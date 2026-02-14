@@ -1,3 +1,3 @@
-public class authcontroller {
+public class AuthController {
     
 }

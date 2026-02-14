@@ -1,3 +1,3 @@
-public class staffloginrequest {
+public class StaffLoginRequest {
     
 }
