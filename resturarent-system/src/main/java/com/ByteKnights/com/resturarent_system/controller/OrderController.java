@@ -3,10 +3,12 @@ package com.ByteKnights.com.resturarent_system.controller;
 import com.ByteKnights.com.resturarent_system.dto.*;
 import com.ByteKnights.com.resturarent_system.service.OrderService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -52,5 +54,13 @@ public class OrderController {
             @RequestBody(required = false) CancelOrderRequest request) {
         String reason = (request != null) ? request.getReason() : null;
         return ResponseEntity.ok(orderService.cancelOrder(id, reason));
+    }
+
+    // ── Exception Handlers ────────────────────────────────
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, String>> handleInvalidState(IllegalStateException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("error", ex.getMessage()));
     }
 }

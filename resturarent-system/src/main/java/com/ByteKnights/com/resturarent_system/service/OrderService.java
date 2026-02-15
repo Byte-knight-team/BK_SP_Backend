@@ -60,6 +60,12 @@ public class OrderService {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
 
+        // Only OPEN orders can be edited
+        if (order.getStatus() != OrderStatus.OPEN) {
+            throw new IllegalStateException(
+                    "Cannot edit order in " + order.getStatus() + " status. Only OPEN orders can be modified.");
+        }
+
         if (request.getTableNumber() != null) {
             order.setTableNumber(request.getTableNumber());
         }
@@ -90,6 +96,14 @@ public class OrderService {
     public OrderDTO cancelOrder(Long id, String reason) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
+
+        // Prevent cancelling already closed or cancelled orders
+        if (order.getStatus() == OrderStatus.CLOSED) {
+            throw new IllegalStateException("Cannot cancel a closed order.");
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new IllegalStateException("Order is already cancelled.");
+        }
 
         order.setStatus(OrderStatus.CANCELLED);
         order.setTotal(BigDecimal.ZERO);
