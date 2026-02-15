@@ -19,7 +19,7 @@ public class OrderController {
 
     @GetMapping
     public ResponseEntity<List<OrderDTO>> getAllOrders(
-            @RequestParam(required = false) String status) {
+            @RequestParam(value = "status", required = false) String status) {
         if (status != null && !status.isEmpty()) {
             return ResponseEntity.ok(orderService.getOrdersByStatus(status));
         }
@@ -27,7 +27,7 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<OrderDTO> getOrderById(@PathVariable Long id) {
+    public ResponseEntity<OrderDTO> getOrderById(@PathVariable("id") Long id) {
         return ResponseEntity.ok(orderService.getOrderById(id));
     }
 
@@ -43,14 +43,14 @@ public class OrderController {
 
     @PutMapping("/{id}")
     public ResponseEntity<OrderDTO> updateOrder(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody UpdateOrderRequest request) {
         return ResponseEntity.ok(orderService.updateOrder(id, request));
     }
 
     @PutMapping("/{id}/cancel")
     public ResponseEntity<OrderDTO> cancelOrder(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestBody(required = false) CancelOrderRequest request) {
         String reason = (request != null) ? request.getReason() : null;
         return ResponseEntity.ok(orderService.cancelOrder(id, reason));
@@ -62,5 +62,19 @@ public class OrderController {
     public ResponseEntity<Map<String, String>> handleInvalidState(IllegalStateException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Map.of("error", ex.getMessage()));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGeneral(Exception ex) {
+        ex.printStackTrace();
+        String rootCause = ex.getMessage();
+        Throwable cause = ex.getCause();
+        while (cause != null) {
+            rootCause = cause.getMessage();
+            cause = cause.getCause();
+        }
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", ex.getClass().getSimpleName(), "message",
+                        rootCause != null ? rootCause : "unknown"));
     }
 }
