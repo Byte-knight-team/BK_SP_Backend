@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.auth;
+package com.byteknights.com.resturarent_system.auth;
 
 import java.util.Optional;
 
@@ -9,10 +9,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.ByteKnights.com.resturarent_system.auth.dto.LoginResponse;
-import com.ByteKnights.com.resturarent_system.auth.dto.StaffLoginRequest;
-import com.ByteKnights.com.resturarent_system.user.User;
-import com.ByteKnights.com.resturarent_system.user.UserRepository;
+import com.byteknights.com.resturarent_system.auth.dto.LoginResponse;
+import com.byteknights.com.resturarent_system.auth.dto.StaffLoginRequest;
+import com.byteknights.com.resturarent_system.user.User;
+import com.byteknights.com.resturarent_system.user.UserRepository;
 
 @RestController
 @RequestMapping("/api/auth")

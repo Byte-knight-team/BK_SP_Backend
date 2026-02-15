@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.auth;
+package com.byteknights.com.resturarent_system.auth;
 
 import org.springframework.stereotype.Service;
 

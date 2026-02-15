@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system;
+package com.byteknights.com.resturarent_system;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

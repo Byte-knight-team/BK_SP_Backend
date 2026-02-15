@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.auth.dto;
+package com.byteknights.com.resturarent_system.auth.dto;
 
 public class StaffLoginRequest {
     private String email;

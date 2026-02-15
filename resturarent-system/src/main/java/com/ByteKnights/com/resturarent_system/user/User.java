@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.user;
+package com.byteknights.com.resturarent_system.user;
 
 
 import jakarta.persistence.Column;
