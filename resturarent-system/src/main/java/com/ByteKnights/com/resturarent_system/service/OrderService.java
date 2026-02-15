@@ -22,28 +22,33 @@ public class OrderService {
 
     // ── Reads ──────────────────────────────────────────────
 
+    @Transactional(readOnly = true)
     public List<OrderDTO> getAllOrders() {
         return orderRepository.findAllByOrderByCreatedAtDesc()
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public OrderDTO getOrderById(Long id) {
-        Order order = orderRepository.findById(id)
+        Order order = orderRepository.findOrderById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
         return toDTO(order);
     }
 
+    @Transactional(readOnly = true)
     public List<OrderDTO> getRecentOrders() {
         return orderRepository.findTop5ByOrderByCreatedAtDesc()
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public List<OrderDTO> getOrdersByStatus(String status) {
         OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
         return orderRepository.findByStatusOrderByCreatedAtDesc(orderStatus)
                 .stream().map(this::toDTO).collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public OrderStatsDTO getOrderStats() {
         return OrderStatsDTO.builder()
                 .openCount(orderRepository.countByStatus(OrderStatus.OPEN))
@@ -57,7 +62,7 @@ public class OrderService {
 
     @Transactional
     public OrderDTO updateOrder(Long id, UpdateOrderRequest request) {
-        Order order = orderRepository.findById(id)
+        Order order = orderRepository.findOrderById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
 
         // Only OPEN orders can be edited
@@ -94,7 +99,7 @@ public class OrderService {
 
     @Transactional
     public OrderDTO cancelOrder(Long id, String reason) {
-        Order order = orderRepository.findById(id)
+        Order order = orderRepository.findOrderById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
 
         // Prevent cancelling already closed or cancelled orders
