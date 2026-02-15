@@ -12,12 +12,12 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(/* TODO: @RequestBody RegisterRequest request */) {
         // TODO: Implement user registration logic
-        return ResponseEntity.ok("Register endpoint — not yet implemented");
+        return null;
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(/* TODO: @RequestBody LoginRequest request */) {
         // TODO: Implement authentication + JWT token generation
-        return ResponseEntity.ok("Login endpoint — not yet implemented");
+        return null;
     }
 }
