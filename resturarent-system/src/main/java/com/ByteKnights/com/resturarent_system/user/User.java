@@ -34,7 +34,7 @@ public class User {
     private String fullName;
 
     public enum Role {
-        ADMIN, MANAGER, RECEPTIONIST, CHEF, DELIVERY
+        SUPER_ADMIN ,ADMIN, MANAGER, RECEPTIONIST, CHEF, DELIVERY
     }
 
     // Getters and Setters
