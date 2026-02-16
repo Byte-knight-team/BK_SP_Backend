@@ -160,6 +160,52 @@ public class DataSeeder implements CommandLineRunner {
                                 .build();
                 orderItemRepository.save(item3);
 
+                System.out.println("Seeding completed for Order 1 & 2.");
+
+                // Create Order 3 (Pending)
+                Order order3 = Order.builder()
+                                .orderNumber("ORD-1205")
+                                .branch(branch)
+                                .customer(customer)
+                                .orderType(OrderType.ONLINE)
+                                .status(OrderStatus.PLACED)
+                                .totalAmount(fries.getPrice())
+                                .finalAmount(fries.getPrice())
+                                .paymentStatus(PaymentStatus.PENDING)
+                                .build();
+                order3 = orderRepository.save(order3);
+
+                OrderItem item4 = OrderItem.builder()
+                                .order(order3)
+                                .menuItem(fries)
+                                .quantity(1)
+                                .unitPrice(fries.getPrice())
+                                .subtotal(fries.getPrice())
+                                .build();
+                orderItemRepository.save(item4);
+
+                // Create Order 4 (Pending)
+                Order order4 = Order.builder()
+                                .orderNumber("ORD-1206")
+                                .branch(branch)
+                                .customer(customer)
+                                .orderType(OrderType.QR)
+                                .status(OrderStatus.PLACED)
+                                .totalAmount(burger.getPrice())
+                                .finalAmount(burger.getPrice())
+                                .paymentStatus(PaymentStatus.PENDING)
+                                .build();
+                order4 = orderRepository.save(order4);
+
+                OrderItem item5 = OrderItem.builder()
+                                .order(order4)
+                                .menuItem(burger)
+                                .quantity(1)
+                                .unitPrice(burger.getPrice())
+                                .subtotal(burger.getPrice())
+                                .build();
+                orderItemRepository.save(item5);
+
                 System.out.println("Data seeding completed.");
         }
 }
