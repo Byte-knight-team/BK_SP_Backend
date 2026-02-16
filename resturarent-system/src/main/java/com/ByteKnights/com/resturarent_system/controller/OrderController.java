@@ -56,6 +56,14 @@ public class OrderController {
         return ResponseEntity.ok(orderService.cancelOrder(id, reason));
     }
 
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<OrderDTO> updateOrderStatus(
+            @PathVariable("id") Long id,
+            @RequestBody Map<String, String> body) {
+        String status = body.get("status");
+        return ResponseEntity.ok(orderService.updateOrderStatus(id, status));
+    }
+
     // ── Exception Handlers ────────────────────────────────
 
     @ExceptionHandler(IllegalStateException.class)
