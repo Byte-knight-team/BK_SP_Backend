@@ -56,7 +56,7 @@ public class OrderController {
         return ResponseEntity.ok(orderService.cancelOrder(id, reason));
     }
 
-    @PatchMapping("/{id}/status")
+    @PutMapping("/{id}/status")
     public ResponseEntity<OrderDTO> updateOrderStatus(
             @PathVariable("id") Long id,
             @RequestBody Map<String, String> body) {
