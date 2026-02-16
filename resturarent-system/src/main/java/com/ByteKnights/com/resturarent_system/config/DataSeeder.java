@@ -144,7 +144,7 @@ public class DataSeeder implements CommandLineRunner {
                                 .branch(branch)
                                 .customer(customer)
                                 .orderType(OrderType.QR)
-                                .status(OrderStatus.PREPARING)
+                                .status(OrderStatus.PLACED)
                                 .totalAmount(BigDecimal.valueOf(31.98)) // 2 Burgers
                                 .finalAmount(BigDecimal.valueOf(31.98))
                                 .paymentStatus(PaymentStatus.PAID)
@@ -183,28 +183,6 @@ public class DataSeeder implements CommandLineRunner {
                                 .subtotal(fries.getPrice())
                                 .build();
                 orderItemRepository.save(item4);
-
-                // Create Order 4 (Pending)
-                Order order4 = Order.builder()
-                                .orderNumber("ORD-1206")
-                                .branch(branch)
-                                .customer(customer)
-                                .orderType(OrderType.QR)
-                                .status(OrderStatus.PLACED)
-                                .totalAmount(burger.getPrice())
-                                .finalAmount(burger.getPrice())
-                                .paymentStatus(PaymentStatus.PENDING)
-                                .build();
-                order4 = orderRepository.save(order4);
-
-                OrderItem item5 = OrderItem.builder()
-                                .order(order4)
-                                .menuItem(burger)
-                                .quantity(1)
-                                .unitPrice(burger.getPrice())
-                                .subtotal(burger.getPrice())
-                                .build();
-                orderItemRepository.save(item5);
 
                 System.out.println("Data seeding completed.");
         }
