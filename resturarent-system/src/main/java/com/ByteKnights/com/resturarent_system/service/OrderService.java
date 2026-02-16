@@ -98,6 +98,36 @@ public class OrderService {
     }
 
     @Transactional
+    public OrderDTO updateOrderStatus(Long id, String newStatus) {
+        Order order = orderRepository.findOrderById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
+
+        OrderStatus targetStatus;
+        try {
+            targetStatus = OrderStatus.valueOf(newStatus.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Invalid status: " + newStatus);
+        }
+
+        // Validate allowed transitions
+        OrderStatus current = order.getStatus();
+        boolean allowed = switch (current) {
+            case OPEN -> targetStatus == OrderStatus.PAID || targetStatus == OrderStatus.CANCELLED;
+            case PAID -> targetStatus == OrderStatus.CLOSED;
+            default -> false;
+        };
+
+        if (!allowed) {
+            throw new IllegalStateException(
+                    "Cannot transition from " + current + " to " + targetStatus);
+        }
+
+        order.setStatus(targetStatus);
+        Order saved = orderRepository.save(order);
+        return toDTO(saved);
+    }
+
+    @Transactional
     public OrderDTO cancelOrder(Long id, String reason) {
         Order order = orderRepository.findOrderById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
