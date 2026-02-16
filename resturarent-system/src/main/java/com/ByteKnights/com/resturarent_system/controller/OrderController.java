@@ -7,29 +7,33 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/orders")
 public class OrderController {
 
-    // TODO: Inject OrderService
+    private final com.ByteKnights.com.resturarent_system.service.OrderService orderService;
 
-    @PostMapping
-    public ResponseEntity<?> createOrder(/* TODO: @RequestBody OrderRequest request */) {
-        // TODO: Place a new order (customer)
-        return ResponseEntity.ok("POST /api/orders — not yet implemented");
+    @org.springframework.beans.factory.annotation.Autowired
+    public OrderController(com.ByteKnights.com.resturarent_system.service.OrderService orderService) {
+        this.orderService = orderService;
     }
 
     @GetMapping
     public ResponseEntity<?> getAllOrders() {
-        // TODO: Get orders (filtered by role — customer sees own, staff sees branch)
-        return ResponseEntity.ok("GET /api/orders — not yet implemented");
+        return ResponseEntity.ok(orderService.getAllOrders());
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getOrderById(@PathVariable Long id) {
-        // TODO: Get single order details
-        return ResponseEntity.ok("GET /api/orders/" + id + " — not yet implemented");
-    }
+    // TODO: createOrder, getOrderById
 
-    @PutMapping("/{id}/status")
-    public ResponseEntity<?> updateOrderStatus(@PathVariable Long id /* TODO: @RequestBody StatusUpdateRequest request */) {
-        // TODO: Update order status (staff/manager only)
-        return ResponseEntity.ok("PUT /api/orders/" + id + "/status — not yet implemented");
+    @PutMapping("/{id}/cancel")
+    public ResponseEntity<?> cancelOrder(@PathVariable Long id, @RequestBody java.util.Map<String, String> payload) {
+        String reason = payload.get("reason");
+        if (reason == null || reason.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Cancellation reason is required");
+        }
+        try {
+            com.ByteKnights.com.resturarent_system.dto.OrderDTO cancelledOrder = orderService.cancelOrder(id, reason);
+            return ResponseEntity.ok(cancelledOrder);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(404).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error cancelling order: " + e.getMessage());
+        }
     }
 }

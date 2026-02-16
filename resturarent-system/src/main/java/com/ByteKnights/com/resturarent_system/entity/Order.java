@@ -58,6 +58,9 @@ public class Order {
     @Builder.Default
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by")
     private Staff approvedBy;

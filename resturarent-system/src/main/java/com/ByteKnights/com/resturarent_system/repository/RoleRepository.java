@@ -7,4 +7,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface RoleRepository extends JpaRepository<Role, Long> {
     // TODO: Add custom query methods as needed
+    java.util.Optional<Role> findByName(String name);
 }
