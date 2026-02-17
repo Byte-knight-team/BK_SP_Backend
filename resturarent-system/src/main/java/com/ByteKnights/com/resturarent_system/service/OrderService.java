@@ -1,167 +1,241 @@
 package com.ByteKnights.com.resturarent_system.service;
 
-import com.ByteKnights.com.resturarent_system.dto.CreateOrderRequest;
-import com.ByteKnights.com.resturarent_system.dto.OrderResponse;
-import com.ByteKnights.com.resturarent_system.entity.*;
-import com.ByteKnights.com.resturarent_system.repository.*;
+import com.ByteKnights.com.resturarent_system.dto.*;
+import com.ByteKnights.com.resturarent_system.entity.Order;
+import com.ByteKnights.com.resturarent_system.entity.OrderItem;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+import com.ByteKnights.com.resturarent_system.entity.Order;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.Optional;
+
+@Service
 public class OrderService {
 
     private final OrderRepository orderRepository;
-    private final MenuItemRepository menuItemRepository;
-    private final BranchRepository branchRepository;
-    private final CustomerRepository customerRepository;
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
 
-    /**
-     * Creates a new online order.
-     *
-     * Flow:
-     *   1. Validate branch exists
-     *   2. Find or create a guest customer (since auth isn't wired yet)
-     *   3. Resolve each menu item, verify availability, snapshot the price
-     *   4. Calculate totals
-     *   5. Persist order + items
-     *   6. Return OrderResponse DTO
-     */
-    @Transactional
-    public OrderResponse createOnlineOrder(CreateOrderRequest request) {
+    // ── Reads ──────────────────────────────────────────────
 
-        // ── 1. Look up the branch ──
-        Branch branch = branchRepository.findById(request.getBranchId())
-                .orElseThrow(() -> new RuntimeException("Branch not found with id: " + request.getBranchId()));
+    @Transactional(readOnly = true)
+    public List<OrderDTO> getAllOrders() {
+        return orderRepository.findAllByOrderByCreatedAtDesc()
+                .stream().map(this::toDTO).collect(Collectors.toList());
+    }
 
-        // ── 2. Find or create guest customer ──
-        Customer customer = findOrCreateGuestCustomer(request.getCustomerName(), request.getCustomerPhone());
+    @Transactional(readOnly = true)
+    public OrderDTO getOrderById(Long id) {
+        Order order = orderRepository.findOrderById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
+        return toDTO(order);
+    }
 
-        // ── 3. Generate unique order number ──
-        String orderNumber = generateOrderNumber();
+    @Transactional(readOnly = true)
+    public List<OrderDTO> getRecentOrders() {
+        return orderRepository.findTop5ByOrderByCreatedAtDesc()
+                .stream().map(this::toDTO).collect(Collectors.toList());
+    }
 
-        // ── 4. Map payment method ──
-        PaymentMethod paymentMethod = "pay-now".equalsIgnoreCase(request.getPaymentMethod())
-                ? PaymentMethod.ONLINE
-                : PaymentMethod.CASH;
+    @Transactional(readOnly = true)
+    public List<OrderDTO> getOrdersByStatus(String status) {
+        OrderStatus orderStatus = OrderStatus.valueOf(status.toUpperCase());
+        return orderRepository.findByStatusOrderByCreatedAtDesc(orderStatus)
+                .stream().map(this::toDTO).collect(Collectors.toList());
+    }
 
-        // ── 5. Build the Order entity ──
-        Order order = Order.builder()
-                .orderNumber(orderNumber)
-                .branch(branch)
-                .customer(customer)
-                .orderType(OrderType.ONLINE)
-                .status(OrderStatus.PLACED)
-                .paymentStatus(PaymentStatus.PENDING)
-                .discountAmount(BigDecimal.ZERO)
+    @Transactional(readOnly = true)
+    public OrderStatsDTO getOrderStats() {
+        return OrderStatsDTO.builder()
+                .openCount(orderRepository.countByStatus(OrderStatus.OPEN))
+                .paidCount(orderRepository.countByStatus(OrderStatus.PAID))
+                .closedCount(orderRepository.countByStatus(OrderStatus.CLOSED))
+                .cancelledCount(orderRepository.countByStatus(OrderStatus.CANCELLED))
                 .build();
+    }
 
-        // ── 6. Resolve menu items, create OrderItems, calculate totals ──
-        BigDecimal totalAmount = BigDecimal.ZERO;
+    // ── Writes ─────────────────────────────────────────────
 
-        for (CreateOrderRequest.OrderItemRequest itemReq : request.getItems()) {
-            MenuItem menuItem = menuItemRepository.findById(itemReq.getMenuItemId())
-                    .orElseThrow(() -> new RuntimeException("Menu item not found: " + itemReq.getMenuItemId()));
+    @Transactional
+    public OrderDTO updateOrder(Long id, UpdateOrderRequest request) {
+        Order order = orderRepository.findOrderById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
 
-            if (!menuItem.getIsAvailable()) {
-                throw new RuntimeException("Menu item is not available: " + menuItem.getName());
-            }
-
-            BigDecimal unitPrice = menuItem.getPrice();
-            BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity()));
-
-            OrderItem orderItem = OrderItem.builder()
-                    .menuItem(menuItem)
-                    .quantity(itemReq.getQuantity())
-                    .unitPrice(unitPrice)
-                    .subtotal(subtotal)
-                    .build();
-
-            order.addItem(orderItem);
-            totalAmount = totalAmount.add(subtotal);
+        // Only OPEN orders can be edited
+        if (order.getStatus() != OrderStatus.OPEN) {
+            throw new IllegalStateException(
+                    "Cannot edit order in " + order.getStatus() + " status. Only OPEN orders can be modified.");
         }
 
-        order.setTotalAmount(totalAmount);
-        order.setFinalAmount(totalAmount.subtract(order.getDiscountAmount()));
+        if (request.getTableNumber() != null) {
+            order.setTableNumber(request.getTableNumber());
+        }
 
-        // ── 7. Save ──
-        Order savedOrder = orderRepository.save(order);
+        if (request.getItems() != null) {
+            order.getItems().clear();
 
-        // ── 8. Build response ──
-        return toOrderResponse(savedOrder, request);
+            List<OrderItem> newItems = new ArrayList<>();
+            for (UpdateOrderRequest.UpdateOrderItemRequest itemReq : request.getItems()) {
+                OrderItem item = OrderItem.builder()
+                        .itemName(itemReq.getItemName())
+                        .quantity(itemReq.getQuantity())
+                        .unitPrice(itemReq.getUnitPrice())
+                        .kitchenNotes(itemReq.getKitchenNotes())
+                        .order(order)
+                        .build();
+                newItems.add(item);
+            }
+            order.getItems().addAll(newItems);
+            order.recalculateTotal();
+        }
+
+        Order saved = orderRepository.save(order);
+        return toDTO(saved);
     }
 
-    // ─────────────────── Helper: find/create guest customer ───────────────────
-    private Customer findOrCreateGuestCustomer(String name, String phone) {
-        // Check if a user with this phone already exists
-        return userRepository.findByPhone(phone)
-                .map(user -> customerRepository.findByUser(user)
-                        .orElseGet(() -> {
-                            Customer c = Customer.builder().user(user).build();
-                            return customerRepository.save(c);
-                        }))
-                .orElseGet(() -> {
-                    // Create a guest user + customer record
-                    Role customerRole = roleRepository.findByName("CUSTOMER")
-                            .orElseGet(() -> roleRepository.save(
-                                    Role.builder().name("CUSTOMER").description("Customer role").build()
-                            ));
+    @Transactional
+    public OrderDTO updateOrderStatus(Long id, String newStatus) {
+        Order order = orderRepository.findOrderById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
 
-                    User guestUser = User.builder()
-                            .username(name)
-                            .password("GUEST_NO_PASSWORD")  // placeholder — no login for guests
-                            .phone(phone)
-                            .role(customerRole)
-                            .isActive(true)
-                            .build();
-                    guestUser = userRepository.save(guestUser);
+        OrderStatus targetStatus;
+        try {
+            targetStatus = OrderStatus.valueOf(newStatus.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("Invalid status: " + newStatus);
+        }
 
-                    Customer customer = Customer.builder().user(guestUser).build();
-                    return customerRepository.save(customer);
-                });
+        // Validate allowed transitions
+        OrderStatus current = order.getStatus();
+        boolean allowed = switch (current) {
+            case OPEN -> targetStatus == OrderStatus.PAID || targetStatus == OrderStatus.CANCELLED;
+            case PAID -> targetStatus == OrderStatus.CLOSED;
+            default -> false;
+        };
+
+        if (!allowed) {
+            throw new IllegalStateException(
+                    "Cannot transition from " + current + " to " + targetStatus);
+        }
+
+        order.setStatus(targetStatus);
+        Order saved = orderRepository.save(order);
+        return toDTO(saved);
     }
 
-    // ─────────────────── Helper: generate order number ───────────────────
-    private String generateOrderNumber() {
-        // Format: ORD-<6 digit random> e.g. ORD-847291
-        return "ORD-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+    @Transactional
+    public OrderDTO cancelOrder(Long id, String reason) {
+        Order order = orderRepository.findOrderById(id)
+                .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
+
+        // Prevent cancelling already closed or cancelled orders
+        if (order.getStatus() == OrderStatus.CLOSED) {
+            throw new IllegalStateException("Cannot cancel a closed order.");
+        }
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new IllegalStateException("Order is already cancelled.");
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setTotal(BigDecimal.ZERO);
+        order.setCancellationReason(reason);
+        Order saved = orderRepository.save(order);
+        return toDTO(saved);
     }
 
-    // ─────────────────── Helper: entity → DTO ───────────────────
-    private OrderResponse toOrderResponse(Order order, CreateOrderRequest request) {
-        List<OrderResponse.OrderItemResponse> itemResponses = order.getItems().stream()
-                .map(item -> OrderResponse.OrderItemResponse.builder()
-                        .menuItemId(item.getMenuItem().getId())
-                        .menuItemName(item.getMenuItem().getName())
+    // ── Mapper ─────────────────────────────────────────────
+
+    private OrderDTO toDTO(Order order) {
+        List<OrderItemDTO> itemDTOs = order.getItems().stream()
+                .map(item -> OrderItemDTO.builder()
+                        .id(item.getId())
+                        .itemName(item.getItemName())
                         .quantity(item.getQuantity())
                         .unitPrice(item.getUnitPrice())
-                        .subtotal(item.getSubtotal())
+                        .kitchenNotes(item.getKitchenNotes())
                         .build())
                 .collect(Collectors.toList());
 
-        return OrderResponse.builder()
+        return OrderDTO.builder()
+                .id(order.getId())
+                .customerName(order.getCustomerName())
+                .tableNumber(order.getTableNumber())
+                .guestCount(order.getGuestCount())
+                .status(order.getStatus().name())
+                .total(order.getTotal())
+                .cancellationReason(order.getCancellationReason())
+                .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
+                .items(itemDTOs)
+    @Autowired
+    public OrderService(OrderRepository orderRepository) {
+        this.orderRepository = orderRepository;
+    }
+
+    @Transactional
+    public com.ByteKnights.com.resturarent_system.dto.OrderDTO cancelOrder(Long orderId, String reason) {
+        Optional<Order> orderOptional = orderRepository.findById(orderId);
+        if (orderOptional.isPresent()) {
+            Order order = orderOptional.get();
+            order.setStatus(OrderStatus.CANCELLED);
+            order.setCancelReason(reason);
+            // Optionally, we could also cancel all items if we were tracking item status
+            // order.getItems().forEach(item -> item.setStatus("cancelled"));
+            Order savedOrder = orderRepository.save(order);
+            return mapToDTO(savedOrder);
+        } else {
+            throw new RuntimeException("Order not found with id: " + orderId);
+        }
+    }
+
+    public java.util.List<com.ByteKnights.com.resturarent_system.dto.OrderDTO> getAllOrders() {
+        return orderRepository.findAll().stream()
+                .map(this::mapToDTO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    public Optional<com.ByteKnights.com.resturarent_system.dto.OrderDTO> getOrderById(Long id) {
+        return orderRepository.findById(id).map(this::mapToDTO);
+    }
+
+    private com.ByteKnights.com.resturarent_system.dto.OrderDTO mapToDTO(Order order) {
+        return com.ByteKnights.com.resturarent_system.dto.OrderDTO.builder()
                 .id(order.getId())
                 .orderNumber(order.getOrderNumber())
-                .status(order.getStatus().name())
-                .orderType(request.getOrderType())
-                .paymentMethod(request.getPaymentMethod())
-                .paymentStatus(order.getPaymentStatus().name())
+                .status(order.getStatus())
+                .orderType(order.getOrderType())
                 .totalAmount(order.getTotalAmount())
-                .discountAmount(order.getDiscountAmount())
-                .finalAmount(order.getFinalAmount())
-                .customerName(request.getCustomerName())
-                .customerPhone(request.getCustomerPhone())
-                .deliveryAddress(request.getDeliveryAddress())
+                .cancelReason(order.getCancelReason())
                 .createdAt(order.getCreatedAt())
-                .items(itemResponses)
+                .branchName(order.getBranch() != null ? order.getBranch().getName() : null)
+                .customerName(order.getCustomer() != null && order.getCustomer().getUser() != null
+                        ? order.getCustomer().getUser().getUsername()
+                        : "Guest")
+                .tableNumber(order.getTable() != null ? order.getTable().getTableNumber().toString() : null)
+                .items(order.getItems().stream()
+                        .map(item -> com.ByteKnights.com.resturarent_system.dto.OrderDTO.OrderItemDTO.builder()
+                                .id(item.getId())
+                                .menuItemName(item.getMenuItem() != null ? item.getMenuItem().getName() : "Unknown")
+                                .categoryName(item.getMenuItem() != null && item.getMenuItem().getCategory() != null
+                                        ? item.getMenuItem().getCategory()
+                                        : "General")
+                                .quantity(item.getQuantity())
+                                .unitPrice(item.getUnitPrice())
+                                .build())
+                        .collect(java.util.stream.Collectors.toList()))
                 .build();
     }
 }
