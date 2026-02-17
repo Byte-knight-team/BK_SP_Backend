@@ -88,7 +88,7 @@ public class DataSeeder implements CommandLineRunner {
                                 .description("Grilled chicken patty with fresh lettuce")
                                 .price(BigDecimal.valueOf(15.99))
                                 .category("Main Course")
-                                .imageUrl("https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500")
+                                .imageUrl(null)
                                 .isAvailable(true)
                                 .preparationTime(15)
                                 .build();
@@ -100,13 +100,13 @@ public class DataSeeder implements CommandLineRunner {
                                 .description("Crispy salted fries")
                                 .price(BigDecimal.valueOf(5.99))
                                 .category("Sides")
-                                .imageUrl("https://images.unsplash.com/photo-1573080496987-8198cb147a81?w=500")
+                                .imageUrl(null)
                                 .isAvailable(true)
                                 .preparationTime(10)
                                 .build();
                 menuItemRepository.save(fries);
 
-                // Create Order 1 (Pending)
+                // Create Order 1 (Pending) - 9:00 AM
                 Order order1 = Order.builder()
                                 .orderNumber("ORD-1204") // Matching frontend mock ID format
                                 .branch(branch)
@@ -116,6 +116,8 @@ public class DataSeeder implements CommandLineRunner {
                                 .totalAmount(BigDecimal.valueOf(21.98))
                                 .finalAmount(BigDecimal.valueOf(21.98))
                                 .paymentStatus(PaymentStatus.PENDING)
+                                .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
+                                                java.time.LocalTime.of(9, 0)))
                                 .build();
                 order1 = orderRepository.save(order1);
 
@@ -138,16 +140,18 @@ public class DataSeeder implements CommandLineRunner {
                                 .build();
                 orderItemRepository.save(item2);
 
-                // Create Order 2 (Preparing)
+                // Create Order 2 (Preparing) - 9:30 AM
                 Order order2 = Order.builder()
                                 .orderNumber("ORD-1200")
                                 .branch(branch)
                                 .customer(customer)
                                 .orderType(OrderType.QR)
                                 .status(OrderStatus.PLACED)
-                                .totalAmount(BigDecimal.valueOf(31.98)) // 2 Burgers
-                                .finalAmount(BigDecimal.valueOf(31.98))
+                                .totalAmount(BigDecimal.valueOf(37.97)) // 2 Burgers + 1 Fries
+                                .finalAmount(BigDecimal.valueOf(37.97))
                                 .paymentStatus(PaymentStatus.PAID)
+                                .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
+                                                java.time.LocalTime.of(9, 30)))
                                 .build();
                 order2 = orderRepository.save(order2);
 
@@ -160,9 +164,18 @@ public class DataSeeder implements CommandLineRunner {
                                 .build();
                 orderItemRepository.save(item3);
 
+                OrderItem item3_2 = OrderItem.builder()
+                                .order(order2)
+                                .menuItem(fries)
+                                .quantity(1)
+                                .unitPrice(fries.getPrice())
+                                .subtotal(fries.getPrice())
+                                .build();
+                orderItemRepository.save(item3_2);
+
                 System.out.println("Seeding completed for Order 1 & 2.");
 
-                // Create Order 3 (Pending)
+                // Create Order 3 (Pending) - 11:00 AM
                 Order order3 = Order.builder()
                                 .orderNumber("ORD-1205")
                                 .branch(branch)
@@ -172,6 +185,8 @@ public class DataSeeder implements CommandLineRunner {
                                 .totalAmount(fries.getPrice())
                                 .finalAmount(fries.getPrice())
                                 .paymentStatus(PaymentStatus.PENDING)
+                                .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
+                                                java.time.LocalTime.of(11, 0)))
                                 .build();
                 order3 = orderRepository.save(order3);
 
