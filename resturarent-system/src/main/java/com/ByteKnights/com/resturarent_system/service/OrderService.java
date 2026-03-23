@@ -115,8 +115,11 @@ public class OrderService {
                                     Role.builder().name("CUSTOMER").description("Customer role").build()
                             ));
 
+                    // Generate unique username using phone number
+                    String uniqueUsername = "guest_" + phone + "_" + UUID.randomUUID().toString().substring(0, 8);
+
                     User guestUser = User.builder()
-                            .username(name)
+                            .username(uniqueUsername)
                             .password("GUEST_NO_PASSWORD")  // placeholder — no login for guests
                             .phone(phone)
                             .role(customerRole)
