@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
+
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
@@ -17,6 +18,9 @@ public class SecurityConfig {
         http
             // Disable CSRF — not needed for stateless REST APIs
             .csrf(AbstractHttpConfigurer::disable)
+
+            // Enable CORS — defers to WebConfig's addCorsMappings() rules
+            .cors(cors -> {})
 
             // Stateless session — no HTTP sessions will be created
             .sessionManagement(session ->
