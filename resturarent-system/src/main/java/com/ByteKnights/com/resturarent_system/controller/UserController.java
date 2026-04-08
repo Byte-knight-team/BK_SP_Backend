@@ -12,12 +12,12 @@ public class UserController {
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(/* TODO: @AuthenticationPrincipal or SecurityContext */) {
         // TODO: Return current authenticated user's profile
-        return ResponseEntity.ok("GET /api/users/profile — not yet implemented");
+        return null;
     }
 
     @PutMapping("/profile")
     public ResponseEntity<?> updateProfile(/* TODO: @RequestBody ProfileUpdateRequest request */) {
         // TODO: Update current user's profile
-        return ResponseEntity.ok("PUT /api/users/profile — not yet implemented");
+        return null;
     }
 }
