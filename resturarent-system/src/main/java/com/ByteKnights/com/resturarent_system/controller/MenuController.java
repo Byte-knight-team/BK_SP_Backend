@@ -12,30 +12,30 @@ public class MenuController {
     @GetMapping
     public ResponseEntity<?> getAllMenuItems() {
         // TODO: Return list of menu items (public)
-        return ResponseEntity.ok("GET /api/menu — not yet implemented");
+        return null;
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getMenuItemById(@PathVariable Long id) {
         // TODO: Return single menu item by ID
-        return ResponseEntity.ok("GET /api/menu/" + id + " — not yet implemented");
+        return null;
     }
 
     @PostMapping
     public ResponseEntity<?> createMenuItem(/* TODO: @RequestBody MenuItemDto dto */) {
         // TODO: Create menu item (admin/manager only)
-        return ResponseEntity.ok("POST /api/menu — not yet implemented");
+        return null;
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateMenuItem(@PathVariable Long id /* TODO: @RequestBody MenuItemDto dto */) {
         // TODO: Update menu item (admin/manager only)
-        return ResponseEntity.ok("PUT /api/menu/" + id + " — not yet implemented");
+        return null;
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteMenuItem(@PathVariable Long id) {
         // TODO: Delete menu item (admin/manager only)
-        return ResponseEntity.ok("DELETE /api/menu/" + id + " — not yet implemented");
+        return null;
     }
 }
