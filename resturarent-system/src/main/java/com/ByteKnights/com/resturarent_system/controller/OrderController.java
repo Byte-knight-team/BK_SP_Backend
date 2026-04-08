@@ -26,6 +26,12 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getAllOrders());
     }
 
+    @PostMapping
+    public ResponseEntity<OrderDTO> createOrder(@RequestBody CreateOrderRequest request) {
+        OrderDTO createdOrder = orderService.createOrder(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(createdOrder);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<OrderDTO> getOrderById(@PathVariable("id") Long id) {
         return ResponseEntity.ok(orderService.getOrderById(id));

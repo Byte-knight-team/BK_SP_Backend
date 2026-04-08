@@ -4,6 +4,12 @@ import com.ByteKnights.com.resturarent_system.dto.*;
 import com.ByteKnights.com.resturarent_system.entity.Order;
 import com.ByteKnights.com.resturarent_system.entity.OrderItem;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.entity.Branch;
+import com.ByteKnights.com.resturarent_system.entity.MenuItem;
+import com.ByteKnights.com.resturarent_system.entity.OrderType;
+import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
+import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
+import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -19,6 +26,64 @@ import java.util.stream.Collectors;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final MenuItemRepository menuItemRepository;
+    private final BranchRepository branchRepository;
+
+    // ── Writes ─────────────────────────────────────────────
+
+    @Transactional
+    public OrderDTO createOrder(CreateOrderRequest request) {
+        Order order = new Order();
+        
+        // Generate a simple unique order number. E.g., ORD-<UUID-prefix>
+        order.setOrderNumber("ORD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        order.setCustomerName(request.getCustomerName());
+        
+        // If it's a delivery order, map address somewhere (often tableNumber is reused or a new field is needed, keeping it simple)
+        if ("delivery".equalsIgnoreCase(request.getOrderType())) {
+            order.setOrderType(OrderType.ONLINE);
+        } else {
+            order.setOrderType(OrderType.QR);
+        }
+
+        order.setStatus(OrderStatus.PLACED);
+
+        if ("pay-now".equalsIgnoreCase(request.getPaymentMethod())) {
+            order.setPaymentStatus(PaymentStatus.PAID);
+        } else {
+            order.setPaymentStatus(PaymentStatus.PENDING);
+        }
+
+        Branch branch = null;
+        if (request.getBranchId() != null) {
+            branch = branchRepository.findById(request.getBranchId()).orElse(null);
+        }
+        order.setBranch(branch);
+
+        // Process items
+        List<OrderItem> items = new ArrayList<>();
+        if (request.getItems() != null) {
+            for (CreateOrderRequest.OrderItemRequest itemReq : request.getItems()) {
+                MenuItem menuItem = menuItemRepository.findById(itemReq.getMenuItemId())
+                        .orElseThrow(() -> new RuntimeException("Menu item not found: " + itemReq.getMenuItemId()));
+                
+                OrderItem item = OrderItem.builder()
+                        .itemName(menuItem.getName())
+                        .menuItem(menuItem)
+                        .quantity(itemReq.getQuantity())
+                        .unitPrice(menuItem.getPrice())
+                        .subtotal(menuItem.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())))
+                        .build();
+                item.setOrder(order);
+                items.add(item);
+            }
+        }
+        order.setItems(items);
+        order.recalculateTotal();
+
+        Order saved = orderRepository.save(order);
+        return toDTO(saved);
+    }
 
     // ── Reads ──────────────────────────────────────────────
 
@@ -150,8 +215,8 @@ public class OrderService {
     // ── Mapper ─────────────────────────────────────────────
 
     private OrderDTO toDTO(Order order) {
-        List<OrderItemDTO> itemDTOs = order.getItems().stream()
-                .map(item -> OrderItemDTO.builder()
+        List<OrderDTO.OrderItemDTO> itemDTOs = order.getItems().stream()
+                .map(item -> OrderDTO.OrderItemDTO.builder()
                         .id(item.getId())
                         .itemName(item.getItemName())
                         .quantity(item.getQuantity())

@@ -25,10 +25,11 @@ public class OrderItem {
     private String itemName;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false)
+    @JsonIgnore
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "menu_item_id", nullable = false)
+    @JoinColumn(name = "menu_item_id")
     private MenuItem menuItem;
 
     @Column(nullable = false)
@@ -40,10 +41,6 @@ public class OrderItem {
     @Column(name = "kitchen_notes")
     private String kitchenNotes;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
-    @JsonIgnore
-    private Order order;
     @Column(precision = 12, scale = 2)
     private BigDecimal subtotal;
 }
