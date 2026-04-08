@@ -32,5 +32,11 @@ build/
 ### VS Code ###
 .vscode/
 
+### Local Configuration ###
+.env
+
+### Local Configuration ###
+.env
+
 ##database
 .env
