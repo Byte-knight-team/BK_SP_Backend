@@ -36,9 +36,6 @@ public class Staff {
     @Column(length = 20)
     private String nic;
 
-    @Column(length = 255)
-    private String address;
-
     @Column(precision = 10, scale = 2)
     private BigDecimal salary;
 
