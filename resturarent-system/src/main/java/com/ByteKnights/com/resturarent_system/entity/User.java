@@ -29,6 +29,9 @@ public class User {
     @Column(nullable = false, unique = true, length = 20)
     private String phone;
 
+    @Column(length = 255)
+    private String address;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
@@ -52,4 +55,7 @@ public class User {
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private Customer customer;
 }
