@@ -1,9 +1,9 @@
-package com.ByteKnights.com.resturarent_system.dto;
+package com.byteknights.com.resturarent_system.dto;
 
 import lombok.*;
 
-import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
-import com.ByteKnights.com.resturarent_system.entity.OrderType;
+import com.byteknights.com.resturarent_system.entity.OrderStatus;
+import com.byteknights.com.resturarent_system.entity.OrderType;
 import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;

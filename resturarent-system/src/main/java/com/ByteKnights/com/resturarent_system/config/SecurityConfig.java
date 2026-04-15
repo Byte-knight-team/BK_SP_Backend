@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.config;
+package com.byteknights.com.resturarent_system.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
