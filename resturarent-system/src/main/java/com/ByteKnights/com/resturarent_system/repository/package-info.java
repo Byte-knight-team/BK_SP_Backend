@@ -1,6 +1,3 @@
-/**
- * Repository layer.
- * Spring Data JPA repositories for database access.
- * Interfaces extending JpaRepository are auto-implemented by Spring.
- */
+// This package contains Spring Data JPA repository interfaces.
+// Examples: UserRepository, MenuItemRepository, OrderRepository
 package com.ByteKnights.com.resturarent_system.repository;

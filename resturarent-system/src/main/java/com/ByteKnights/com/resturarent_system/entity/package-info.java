@@ -1,6 +1,3 @@
-/**
- * Entity layer.
- * JPA entities mapped to MySQL database tables.
- * Annotated with @Entity and managed by Hibernate.
- */
+// This package contains JPA entity classes (database models).
+// Examples: User, MenuItem, Order, OrderItem, Table
 package com.ByteKnights.com.resturarent_system.entity;

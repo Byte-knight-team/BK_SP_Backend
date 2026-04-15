@@ -1,6 +1,3 @@
-/**
- * REST Controllers layer.
- * Handles incoming HTTP requests and delegates to the Service layer.
- * All controllers are mapped under /api/**
- */
+// This package contains REST controller classes (API endpoints).
+// Examples: AuthController, MenuController, OrderController, UserController
 package com.ByteKnights.com.resturarent_system.controller;
