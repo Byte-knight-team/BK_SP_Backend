@@ -1,6 +1,6 @@
-package com.ByteKnights.com.resturarent_system.repository;
+package com.byteknights.com.resturarent_system.repository;
 
-import com.ByteKnights.com.resturarent_system.entity.Payment;
+import com.byteknights.com.resturarent_system.entity.Payment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
