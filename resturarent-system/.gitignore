@@ -33,4 +33,10 @@ build/
 .vscode/
 
 ### Local Configuration ###
-.env
+.env.properties
+
+# junk files
+build.log
+compile_errors.txt
+error_log.txt
+error_log_utf8.txt
