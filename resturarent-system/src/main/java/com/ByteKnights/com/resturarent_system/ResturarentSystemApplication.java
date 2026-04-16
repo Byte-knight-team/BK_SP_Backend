@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system;
+package com.byteknights.com.resturarent_system;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -6,8 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class ResturarentSystemApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(ResturarentSystemApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(ResturarentSystemApplication.class, args);
+    }
 }

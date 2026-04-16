@@ -1,7 +1,7 @@
-package com.ByteKnights.com.resturarent_system.controller;
+package com.byteknights.com.resturarent_system.controller;
 
-import com.ByteKnights.com.resturarent_system.dto.*;
-import com.ByteKnights.com.resturarent_system.service.OrderService;
+import com.byteknights.com.resturarent_system.dto.*;
+import com.byteknights.com.resturarent_system.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
