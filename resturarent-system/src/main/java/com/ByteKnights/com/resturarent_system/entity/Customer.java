@@ -30,14 +30,6 @@ public class Customer {
     @Column(name = "total_spent", precision = 12, scale = 2)
     private BigDecimal totalSpent = BigDecimal.ZERO;
 
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
-    @PrePersist
-    protected void onCreate() {
-        this.createdAt = LocalDateTime.now();
-    }
-
     @Column(name = "email_verified")
     @Builder.Default
     private Boolean emailVerified = false;
