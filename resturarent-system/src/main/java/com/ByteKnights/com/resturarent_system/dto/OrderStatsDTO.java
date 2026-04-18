@@ -1,4 +1,4 @@
-package com.byteknights.com.resturarent_system.dto;
+package com.ByteKnights.com.resturarent_system.dto;
 
 import lombok.*;
 

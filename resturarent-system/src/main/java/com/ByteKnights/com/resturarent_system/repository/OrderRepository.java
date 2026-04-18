@@ -1,7 +1,7 @@
-package com.byteknights.com.resturarent_system.repository;
+package com.ByteKnights.com.resturarent_system.repository;
 
-import com.byteknights.com.resturarent_system.entity.Order;
-import com.byteknights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.entity.Order;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
