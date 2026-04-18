@@ -24,15 +24,6 @@ public class Order {
     @Column(name = "order_number", unique = true, length = 50)
     private String orderNumber;
 
-    @Column(name = "customer_name")
-    private String customerName;
-
-    @Column(name = "table_number")
-    private String tableNumber;
-
-    @Column(name = "guest_count")
-    private Integer guestCount;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
@@ -42,12 +33,9 @@ public class Order {
     @Column(name = "order_type")
     private OrderType orderType;
 
-    @Column(nullable = false, precision = 12, scale = 2)
+    @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     @Builder.Default
-    private BigDecimal total = BigDecimal.ZERO;
-
-    @Column(name = "total_amount", precision = 12, scale = 2)
-    private BigDecimal totalAmount;
+    private BigDecimal totalAmount = BigDecimal.ZERO;
 
     @Column(name = "discount_amount", precision = 10, scale = 2)
     private BigDecimal discountAmount;
@@ -60,27 +48,24 @@ public class Order {
     @Builder.Default
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
-    @Column(name = "cancellation_reason")
-    private String cancellationReason;
-
-    @Column(name = "cancel_reason")
-    private String cancelReason;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "branch_id")
+    @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "table_id")
-    private RestaurantTable tableObj;
+    private RestaurantTable table;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id")
+    @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by")
     private Staff approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_chef_id")
@@ -116,10 +101,14 @@ public class Order {
     }
 
     public void recalculateTotal() {
-        if(items != null) {
-            this.total = items.stream()
+        if (items != null) {
+            this.totalAmount = items.stream()
                 .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (this.discountAmount == null) {
+                this.discountAmount = BigDecimal.ZERO;
+            }
+            this.finalAmount = this.totalAmount.subtract(this.discountAmount);
         }
         this.updatedAt = LocalDateTime.now();
     }

@@ -16,6 +16,7 @@ public class DataSeeder implements CommandLineRunner {
         private final OrderRepository orderRepository;
         private final UserRepository userRepository;
         private final RoleRepository roleRepository;
+        private final MenuCategoryRepository menuCategoryRepository;
         private final MenuItemRepository menuItemRepository;
         private final OrderItemRepository orderItemRepository;
 
@@ -24,6 +25,7 @@ public class DataSeeder implements CommandLineRunner {
                         OrderRepository orderRepository,
                         UserRepository userRepository,
                         RoleRepository roleRepository,
+                        MenuCategoryRepository menuCategoryRepository,
                         MenuItemRepository menuItemRepository,
                         OrderItemRepository orderItemRepository) {
                 this.branchRepository = branchRepository;
@@ -31,6 +33,7 @@ public class DataSeeder implements CommandLineRunner {
                 this.orderRepository = orderRepository;
                 this.userRepository = userRepository;
                 this.roleRepository = roleRepository;
+                this.menuCategoryRepository = menuCategoryRepository;
                 this.menuItemRepository = menuItemRepository;
                 this.orderItemRepository = orderItemRepository;
         }
@@ -82,26 +85,42 @@ public class DataSeeder implements CommandLineRunner {
                 customer = customerRepository.save(customer);
 
                 // Create Menu Items
+                MenuCategory mainCourseCategory = menuCategoryRepository.findByName("Main Course").orElseGet(() ->
+                        menuCategoryRepository.save(MenuCategory.builder()
+                                .name("Main Course")
+                                .description("Main meal items")
+                                .build())
+                );
+
+                MenuCategory sidesCategory = menuCategoryRepository.findByName("Sides").orElseGet(() ->
+                        menuCategoryRepository.save(MenuCategory.builder()
+                                .name("Sides")
+                                .description("Side dishes")
+                                .build())
+                );
+
                 MenuItem burger = MenuItem.builder()
                                 .branch(branch)
+                                .category(mainCourseCategory)
                                 .name("Chicken Burger")
                                 .description("Grilled chicken patty with fresh lettuce")
                                 .price(BigDecimal.valueOf(15.99))
-                                .category("Main Course")
                                 .imageUrl(null)
                                 .isAvailable(true)
+                                .status(MenuItemStatus.APPROVED)
                                 .preparationTime(15)
                                 .build();
                 menuItemRepository.save(burger);
 
                 MenuItem fries = MenuItem.builder()
                                 .branch(branch)
+                                .category(sidesCategory)
                                 .name("French Fries")
                                 .description("Crispy salted fries")
                                 .price(BigDecimal.valueOf(5.99))
-                                .category("Sides")
                                 .imageUrl(null)
                                 .isAvailable(true)
+                                .status(MenuItemStatus.APPROVED)
                                 .preparationTime(10)
                                 .build();
                 menuItemRepository.save(fries);
@@ -114,6 +133,7 @@ public class DataSeeder implements CommandLineRunner {
                                 .orderType(OrderType.QR)
                                 .status(OrderStatus.PLACED) // Mapping PLACED to 'pending' in frontend?
                                 .totalAmount(BigDecimal.valueOf(21.98))
+                                .discountAmount(BigDecimal.ZERO)
                                 .finalAmount(BigDecimal.valueOf(21.98))
                                 .paymentStatus(PaymentStatus.PENDING)
                                 .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
@@ -150,6 +170,7 @@ public class DataSeeder implements CommandLineRunner {
                                 .orderType(OrderType.QR)
                                 .status(OrderStatus.PLACED)
                                 .totalAmount(BigDecimal.valueOf(37.97)) // 2 Burgers + 1 Fries
+                                .discountAmount(BigDecimal.ZERO)
                                 .finalAmount(BigDecimal.valueOf(37.97))
                                 .paymentStatus(PaymentStatus.PAID)
                                 .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
@@ -187,6 +208,7 @@ public class DataSeeder implements CommandLineRunner {
                                 .orderType(OrderType.ONLINE)
                                 .status(OrderStatus.PLACED)
                                 .totalAmount(fries.getPrice())
+                                .discountAmount(BigDecimal.ZERO)
                                 .finalAmount(fries.getPrice())
                                 .paymentStatus(PaymentStatus.PENDING)
                                 .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
