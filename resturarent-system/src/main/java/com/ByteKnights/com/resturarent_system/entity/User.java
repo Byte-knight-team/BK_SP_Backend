@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+
 public class User {
 
     @Id
@@ -36,6 +37,16 @@ public class User {
     @Builder.Default
     @Column(nullable = false)
     private Boolean isActive = true;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean passwordChanged = false;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private InviteStatus inviteStatus = InviteStatus.PENDING;
+    private LocalDateTime lastInviteAttemptAt;
 
     @Column(updatable = false)
     private LocalDateTime createdAt;
