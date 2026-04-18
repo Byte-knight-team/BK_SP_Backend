@@ -34,3 +34,9 @@ build/
 
 ### Local Configuration ###
 .env
+
+# Log files
+*.log
+spring-boot-log.txt
+spring-output.txt
+logs/
