@@ -19,26 +19,15 @@ public class AuthController {
         this.authService = authService;
     }
 
-
-    @GetMapping("/ping")
-    public ResponseEntity<String> ping() {
-        return ResponseEntity.ok("auth open");
-    }
-
-    @PostMapping("/ping-post")
-    public ResponseEntity<String> pingPost() {
-        return ResponseEntity.ok("post open");
-    }
-
     @PostMapping("/staff/login")
     public ResponseEntity<LoginResponse> staffLogin(@RequestBody StaffLoginRequest request) {
-        System.out.println(">>> staff login endpoint reached");
         LoginResponse response = authService.loginStaff(request);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/change-password")
     public ResponseEntity<String> changePassword(@RequestBody ChangePasswordRequest request) {
-        return ResponseEntity.ok(authService.changePassword(request));
+        String result = authService.changePassword(request);
+        return ResponseEntity.ok(result);
     }
 }

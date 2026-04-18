@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ByteKnights.com.resturarent_system.dto.ChangePasswordRequest;
 import com.ByteKnights.com.resturarent_system.dto.LoginResponse;
@@ -11,6 +12,8 @@ import com.ByteKnights.com.resturarent_system.dto.StaffLoginRequest;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtService;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
+
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
@@ -30,29 +33,20 @@ public class AuthService {
 
     public LoginResponse loginStaff(StaffLoginRequest request) {
         Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
-
-        if (userOptional.isEmpty()) {
-            throw new RuntimeException("Invalid email");
-        }
+        if (userOptional.isEmpty()) throw new RuntimeException("Invalid email");
 
         User user = userOptional.get();
-
-        if (!Boolean.TRUE.equals(user.getIsActive())) {
-            throw new RuntimeException("Account disabled");
-        }
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+        if (!Boolean.TRUE.equals(user.getIsActive())) throw new RuntimeException("Account disabled");
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword()))
             throw new RuntimeException("Invalid password");
-        }
 
-        String roleName = user.getRole().getName();
-        String token = jwtService.generateToken(user.getEmail(), roleName);
+        String token = jwtService.generateToken(user.getEmail(), user.getRole().getName());
 
         return LoginResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .role(roleName)
+                .role(user.getRole().getName())
                 .active(user.getIsActive())
                 .passwordChanged(user.getPasswordChanged())
                 .token(token)
@@ -60,35 +54,29 @@ public class AuthService {
                 .build();
     }
 
+    @Transactional
     public String changePassword(ChangePasswordRequest request) {
-        Object principal = SecurityContextHolder.getContext()
-                .getAuthentication()
-                .getPrincipal();
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String email;
 
-        if (!(principal instanceof User)) {
+        if (principal instanceof JwtUserPrincipal jwtUser) {
+            email = jwtUser.email();
+        } else if (principal instanceof User user) {
+            email = user.getEmail();
+        } else {
             throw new RuntimeException("Authenticated user not found");
         }
 
-        User authenticatedUser = (User) principal;
-
-        User user = userRepository.findByEmail(authenticatedUser.getEmail())
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        if (!Boolean.TRUE.equals(user.getIsActive())) {
-            throw new RuntimeException("Account disabled");
-        }
-
-        if (request.getCurrentPassword() == null || request.getCurrentPassword().trim().isEmpty()) {
+        if (!Boolean.TRUE.equals(user.getIsActive())) throw new RuntimeException("Account disabled");
+        if (request.getCurrentPassword() == null || request.getCurrentPassword().trim().isEmpty())
             throw new RuntimeException("Current password is required");
-        }
-
-        if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
+        if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty())
             throw new RuntimeException("New password is required");
-        }
-
-        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword()))
             throw new RuntimeException("Current password is incorrect");
-        }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setPasswordChanged(true);

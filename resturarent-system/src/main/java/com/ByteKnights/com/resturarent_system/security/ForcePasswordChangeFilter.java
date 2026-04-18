@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Objects;
 
 @Component
 public class ForcePasswordChangeFilter extends OncePerRequestFilter {
@@ -28,50 +29,47 @@ public class ForcePasswordChangeFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        String requestPath = request.getRequestURI();
+        String path = request.getRequestURI();
 
-        // Allow login and password change endpoints
-        if (requestPath.equals("/api/auth/staff/login") ||
-            requestPath.equals("/api/auth/change-password")) {
+        if (path.startsWith("/api/auth/staff/login") || path.startsWith("/api/auth/change-password")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        if (SecurityContextHolder.getContext().getAuthentication() instanceof UsernamePasswordAuthenticationToken authentication) {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth instanceof UsernamePasswordAuthenticationToken authentication)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
-            Object principal = authentication.getPrincipal();
-            String email = null;
+        Object principal = authentication.getPrincipal();
+        String email = null;
 
-            // Determine email from principal
-            if (principal instanceof User user) {
-                email = user.getEmail();
-            } else if (principal instanceof org.springframework.security.core.userdetails.User springUser) {
-                email = springUser.getUsername();
-            }
+        if (principal instanceof JwtUserPrincipal jwtUser) {
+            email = jwtUser.email();
+        } else if (principal instanceof User user) {
+            email = user.getEmail();
+        }
 
-            if (email != null) {
-                User freshUser = userRepository.findByEmail(email).orElse(null);
-                if (freshUser != null) {
+        if (email != null) {
+            User freshUser = userRepository.findByEmail(email).orElse(null);
+            if (freshUser != null) {
+                String role = freshUser.getRole().getName();
+                if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
 
-                    // Skip admin and super-admin
-                    String roleName = freshUser.getRole().getName();
-                    if ("ADMIN".equals(roleName) || "SUPER_ADMIN".equals(roleName)) {
-                        filterChain.doFilter(request, response);
-                        return;
-                    }
-
-                    // Enforce force-password-change for all other staff
-                    if (Boolean.FALSE.equals(freshUser.getPasswordChanged())) {
-                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                        response.getWriter().write("""
-                            {
-                              "success": false,
-                              "message": "You must change your temporary password before accessing this resource."
-                            }
-                            """);
-                        return;
-                    }
+                if (!Boolean.TRUE.equals(freshUser.getPasswordChanged())) {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.getWriter().write("""
+                        {
+                          "success": false,
+                          "message": "You must change your temporary password before accessing this resource."
+                        }
+                        """);
+                    return;
                 }
             }
         }
