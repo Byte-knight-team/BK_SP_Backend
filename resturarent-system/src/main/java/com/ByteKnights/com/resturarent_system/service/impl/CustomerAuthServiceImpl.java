@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 @Service
 public class CustomerAuthServiceImpl implements CustomerAuthService {
 
+    //initialize email and pattern regexes
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
 
@@ -36,6 +37,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
     private final CustomerJwtService customerJwtService;
+
 
     public CustomerAuthServiceImpl(UserRepository userRepository,
                                    RoleRepository roleRepository,
@@ -49,6 +51,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.customerJwtService = customerJwtService;
     }
 
+    //register function
+
     @Override
     @Transactional
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
@@ -58,8 +62,10 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Email already exists");
         }
 
+        //getting role entity for customer from database
         Role customerRole = findCustomerRole();
 
+        //build user entity
         User user = User.builder()
                 .username(request.getUsername().trim())
                 .email(request.getEmail().trim().toLowerCase(Locale.ROOT))
@@ -70,21 +76,27 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .isActive(true)
                 .build();
 
+        //save it to database
         User savedUser = userRepository.save(user);
 
+        //build customer entity
         Customer customer = Customer.builder()
                 .user(savedUser)
                 .build();
         customerRepository.save(customer);
 
+
+        //normalize role name and create jwt token
         String normalizedRole = normalizeRole(customerRole.getName());
         String token = customerJwtService.generateToken(savedUser.getId(), savedUser.getEmail(), normalizedRole);
 
+        //getting time as it uneffected by zone
         String createdAtUtc = savedUser.getCreatedAt()
                 .atZone(ZoneId.systemDefault())
                 .withZoneSameInstant(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ISO_INSTANT);
 
+        //returning response
         return CustomerRegisterResponseData.builder()
                 .userId(savedUser.getId())
                 .username(savedUser.getUsername())
@@ -94,11 +106,14 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .build();
     }
 
+    //login method
+
     @Override
     @Transactional(readOnly = true)
     public CustomerLoginResponseData login(CustomerLoginRequest request) {
         validateLoginRequest(request);
 
+        //validating user and password
         User user = userRepository.findByEmail(request.getEmail().trim().toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid username or password"));
 
@@ -114,15 +129,19 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
         }
 
+        //normalize role and create jwt token
         String normalizedRole = normalizeRole(user.getRole().getName());
         String token = customerJwtService.generateToken(user.getId(), user.getEmail(), normalizedRole);
 
+        //return response
         return CustomerLoginResponseData.builder()
                 .userId(user.getId())
                 .role(normalizedRole)
                 .token(token)
                 .build();
     }
+
+    //helper method for validation
 
     private void validateRegisterRequest(CustomerRegisterRequest request) {
         if (request == null
@@ -154,6 +173,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
     }
 
+
+    //method to get role from database
     private Role findCustomerRole() {
         Optional<Role> roleOptional = roleRepository.findByName("ROLE_CUSTOMER");
         if (roleOptional.isPresent()) {
@@ -175,6 +196,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         return isBlank(address) ? null : address.trim();
     }
 
+    //method to if login user is a customer
     private boolean isCustomerUser(User user) {
         if (user == null || user.getRole() == null || isBlank(user.getRole().getName())) {
             return false;
