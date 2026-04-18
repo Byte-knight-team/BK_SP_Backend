@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import com.byteknights.com.resturarent_system.auth.AuthService;
+import com.byteknights.com.resturarent_system.dto.ChangePasswordRequest;
 import com.byteknights.com.resturarent_system.dto.LoginResponse;
 import com.byteknights.com.resturarent_system.dto.StaffLoginRequest;
 
@@ -34,5 +35,10 @@ public class AuthController {
         System.out.println(">>> staff login endpoint reached");
         LoginResponse response = authService.loginStaff(request);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/change-password")
+    public ResponseEntity<String> changePassword(@RequestBody ChangePasswordRequest request) {
+        return ResponseEntity.ok(authService.changePassword(request));
     }
 }

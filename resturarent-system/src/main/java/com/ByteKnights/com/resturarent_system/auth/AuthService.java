@@ -10,16 +10,22 @@ import com.byteknights.com.resturarent_system.dto.LoginResponse;
 import com.byteknights.com.resturarent_system.dto.StaffLoginRequest;
 import com.byteknights.com.resturarent_system.entity.User;
 import com.byteknights.com.resturarent_system.repository.UserRepository;
+import com.byteknights.com.resturarent_system.security.JwtService;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
 public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(UserRepository userRepository,
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
     }
 
     public LoginResponse loginStaff(StaffLoginRequest request) {
@@ -39,21 +45,45 @@ public class AuthService {
             throw new RuntimeException("Invalid password");
         }
 
-        return new LoginResponse(
-                user.getId(),
-                user.getUsername(),
-                user.getEmail(),
-                user.getRole().getName(),
-                user.getIsActive()
-        );
+        String roleName = user.getRole().getName();
+        String token = jwtService.generateToken(user.getEmail(), roleName);
+
+        return LoginResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .role(roleName)
+                .active(user.getIsActive())
+                .passwordChanged(user.getPasswordChanged())
+                .token(token)
+                .tokenType("Bearer")
+                .build();
     }
 
     public String changePassword(ChangePasswordRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        Object principal = SecurityContextHolder.getContext()
+                .getAuthentication()
+                .getPrincipal();
+
+        if (!(principal instanceof User)) {
+            throw new RuntimeException("Authenticated user not found");
+        }
+
+        User authenticatedUser = (User) principal;
+
+        User user = userRepository.findByEmail(authenticatedUser.getEmail())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (!Boolean.TRUE.equals(user.getIsActive())) {
             throw new RuntimeException("Account disabled");
+        }
+
+        if (request.getCurrentPassword() == null || request.getCurrentPassword().trim().isEmpty()) {
+            throw new RuntimeException("Current password is required");
+        }
+
+        if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
+            throw new RuntimeException("New password is required");
         }
 
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
@@ -61,6 +91,7 @@ public class AuthService {
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChanged(true);
         userRepository.save(user);
 
         return "Password changed successfully";
