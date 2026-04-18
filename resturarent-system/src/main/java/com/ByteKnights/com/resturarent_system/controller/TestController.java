@@ -6,7 +6,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/test")
 public class TestController {
 
     private final StaffService staffService;
@@ -19,7 +18,8 @@ public class TestController {
     // -------STAFF TEST ENDPOINTS-------
 
     // Any authenticated staff (CHEF, MANAGER, ADMIN, etc.)
-    @GetMapping("/staff")
+    // Both /api/test/staff and /api/staff/test work
+    @GetMapping({"/api/test/staff", "/api/staff/test"})
     @PreAuthorize("isAuthenticated()")
     public String staffTest() {
         return "Authenticated staff access granted";
@@ -29,35 +29,35 @@ public class TestController {
 
 
     // Admin and SUPER_ADMIN only
-    @GetMapping("/admin")
+    @GetMapping("/api/test/admin")
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public String adminTest() {
         return "ADMIN or SUPER_ADMIN access granted";
     }
 
     // Manager, Admin, SUPER_ADMIN
-    @GetMapping("/manager")
+    @GetMapping("/api/test/manager")
     @PreAuthorize("hasAnyRole('MANAGER','ADMIN','SUPER_ADMIN')")
     public String managerTest() {
         return "MANAGER, ADMIN, or SUPER_ADMIN access granted";
     }
 
     // Receptionist, Admin, SUPER_ADMIN
-    @GetMapping("/receptionist")
+    @GetMapping("/api/test/receptionist")
     @PreAuthorize("hasAnyRole('RECEPTIONIST','ADMIN','SUPER_ADMIN')")
     public String receptionistTest() {
         return "RECEPTIONIST, ADMIN, or SUPER_ADMIN access granted";
     }
 
     // CHEF, Admin, SUPER_ADMIN
-    @GetMapping("/chef")
+    @GetMapping("/api/test/chef")
     @PreAuthorize("hasAnyRole('CHEF','ADMIN','SUPER_ADMIN')")
     public String chefTest() {
         return "CHEF, ADMIN, or SUPER_ADMIN access granted";
     }
 
     // Delivery, Admin, SUPER_ADMIN
-    @GetMapping("/delivery")
+    @GetMapping("/api/test/delivery")
     @PreAuthorize("hasAnyRole('DELIVERY','ADMIN','SUPER_ADMIN')")
     public String deliveryTest() {
         return "DELIVERY, ADMIN, or SUPER_ADMIN access granted";
@@ -67,9 +67,9 @@ public class TestController {
     // -------RESEND INVITE TEST-------
 
     // Admin / SUPER_ADMIN can test resend invite
-    @PostMapping("/resend-invite/{id}")
+    @PostMapping("/api/test/resend-invite/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public CreateStaffResponse testResendInvite(@PathVariable Long id) {
         return staffService.resendInvite(id);
     }
-}
+}

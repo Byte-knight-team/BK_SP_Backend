@@ -27,18 +27,31 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
-                .cors(Customizer.withDefaults())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/staff/login").permitAll()
-                        .requestMatchers("/api/auth/change-password").authenticated()
-                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER", "SUPER_ADMIN")
-                        .anyRequest().authenticated()
-                )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(forcePasswordChangeFilter, JwtAuthenticationFilter.class);
+            .csrf(csrf -> csrf.disable())
+            .cors(Customizer.withDefaults())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                // Public endpoints
+                .requestMatchers("/api/auth/staff/login").permitAll()
+                .requestMatchers("/api/auth/change-password").authenticated()
+                
+                // Admin endpoints
+                .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                
+                // Manager endpoints
+                .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER", "SUPER_ADMIN")
+                
+                // Staff testing endpoints
+                .requestMatchers("/api/staff/**").hasAnyRole("ADMIN", "MANAGER", "CHEF", "RECEPTIONIST", "DELIVERY", "SUPER_ADMIN")
+                
+                // Default for any other request
+                .anyRequest().authenticated()
+            )
+            // JWT filter must run first to set the authenticated principal
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            
+            // Force-password-change filter runs after JWT, so principal is set
+            .addFilterAfter(forcePasswordChangeFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
