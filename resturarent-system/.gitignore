@@ -34,6 +34,7 @@ build/
 
 ### Configuration ###
 .env.properties
+.env
 
 # junk files
 build.log
