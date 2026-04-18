@@ -1,7 +1,7 @@
-package com.byteknights.com.resturarent_system.config;
+package com.ByteKnights.com.resturarent_system.config;
 
-import com.byteknights.com.resturarent_system.entity.*;
-import com.byteknights.com.resturarent_system.repository.*;
+import com.ByteKnights.com.resturarent_system.entity.*;
+import com.ByteKnights.com.resturarent_system.repository.*;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;

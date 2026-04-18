@@ -1,15 +1,15 @@
-package com.byteknights.com.resturarent_system.auth;
+package com.ByteKnights.com.resturarent_system.auth;
 
 import java.util.Optional;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.byteknights.com.resturarent_system.dto.ChangePasswordRequest;
-import com.byteknights.com.resturarent_system.dto.LoginResponse;
-import com.byteknights.com.resturarent_system.dto.StaffLoginRequest;
-import com.byteknights.com.resturarent_system.entity.User;
-import com.byteknights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.dto.ChangePasswordRequest;
+import com.ByteKnights.com.resturarent_system.dto.LoginResponse;
+import com.ByteKnights.com.resturarent_system.dto.StaffLoginRequest;
+import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 
 @Service
 public class AuthService {

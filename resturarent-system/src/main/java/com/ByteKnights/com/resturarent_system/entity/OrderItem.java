@@ -1,4 +1,4 @@
-package com.byteknights.com.resturarent_system.entity;
+package com.ByteKnights.com.resturarent_system.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
