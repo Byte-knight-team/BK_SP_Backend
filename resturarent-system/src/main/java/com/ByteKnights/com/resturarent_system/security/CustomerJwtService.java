@@ -15,21 +15,31 @@ import java.util.Map;
 @Service
 public class CustomerJwtService {
 
+    //extract secreat keys and time
+
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
 
+    //method to genarate token
+
     public String generateToken(Long userId, String email, String roleName) {
+
+        //take current time and make expiration time
         Instant now = Instant.now();
         Instant expiry = now.plusMillis(jwtExpirationMs);
+
+        //create custom data fileds for token
 
         Map<String, Object> claims = Map.of(
                 "email", email,
                 "roles", List.of(roleName),
                 "userId", userId
         );
+
+        //build and return the token
 
         return Jwts.builder()
                 .subject(email)
@@ -39,6 +49,8 @@ public class CustomerJwtService {
             .signWith(getSigningKey(), Jwts.SIG.HS256)
                 .compact();
     }
+
+    //helper method to get correct formated cryptrograpy key
 
     private SecretKey getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(jwtSecret);
