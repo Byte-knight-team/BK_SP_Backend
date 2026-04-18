@@ -2,16 +2,18 @@ package com.byteknights.com.resturarent_system.service;
 
 import com.byteknights.com.resturarent_system.dto.CreateStaffRequest;
 import com.byteknights.com.resturarent_system.dto.CreateStaffResponse;
+import com.byteknights.com.resturarent_system.entity.InviteStatus;
 import com.byteknights.com.resturarent_system.entity.Role;
 import com.byteknights.com.resturarent_system.entity.User;
 import com.byteknights.com.resturarent_system.repository.RoleRepository;
 import com.byteknights.com.resturarent_system.repository.UserRepository;
+import com.byteknights.com.resturarent_system.service.email.EmailService;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-
+import java.time.LocalDateTime;
 import java.util.Random;
 
 @Service
@@ -20,13 +22,16 @@ public class StaffService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     public StaffService(UserRepository userRepository,
                         RoleRepository roleRepository,
-                        PasswordEncoder passwordEncoder) {
+                        PasswordEncoder passwordEncoder,
+                        EmailService emailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     public CreateStaffResponse createStaff(CreateStaffRequest request) {
@@ -61,7 +66,6 @@ public class StaffService {
 
         String requestedRole = request.getRoleName().trim().toUpperCase();
 
-        // Get current logged-in user role
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         String currentUserRole = authentication.getAuthorities()
@@ -71,16 +75,10 @@ public class StaffService {
                 .getAuthority()
                 .replace("ROLE_", "");
 
-        // Rule enforcement
         if (currentUserRole.equals("ADMIN")) {
-
             if (requestedRole.equals("ADMIN") || requestedRole.equals("SUPER_ADMIN")) {
                 throw new RuntimeException("ADMIN cannot create ADMIN or SUPER_ADMIN users");
             }
-        }
-
-        if (currentUserRole.equals("SUPER_ADMIN")) {
-            // SUPER_ADMIN can create all roles → no restriction
         }
 
         if (requestedRole.equals("CUSTOMER")) {
@@ -100,19 +98,114 @@ public class StaffService {
                 .passwordChanged(false)
                 .role(role)
                 .isActive(true)
+                .inviteStatus(InviteStatus.PENDING)
+                .lastInviteAttemptAt(LocalDateTime.now())
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        return CreateStaffResponse.builder()
-                .id(savedUser.getId())
-                .username(savedUser.getUsername())
-                .email(savedUser.getEmail())
-                .phone(savedUser.getPhone())
-                .role(savedUser.getRole().getName())
-                .active(savedUser.getIsActive())
-                .temporaryPassword(temporaryPassword)
-                .build();
+        try {
+            emailService.sendStaffInviteEmail(
+                    savedUser.getEmail(),
+                    savedUser.getUsername(),
+                    temporaryPassword
+            );
+
+            savedUser.setInviteStatus(InviteStatus.SENT);
+            savedUser.setLastInviteAttemptAt(LocalDateTime.now());
+            userRepository.save(savedUser);
+
+            return CreateStaffResponse.builder()
+                    .id(savedUser.getId())
+                    .username(savedUser.getUsername())
+                    .email(savedUser.getEmail())
+                    .phone(savedUser.getPhone())
+                    .role(savedUser.getRole().getName())
+                    .active(savedUser.getIsActive())
+                    .passwordChanged(savedUser.getPasswordChanged())
+                    .inviteStatus(savedUser.getInviteStatus())
+                    .emailSent(true)
+                    .temporaryPassword(null)
+                    .message("Staff created successfully and invitation email sent.")
+                    .build();
+
+        } catch (Exception e) {
+            savedUser.setInviteStatus(InviteStatus.FAILED);
+            savedUser.setLastInviteAttemptAt(LocalDateTime.now());
+            userRepository.save(savedUser);
+
+            return CreateStaffResponse.builder()
+                    .id(savedUser.getId())
+                    .username(savedUser.getUsername())
+                    .email(savedUser.getEmail())
+                    .phone(savedUser.getPhone())
+                    .role(savedUser.getRole().getName())
+                    .active(savedUser.getIsActive())
+                    .passwordChanged(savedUser.getPasswordChanged())
+                    .inviteStatus(savedUser.getInviteStatus())
+                    .emailSent(false)
+                    .temporaryPassword(temporaryPassword)
+                    .message("Staff created successfully, but invitation email could not be sent.")
+                    .build();
+        }
+    }
+
+    public CreateStaffResponse resendInvite(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Staff user not found"));
+
+        String newTemporaryPassword = generateTemporaryPassword();
+
+        user.setPassword(passwordEncoder.encode(newTemporaryPassword));
+        user.setPasswordChanged(false);
+        user.setLastInviteAttemptAt(LocalDateTime.now());
+
+        userRepository.save(user);
+
+        try {
+            emailService.sendStaffInviteEmail(
+                    user.getEmail(),
+                    user.getUsername(),
+                    newTemporaryPassword
+            );
+
+            user.setInviteStatus(InviteStatus.SENT);
+            user.setLastInviteAttemptAt(LocalDateTime.now());
+            userRepository.save(user);
+
+            return CreateStaffResponse.builder()
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .email(user.getEmail())
+                    .phone(user.getPhone())
+                    .role(user.getRole().getName())
+                    .active(user.getIsActive())
+                    .passwordChanged(user.getPasswordChanged())
+                    .inviteStatus(user.getInviteStatus())
+                    .emailSent(true)
+                    .temporaryPassword(null)
+                    .message("Invitation email resent successfully.")
+                    .build();
+
+        } catch (Exception e) {
+            user.setInviteStatus(InviteStatus.FAILED);
+            user.setLastInviteAttemptAt(LocalDateTime.now());
+            userRepository.save(user);
+
+            return CreateStaffResponse.builder()
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .email(user.getEmail())
+                    .phone(user.getPhone())
+                    .role(user.getRole().getName())
+                    .active(user.getIsActive())
+                    .passwordChanged(user.getPasswordChanged())
+                    .inviteStatus(user.getInviteStatus())
+                    .emailSent(false)
+                    .temporaryPassword(newTemporaryPassword)
+                    .message("Invitation email resend failed.")
+                    .build();
+        }
     }
 
     private String generateTemporaryPassword() {

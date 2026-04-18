@@ -21,4 +21,10 @@ public class StaffController {
     public CreateStaffResponse createStaff(@RequestBody CreateStaffRequest request) {
         return staffService.createStaff(request);
     }
+
+    @PostMapping("/{id}/resend-invite")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public CreateStaffResponse resendInvite(@PathVariable Long id) {
+        return staffService.resendInvite(id);
+    }
 }

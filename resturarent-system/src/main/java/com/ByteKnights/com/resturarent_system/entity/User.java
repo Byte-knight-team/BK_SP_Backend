@@ -2,6 +2,7 @@ package com.byteknights.com.resturarent_system.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -11,7 +12,6 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-
 public class User {
 
     @Id
@@ -46,6 +46,7 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private InviteStatus inviteStatus = InviteStatus.PENDING;
+
     private LocalDateTime lastInviteAttemptAt;
 
     @Column(updatable = false)
