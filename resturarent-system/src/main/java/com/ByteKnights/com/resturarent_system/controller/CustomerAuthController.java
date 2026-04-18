@@ -35,7 +35,7 @@ public class CustomerAuthController {
     //customer login controller
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<CustomerLoginResponseData>> login(
-            @RequestBody(required = false) CustomerLoginRequest request) {
+            @RequestBody CustomerLoginRequest request) {
         CustomerLoginResponseData responseData = customerAuthService.login(request);
         return ResponseEntity.ok(ApiResponse.success("Login successful.", responseData));
     }
