@@ -1,7 +1,7 @@
-package com.byteknights.com.resturarent_system.security;
+package com.ByteKnights.com.resturarent_system.security;
 
-import com.byteknights.com.resturarent_system.entity.User;
-import com.byteknights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

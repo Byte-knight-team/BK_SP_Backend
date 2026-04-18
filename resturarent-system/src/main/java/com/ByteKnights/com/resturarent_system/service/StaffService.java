@@ -1,13 +1,13 @@
-package com.byteknights.com.resturarent_system.service;
+package com.ByteKnights.com.resturarent_system.service;
 
-import com.byteknights.com.resturarent_system.dto.CreateStaffRequest;
-import com.byteknights.com.resturarent_system.dto.CreateStaffResponse;
-import com.byteknights.com.resturarent_system.entity.InviteStatus;
-import com.byteknights.com.resturarent_system.entity.Role;
-import com.byteknights.com.resturarent_system.entity.User;
-import com.byteknights.com.resturarent_system.repository.RoleRepository;
-import com.byteknights.com.resturarent_system.repository.UserRepository;
-import com.byteknights.com.resturarent_system.service.email.EmailService;
+import com.ByteKnights.com.resturarent_system.dto.CreateStaffRequest;
+import com.ByteKnights.com.resturarent_system.dto.CreateStaffResponse;
+import com.ByteKnights.com.resturarent_system.entity.InviteStatus;
+import com.ByteKnights.com.resturarent_system.entity.Role;
+import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.service.email.EmailService;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;

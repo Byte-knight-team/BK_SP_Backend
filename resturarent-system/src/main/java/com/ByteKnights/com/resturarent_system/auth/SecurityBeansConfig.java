@@ -1,4 +1,4 @@
-package com.byteknights.com.resturarent_system.auth;
+package com.ByteKnights.com.resturarent_system.auth;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
