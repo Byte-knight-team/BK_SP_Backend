@@ -1,7 +1,6 @@
 package com.ByteKnights.com.resturarent_system.security;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +36,7 @@ public class CustomerJwtService {
                 .claims(claims)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+            .signWith(getSigningKey(), Jwts.SIG.HS256)
                 .compact();
     }
 
