@@ -1,4 +1,4 @@
-package com.byteknights.com.resturarent_system.exception;
+package com.ByteKnights.com.resturarent_system.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

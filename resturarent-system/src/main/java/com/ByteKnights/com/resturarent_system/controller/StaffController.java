@@ -1,8 +1,8 @@
-package com.byteknights.com.resturarent_system.controller;
+package com.ByteKnights.com.resturarent_system.controller;
 
-import com.byteknights.com.resturarent_system.dto.CreateStaffRequest;
-import com.byteknights.com.resturarent_system.dto.CreateStaffResponse;
-import com.byteknights.com.resturarent_system.service.StaffService;
+import com.ByteKnights.com.resturarent_system.dto.CreateStaffRequest;
+import com.ByteKnights.com.resturarent_system.dto.CreateStaffResponse;
+import com.ByteKnights.com.resturarent_system.service.StaffService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 

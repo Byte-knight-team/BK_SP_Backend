@@ -1,4 +1,4 @@
-package com.byteknights.com.resturarent_system.service.email;
+package com.ByteKnights.com.resturarent_system.service.email;
 
 import org.springframework.stereotype.Service;
 

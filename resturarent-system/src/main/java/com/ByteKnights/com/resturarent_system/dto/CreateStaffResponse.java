@@ -1,6 +1,6 @@
-package com.byteknights.com.resturarent_system.dto;
+package com.ByteKnights.com.resturarent_system.dto;
 
-import com.byteknights.com.resturarent_system.entity.InviteStatus;
+import com.ByteKnights.com.resturarent_system.entity.InviteStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

@@ -1,6 +1,7 @@
-package com.byteknights.com.resturarent_system.config;
+package com.ByteKnights.com.resturarent_system.config;
 
-import com.byteknights.com.resturarent_system.security.JwtAuthenticationFilter;
+import com.ByteKnights.com.resturarent_system.security.ForcePasswordChangeFilter;
+import com.ByteKnights.com.resturarent_system.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
@@ -15,9 +16,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final ForcePasswordChangeFilter forcePasswordChangeFilter;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter,
+                          ForcePasswordChangeFilter forcePasswordChangeFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.forcePasswordChangeFilter = forcePasswordChangeFilter;
     }
 
     @Bean
@@ -29,13 +33,13 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/staff/login").permitAll()
                         .requestMatchers("/api/auth/change-password").authenticated()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER")
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER", "SUPER_ADMIN")
                         .anyRequest().authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(forcePasswordChangeFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
-
 }

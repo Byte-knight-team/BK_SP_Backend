@@ -1,7 +1,7 @@
-package com.byteknights.com.resturarent_system.config;
+package com.ByteKnights.com.resturarent_system.config;
 
-import com.byteknights.com.resturarent_system.entity.*;
-import com.byteknights.com.resturarent_system.repository.*;
+import com.ByteKnights.com.resturarent_system.entity.*;
+import com.ByteKnights.com.resturarent_system.repository.*;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +18,7 @@ public class DataSeeder implements CommandLineRunner {
         private final RoleRepository roleRepository;
         private final MenuItemRepository menuItemRepository;
         private final OrderItemRepository orderItemRepository;
+        private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
         public DataSeeder(BranchRepository branchRepository,
                         CustomerRepository customerRepository,
@@ -25,7 +26,8 @@ public class DataSeeder implements CommandLineRunner {
                         UserRepository userRepository,
                         RoleRepository roleRepository,
                         MenuItemRepository menuItemRepository,
-                        OrderItemRepository orderItemRepository) {
+                        OrderItemRepository orderItemRepository,
+                        org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
                 this.branchRepository = branchRepository;
                 this.customerRepository = customerRepository;
                 this.orderRepository = orderRepository;
@@ -33,25 +35,45 @@ public class DataSeeder implements CommandLineRunner {
                 this.roleRepository = roleRepository;
                 this.menuItemRepository = menuItemRepository;
                 this.orderItemRepository = orderItemRepository;
+                this.passwordEncoder = passwordEncoder;
         }
 
         @Override
         @Transactional
         public void run(String... args) throws Exception {
+                System.out.println("Checking and seeding required roles/admin...");
+
+                // Always ensure required roles exist
+                Role customerRole = createRoleIfNotExists("CUSTOMER", "Customer Role");
+                Role superAdminRole = createRoleIfNotExists("SUPER_ADMIN", "System Super Admin");
+                Role adminRole = createRoleIfNotExists("ADMIN", "System Admin");
+                createRoleIfNotExists("CHEF", "Chef Role");
+                createRoleIfNotExists("MANAGER", "Manager Role");
+                createRoleIfNotExists("RECEPTIONIST", "Reception Role");
+                createRoleIfNotExists("DELIVERY", "Delivery Role");
+
+                // Always ensure default super admin exists
+                if (!userRepository.existsByEmail("admin@test.com")) {
+                        User admin = User.builder()
+                                        .username("superadmin")
+                                        .email("admin@test.com")
+                                        .password(passwordEncoder.encode("Temp1234"))
+                                        .phone("0770000000")
+                                        .role(superAdminRole)
+                                        .isActive(true)
+                                        .passwordChanged(false)
+                                        .build();
+
+                        userRepository.save(admin);
+                        System.out.println("SUPER_ADMIN created: admin@test.com / Temp1234");
+                }
+
                 if (orderRepository.count() > 0) {
+                        System.out.println("Orders already exist. Skipping sample order/customer data.");
                         return;
                 }
 
-                System.out.println("Seeding data...");
-
-                // Create Role
-                Role customerRole = roleRepository.findByName("ROLE_CUSTOMER").orElseGet(() -> {
-                        Role role = Role.builder()
-                                        .name("ROLE_CUSTOMER")
-                                        .description("Customer Role")
-                                        .build();
-                        return roleRepository.save(role);
-                });
+                System.out.println("Seeding sample data...");
 
                 // Create Branch
                 Branch branch = Branch.builder()
@@ -200,5 +222,15 @@ public class DataSeeder implements CommandLineRunner {
                 orderItemRepository.save(item4);
 
                 System.out.println("Data seeding completed.");
+        }
+
+        private Role createRoleIfNotExists(String name, String description) {
+                return roleRepository.findByName(name).orElseGet(() -> {
+                        Role role = Role.builder()
+                                        .name(name)
+                                        .description(description)
+                                        .build();
+                        return roleRepository.save(role);
+                });
         }
 }

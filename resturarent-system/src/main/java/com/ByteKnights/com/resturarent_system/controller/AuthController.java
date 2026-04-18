@@ -1,12 +1,12 @@
-package com.byteknights.com.resturarent_system.controller;
+package com.ByteKnights.com.resturarent_system.controller;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.byteknights.com.resturarent_system.auth.AuthService;
-import com.byteknights.com.resturarent_system.dto.ChangePasswordRequest;
-import com.byteknights.com.resturarent_system.dto.LoginResponse;
-import com.byteknights.com.resturarent_system.dto.StaffLoginRequest;
+import com.ByteKnights.com.resturarent_system.auth.AuthService;
+import com.ByteKnights.com.resturarent_system.dto.ChangePasswordRequest;
+import com.ByteKnights.com.resturarent_system.dto.LoginResponse;
+import com.ByteKnights.com.resturarent_system.dto.StaffLoginRequest;
 
 @RestController
 @RequestMapping("/api/auth")

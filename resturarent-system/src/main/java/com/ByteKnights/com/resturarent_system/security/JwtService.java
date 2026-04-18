@@ -1,4 +1,4 @@
-package com.byteknights.com.resturarent_system.security;
+package com.ByteKnights.com.resturarent_system.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
