@@ -32,6 +32,10 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
                 .orElseThrow(() -> new RuntimeException(
                         "Branch not found with id: " + request.getBranchId()));
 
+        if (branch.getStatus() != com.ByteKnights.com.resturarent_system.entity.BranchStatus.ACTIVE) {
+            throw new RuntimeException("Cannot create table in an inactive branch: " + branch.getName());
+        }
+
         // 2. Check for duplicate table number within branch
         if (tableRepository.existsByBranchIdAndTableNumber(
                 request.getBranchId(), request.getTableNumber())) {
