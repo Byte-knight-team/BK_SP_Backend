@@ -37,6 +37,12 @@ public class InventoryItem {
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
 
+    @Column(length = 50)
+    private String category;
+
+    @Column(name = "unit_price", precision = 10, scale = 2)
+    private BigDecimal unitPrice;
+
     @PrePersist
     @PreUpdate
     protected void onUpdate() {
