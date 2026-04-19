@@ -12,4 +12,6 @@ public interface RestaurantTableRepository extends JpaRepository<RestaurantTable
     List<RestaurantTable> findByBranchId(Long branchId);
 
     boolean existsByBranchIdAndTableNumber(Long branchId, Integer tableNumber);
+
+    boolean existsByBranchIdAndTableNumberAndIdNot(Long branchId, Integer tableNumber, Long id);
 }
