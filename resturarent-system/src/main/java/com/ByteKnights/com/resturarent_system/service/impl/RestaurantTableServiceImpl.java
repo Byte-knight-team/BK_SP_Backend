@@ -76,20 +76,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<TableResponse> getTablesByBranch(Long branchId) {
-        // Validate branch exists
-        if (!branchRepository.existsById(branchId)) {
-            throw new RuntimeException("Branch not found with id: " + branchId);
-        }
-
-        return tableRepository.findByBranchId(branchId)
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-    }
-
-    @Override
     @Transactional
     public TableResponse updateTable(Long id, UpdateTableRequest request) {
         RestaurantTable table = findTableOrThrow(id);

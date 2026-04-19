@@ -49,17 +49,6 @@ public class RestaurantTableController {
         }
     }
 
-    @GetMapping("/branch/{branchId}")
-    public ResponseEntity<?> getTablesByBranch(@PathVariable Long branchId) {
-        try {
-            List<TableResponse> tables = tableService.getTablesByBranch(branchId);
-            return ResponseEntity.ok(tables);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", e.getMessage()));
-        }
-    }
-
     @PutMapping("/{id}")
     public ResponseEntity<?> updateTable(
             @PathVariable Long id,
