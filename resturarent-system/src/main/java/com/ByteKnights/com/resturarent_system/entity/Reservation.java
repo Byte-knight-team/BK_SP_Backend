@@ -22,8 +22,14 @@ public class Reservation {
     private RestaurantTable table;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id", nullable = false)
+    @JoinColumn(name = "customer_id")
     private Customer customer;
+
+    @Column(name = "customer_name", length = 100)
+    private String customerName;
+
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone;
 
     @Column(name = "reservation_time", nullable = false)
     private LocalDateTime reservationTime;
@@ -32,10 +38,14 @@ public class Reservation {
     private Integer guestCount;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     @Builder.Default
     private ReservationStatus status = ReservationStatus.CONFIRMED;
 
-    @Column(updatable = false)
+    @Column(name = "cancel_reason", length = 255)
+    private String cancelReason;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist

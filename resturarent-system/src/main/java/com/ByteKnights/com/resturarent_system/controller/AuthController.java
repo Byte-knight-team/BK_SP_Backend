@@ -3,21 +3,36 @@ package com.ByteKnights.com.resturarent_system.controller;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.ByteKnights.com.resturarent_system.auth.AuthService;
+import com.ByteKnights.com.resturarent_system.dto.LoginResponse;
+import com.ByteKnights.com.resturarent_system.dto.StaffLoginRequest;
+
 @RestController
 @RequestMapping("/api/auth")
+@CrossOrigin(origins = "http://localhost:5173")
 public class AuthController {
 
-    // TODO: Inject AuthService / UserService / PasswordEncoder / JwtUtil
+    private final AuthService authService;
 
-    @PostMapping("/register")
-    public ResponseEntity<?> register(/* TODO: @RequestBody RegisterRequest request */) {
-        // TODO: Implement user registration logic
-        return ResponseEntity.ok("Register endpoint — not yet implemented");
+    public AuthController(AuthService authService) {
+        this.authService = authService;
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<?> login(/* TODO: @RequestBody LoginRequest request */) {
-        // TODO: Implement authentication + JWT token generation
-        return ResponseEntity.ok("Login endpoint — not yet implemented");
+
+    @GetMapping("/ping")
+    public ResponseEntity<String> ping() {
+        return ResponseEntity.ok("auth open");
+    }
+
+    @PostMapping("/ping-post")
+    public ResponseEntity<String> pingPost() {
+        return ResponseEntity.ok("post open");
+    }
+
+    @PostMapping("/staff/login")
+    public ResponseEntity<LoginResponse> staffLogin(@RequestBody StaffLoginRequest request) {
+        System.out.println(">>> staff login endpoint reached");
+        LoginResponse response = authService.loginStaff(request);
+        return ResponseEntity.ok(response);
     }
 }
