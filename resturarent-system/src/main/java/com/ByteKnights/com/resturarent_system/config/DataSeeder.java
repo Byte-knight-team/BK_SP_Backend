@@ -126,19 +126,18 @@ public class DataSeeder implements CommandLineRunner {
                 menuItemRepository.save(fries);
 
                 // Create Order 1 (Pending) - 9:00 AM
-                Order order1 = Order.builder()
-                                .orderNumber("ORD-1204") // Matching frontend mock ID format
-                                .branch(branch)
-                                .customer(customer)
-                                .orderType(OrderType.QR)
-                                .status(OrderStatus.PLACED) // Mapping PLACED to 'pending' in frontend?
-                                .totalAmount(BigDecimal.valueOf(21.98))
-                                .discountAmount(BigDecimal.ZERO)
-                                .finalAmount(BigDecimal.valueOf(21.98))
-                                .paymentStatus(PaymentStatus.PENDING)
-                                .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
-                                                java.time.LocalTime.of(9, 0)))
-                                .build();
+                Order order1 = new Order();
+                order1.setOrderNumber("ORD-1204"); // Matching frontend mock ID format
+                order1.setBranch(branch);
+                order1.setCustomer(customer);
+                order1.setOrderType(OrderType.QR);
+                order1.setStatus(OrderStatus.PLACED); // Mapping PLACED to 'pending' in frontend?
+                order1.setTotalAmount(BigDecimal.valueOf(21.98));
+                order1.setDiscountAmount(BigDecimal.ZERO);
+                order1.setFinalAmount(BigDecimal.valueOf(21.98));
+                order1.setPaymentStatus(PaymentStatus.PENDING);
+                order1.setCreatedAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
+                                java.time.LocalTime.of(9, 0)));
                 order1 = orderRepository.save(order1);
 
                 // Add items to Order 1
@@ -163,19 +162,18 @@ public class DataSeeder implements CommandLineRunner {
                 orderItemRepository.save(item2);
 
                 // Create Order 2 (Preparing) - 9:30 AM
-                Order order2 = Order.builder()
-                                .orderNumber("ORD-1200")
-                                .branch(branch)
-                                .customer(customer)
-                                .orderType(OrderType.QR)
-                                .status(OrderStatus.PLACED)
-                                .totalAmount(BigDecimal.valueOf(37.97)) // 2 Burgers + 1 Fries
-                                .discountAmount(BigDecimal.ZERO)
-                                .finalAmount(BigDecimal.valueOf(37.97))
-                                .paymentStatus(PaymentStatus.PAID)
-                                .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
-                                                java.time.LocalTime.of(9, 30)))
-                                .build();
+                Order order2 = new Order();
+                order2.setOrderNumber("ORD-1200");
+                order2.setBranch(branch);
+                order2.setCustomer(customer);
+                order2.setOrderType(OrderType.QR);
+                order2.setStatus(OrderStatus.PLACED);
+                order2.setTotalAmount(BigDecimal.valueOf(37.97)); // 2 Burgers + 1 Fries
+                order2.setDiscountAmount(BigDecimal.ZERO);
+                order2.setFinalAmount(BigDecimal.valueOf(37.97));
+                order2.setPaymentStatus(PaymentStatus.PAID);
+                order2.setCreatedAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
+                                java.time.LocalTime.of(9, 30)));
                 order2 = orderRepository.save(order2);
 
                 OrderItem item3 = OrderItem.builder()
@@ -201,19 +199,18 @@ public class DataSeeder implements CommandLineRunner {
                 System.out.println("Seeding completed for Order 1 & 2.");
 
                 // Create Order 3 (Pending) - 11:00 AM
-                Order order3 = Order.builder()
-                                .orderNumber("ORD-1205")
-                                .branch(branch)
-                                .customer(customer)
-                                .orderType(OrderType.ONLINE)
-                                .status(OrderStatus.PLACED)
-                                .totalAmount(fries.getPrice())
-                                .discountAmount(BigDecimal.ZERO)
-                                .finalAmount(fries.getPrice())
-                                .paymentStatus(PaymentStatus.PENDING)
-                                .createdAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
-                                                java.time.LocalTime.of(11, 0)))
-                                .build();
+                Order order3 = new Order();
+                order3.setOrderNumber("ORD-1205");
+                order3.setBranch(branch);
+                order3.setCustomer(customer);
+                order3.setOrderType(OrderType.ONLINE);
+                order3.setStatus(OrderStatus.PLACED);
+                order3.setTotalAmount(fries.getPrice());
+                order3.setDiscountAmount(BigDecimal.ZERO);
+                order3.setFinalAmount(fries.getPrice());
+                order3.setPaymentStatus(PaymentStatus.PENDING);
+                order3.setCreatedAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
+                                java.time.LocalTime.of(11, 0)));
                 order3 = orderRepository.save(order3);
 
                 OrderItem item4 = OrderItem.builder()
