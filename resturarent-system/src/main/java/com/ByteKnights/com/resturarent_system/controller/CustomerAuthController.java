@@ -24,7 +24,7 @@ public class CustomerAuthController {
         this.customerAuthService = customerAuthService;
     }
 
-    //customer regiter controller
+    //online customer regiter controller
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<CustomerRegisterResponseData>> register(
             @RequestBody CustomerRegisterRequest request) {
@@ -32,7 +32,7 @@ public class CustomerAuthController {
         return ResponseEntity.ok(ApiResponse.success("Customer registered successfully.", responseData));
     }
 
-    //customer login controller
+    //online customer login controller
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<CustomerLoginResponseData>> login(
             @RequestBody CustomerLoginRequest request) {
