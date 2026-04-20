@@ -22,8 +22,9 @@ public class MenuItem {
     @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
 
-    @Column(length = 100)
-    private String category;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    private MenuCategory category;
 
     @Column(name = "sub_category", length = 100)
     private String subCategory;
@@ -44,10 +45,15 @@ public class MenuItem {
     @Column(nullable = false)
     private Boolean isAvailable = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private MenuItemStatus status = MenuItemStatus.PENDING;
+
     @Column(name = "preparation_time")
     private Integer preparationTime;
 
-    @Column(updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist

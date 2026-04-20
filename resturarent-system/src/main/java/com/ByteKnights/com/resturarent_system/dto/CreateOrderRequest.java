@@ -7,10 +7,10 @@ import java.util.List;
  * Request payload sent by the frontend when a customer places an online order.
  *
  * Maps from CheckoutPage.jsx fields:
- *   - customerName  → fullName
- *   - customerPhone → phone
+ *   - customerId    → authenticated customer ID
  *   - orderType     → "delivery" | "pickup"  (mapped to OrderType.ONLINE)
- *   - paymentMethod → "pay-now" | "pay-later" (mapped to PaymentMethod enum)
+ *   - paymentMethodId → selected payment method ID
+ *   - tableId       → optional for QR order flows
  *   - items[]       → list of {menuItemId, quantity}
  *   - deliveryAddress → only when orderType == "delivery"
  */
@@ -21,11 +21,11 @@ import java.util.List;
 @Builder
 public class CreateOrderRequest {
 
-    private String customerName;
-    private String customerPhone;
+    private Long customerId;
     private String deliveryAddress;     // null for pickup orders
     private String orderType;           // "delivery" or "pickup"
-    private String paymentMethod;       // "pay-now" or "pay-later"
+    private Long paymentMethodId;
+    private Long tableId;
     private Long branchId;              // which branch to order from
     private List<OrderItemRequest> items;
 
