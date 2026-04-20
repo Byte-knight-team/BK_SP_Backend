@@ -56,6 +56,7 @@ public class User {
     @Column(nullable = false)
     private Boolean emailSent = false;
 
+    // Deprecated: do not store plaintext temporary passwords in DB
     private String temporaryPassword;
     private LocalDateTime lastInviteAttemptAt;
 

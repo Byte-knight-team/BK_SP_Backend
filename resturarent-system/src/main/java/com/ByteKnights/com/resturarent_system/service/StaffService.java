@@ -2,20 +2,37 @@ package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.CreateStaffRequest;
 import com.ByteKnights.com.resturarent_system.dto.CreateStaffResponse;
+import com.ByteKnights.com.resturarent_system.entity.Branch;
+import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
+import com.ByteKnights.com.resturarent_system.entity.EmploymentStatus;
 import com.ByteKnights.com.resturarent_system.entity.InviteStatus;
 import com.ByteKnights.com.resturarent_system.entity.Role;
+import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
+import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.email.EmailService;
+import com.ByteKnights.com.resturarent_system.dto.StaffResponse;
+import com.ByteKnights.com.resturarent_system.dto.UpdateStaffRequest;
+
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Random;
+import java.util.Set;
+
+import java.util.Comparator;
+import java.util.List;
+
 
 @Service
 @RequiredArgsConstructor
@@ -23,15 +40,34 @@ public class StaffService {
 
     private static final Logger log = LoggerFactory.getLogger(StaffService.class);
 
+    private static final Set<String> STAFF_ROLES = Set.of(
+            "SUPER_ADMIN",
+            "ADMIN",
+            "MANAGER",
+            "CHEF",
+            "RECEPTIONIST",
+            "DELIVERY"
+    );
+
+    private static final Set<String> ADMIN_CREATABLE_ROLES = Set.of(
+            "MANAGER",
+            "CHEF",
+            "RECEPTIONIST",
+            "DELIVERY"
+    );
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final BranchRepository branchRepository;
+    private final StaffRepository staffRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
 
     @Transactional
     public CreateStaffResponse createStaff(CreateStaffRequest request) {
 
-        // ----------------- Basic input validation -----------------
+        String normalizedRoleName = normalize(request.getRoleName());
+
         StringBuilder validationErrors = new StringBuilder();
 
         if (isBlank(request.getFullName())) {
@@ -50,8 +86,14 @@ public class StaffService {
             validationErrors.append("Phone number must be exactly 10 digits. ");
         }
 
-        if (isBlank(request.getRoleName())) {
+        if (isBlank(normalizedRoleName)) {
             validationErrors.append("Role is required. ");
+        } else if (!STAFF_ROLES.contains(normalizedRoleName)) {
+            validationErrors.append("Only staff roles can be used in staff creation. ");
+        }
+
+        if (!"SUPER_ADMIN".equals(normalizedRoleName) && request.getBranchId() == null) {
+            validationErrors.append("Branch is required for non-super-admin staff. ");
         }
 
         if (validationErrors.length() > 0) {
@@ -60,18 +102,22 @@ public class StaffService {
                     .build();
         }
 
-        // ----------------- Duplicate checks -----------------
+        String email = request.getEmail().trim();
+        String phone = request.getPhone().trim();
+        String username = request.getUsername().trim();
+        String fullName = request.getFullName().trim();
+
         StringBuilder conflictMsg = new StringBuilder();
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(email)) {
             conflictMsg.append("Email already exists. ");
         }
 
-        if (userRepository.existsByPhone(request.getPhone())) {
+        if (userRepository.existsByPhone(phone)) {
             conflictMsg.append("Phone number already exists. ");
         }
 
-        if (userRepository.existsByUsername(request.getUsername())) {
+        if (userRepository.existsByUsername(username)) {
             conflictMsg.append("Username already exists. ");
         }
 
@@ -81,94 +127,139 @@ public class StaffService {
                     .build();
         }
 
-        // ----------------- Resolve role -----------------
-        Role role = roleRepository.findByName(request.getRoleName())
-                .orElseThrow(() -> new RuntimeException("Role not found: " + request.getRoleName()));
+        Role role = roleRepository.findByName(normalizedRoleName)
+                .orElseThrow(() -> new RuntimeException("Role not found: " + normalizedRoleName));
 
-        // ----------------- Generate temporary password -----------------
+        User creator = getCurrentAuthenticatedUser();
+        String creatorRole = normalize(creator.getRole().getName());
+
+        Branch targetBranch = resolveTargetBranch(creator, creatorRole, normalizedRoleName, request.getBranchId());
+
         String tempPassword = generateTempPassword();
 
-        // ----------------- Build new staff user -----------------
         User user = User.builder()
-                .fullName(request.getFullName().trim())
-                .username(request.getUsername().trim())
-                .email(request.getEmail().trim())
-                .phone(request.getPhone().trim())
+                .fullName(fullName)
+                .username(username)
+                .email(email)
+                .phone(phone)
                 .role(role)
                 .password(passwordEncoder.encode(tempPassword))
                 .passwordChanged(false)
                 .inviteStatus(InviteStatus.PENDING)
-                .temporaryPassword(tempPassword)
+                .temporaryPassword(null)
+                .emailSent(false)
                 .build();
 
-        // ----------------- Try to send invite email -----------------
+        User savedUser = userRepository.save(user);
+
+        if (!"SUPER_ADMIN".equals(normalizedRoleName)) {
+            Staff staff = Staff.builder()
+                    .user(savedUser)
+                    .branch(targetBranch)
+                    .employmentStatus(EmploymentStatus.ACTIVE)
+                    .build();
+
+            staffRepository.save(staff);
+        }
+
         try {
-            emailService.sendStaffInviteEmail(user.getEmail(), user.getUsername(), tempPassword);
-            user.setEmailSent(true);
-            user.setInviteStatus(InviteStatus.SENT);
+            emailService.sendStaffInviteEmail(savedUser.getEmail(), savedUser.getUsername(), tempPassword);
+            savedUser.setEmailSent(true);
+            savedUser.setInviteStatus(InviteStatus.SENT);
 
         } catch (Exception e) {
-            user.setEmailSent(false);
-            user.setInviteStatus(InviteStatus.FAILED);
+            savedUser.setEmailSent(false);
+            savedUser.setInviteStatus(InviteStatus.FAILED);
 
             log.error(
                     "Email sending failed while creating staff. username={}, email={}",
-                    user.getUsername(),
-                    user.getEmail(),
+                    savedUser.getUsername(),
+                    savedUser.getEmail(),
                     e
             );
         }
 
-        // Save staff even if email failed
-        User savedUser = userRepository.save(user);
+        User finalSavedUser = userRepository.save(savedUser);
 
         return CreateStaffResponse.builder()
-                .id(savedUser.getId())
-                .fullName(savedUser.getFullName())
-                .username(savedUser.getUsername())
-                .email(savedUser.getEmail())
-                .phone(savedUser.getPhone())
-                .role(savedUser.getRole().getName())
-                .active(savedUser.getIsActive())
-                .passwordChanged(savedUser.getPasswordChanged())
-                .inviteStatus(savedUser.getInviteStatus())
-                .emailSent(savedUser.getEmailSent())
-                .temporaryPassword(Boolean.TRUE.equals(savedUser.getEmailSent()) ? null : tempPassword)
-                .message(Boolean.TRUE.equals(savedUser.getEmailSent()) ? "Email sent successfully" : "Email failed")
+                .id(finalSavedUser.getId())
+                .fullName(finalSavedUser.getFullName())
+                .username(finalSavedUser.getUsername())
+                .email(finalSavedUser.getEmail())
+                .phone(finalSavedUser.getPhone())
+                .roleName(finalSavedUser.getRole().getName())
+                .active(finalSavedUser.getIsActive())
+                .passwordChanged(finalSavedUser.getPasswordChanged())
+                .inviteStatus(finalSavedUser.getInviteStatus())
+                .emailSent(finalSavedUser.getEmailSent())
+                .temporaryPassword(Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? null : tempPassword)
+                .branchId(targetBranch != null ? targetBranch.getId() : null)
+                .branchName(targetBranch != null ? targetBranch.getName() : null)
+                .message(Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? "Email sent successfully" : "Email failed")
                 .build();
     }
 
     @Transactional
     public CreateStaffResponse resendInvite(Long userId) {
-        User user = userRepository.findById(userId)
+        User targetUser = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        User creator = getCurrentAuthenticatedUser();
+        String creatorRole = normalize(creator.getRole().getName());
+        String targetRole = normalize(targetUser.getRole().getName());
+
+        Staff targetStaff = staffRepository.findByUserId(userId).orElse(null);
+
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            // SUPER_ADMIN can resend for anyone in staff flow
+            // including SUPER_ADMIN or branch staff
+        } else if ("ADMIN".equals(creatorRole)) {
+            if (targetStaff == null) {
+                throw new RuntimeException("ADMIN cannot resend invite for this user");
+            }
+
+            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+
+            Long adminBranchId = creatorStaff.getBranch().getId();
+            Long targetBranchId = targetStaff.getBranch().getId();
+
+            if (!adminBranchId.equals(targetBranchId)) {
+                throw new RuntimeException("ADMIN can resend invite only for staff in their own branch");
+            }
+
+            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+                throw new RuntimeException("ADMIN can resend invite only for MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
+            }
+        } else {
+            throw new RuntimeException("Only SUPER_ADMIN or ADMIN can resend invites");
+        }
 
         String tempPassword = generateTempPassword();
 
-        user.setPassword(passwordEncoder.encode(tempPassword));
-        user.setTemporaryPassword(tempPassword);
-        user.setPasswordChanged(false);
-        user.setInviteStatus(InviteStatus.PENDING);
+        targetUser.setPassword(passwordEncoder.encode(tempPassword));
+        targetUser.setTemporaryPassword(null);
+        targetUser.setPasswordChanged(false);
+        targetUser.setInviteStatus(InviteStatus.PENDING);
 
         try {
-            emailService.sendStaffInviteEmail(user.getEmail(), user.getUsername(), tempPassword);
-            user.setEmailSent(true);
-            user.setInviteStatus(InviteStatus.SENT);
+            emailService.sendStaffInviteEmail(targetUser.getEmail(), targetUser.getUsername(), tempPassword);
+            targetUser.setEmailSent(true);
+            targetUser.setInviteStatus(InviteStatus.SENT);
 
         } catch (Exception e) {
-            user.setEmailSent(false);
-            user.setInviteStatus(InviteStatus.FAILED);
+            targetUser.setEmailSent(false);
+            targetUser.setInviteStatus(InviteStatus.FAILED);
 
             log.error(
                     "Email sending failed while resending invite. userId={}, username={}, email={}",
-                    user.getId(),
-                    user.getUsername(),
-                    user.getEmail(),
-                    e
-            );
+                    targetUser.getId(),
+                    targetUser.getUsername(),
+                    targetUser.getEmail(),
+                    e);
         }
 
-        User savedUser = userRepository.save(user);
+        User savedUser = userRepository.save(targetUser);
 
         return CreateStaffResponse.builder()
                 .id(savedUser.getId())
@@ -176,17 +267,269 @@ public class StaffService {
                 .username(savedUser.getUsername())
                 .email(savedUser.getEmail())
                 .phone(savedUser.getPhone())
-                .role(savedUser.getRole().getName())
+                .roleName(savedUser.getRole().getName())
                 .active(savedUser.getIsActive())
                 .passwordChanged(savedUser.getPasswordChanged())
                 .inviteStatus(savedUser.getInviteStatus())
                 .emailSent(savedUser.getEmailSent())
                 .temporaryPassword(Boolean.TRUE.equals(savedUser.getEmailSent()) ? null : tempPassword)
+                .branchId(targetStaff != null ? targetStaff.getBranch().getId() : null)
+                .branchName(targetStaff != null ? targetStaff.getBranch().getName() : null)
                 .message(Boolean.TRUE.equals(savedUser.getEmailSent()) ? "Email resent successfully" : "Email failed")
                 .build();
     }
 
-    // ----------------- Helper: generate temporary password -----------------
+    //Get all staff
+    @Transactional(readOnly = true)
+    public List<StaffResponse> getAllStaff() {
+        User creator = getCurrentAuthenticatedUser();
+        String creatorRole = normalize(creator.getRole().getName());
+
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            return userRepository.findAll().stream()
+                    .filter(this::isStaffUser)
+                    .map(this::mapToStaffResponse)
+                    .sorted(Comparator.comparing(StaffResponse::getId))
+                    .toList();
+        }
+
+        if ("ADMIN".equals(creatorRole)) {
+            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+
+            Long adminBranchId = creatorStaff.getBranch().getId();
+
+            return userRepository.findAll().stream()
+                    .filter(this::isStaffUser)
+                    .filter(user -> belongsToBranch(user, adminBranchId))
+                    .map(this::mapToStaffResponse)
+                    .sorted(Comparator.comparing(StaffResponse::getId))
+                    .toList();
+        }
+
+        throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff");
+    }
+
+    //Get one staff member
+    @Transactional(readOnly = true)
+    public StaffResponse getStaffById(Long userId) {
+        User creator = getCurrentAuthenticatedUser();
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Staff user not found"));
+
+        if (!isStaffUser(targetUser)) {
+            throw new RuntimeException("This user is not a staff user");
+        }
+
+        ensureCanViewTarget(creator, targetUser);
+
+        return mapToStaffResponse(targetUser);
+    }
+
+    //Upadte staff
+    @Transactional
+    public StaffResponse updateStaff(Long userId, UpdateStaffRequest request) {
+        User creator = getCurrentAuthenticatedUser();
+        String creatorRole = normalize(creator.getRole().getName());
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Staff user not found"));
+
+        if (!isStaffUser(targetUser)) {
+            throw new RuntimeException("This user is not a staff user");
+        }
+
+        ensureCanManageTarget(creator, targetUser);
+
+        String currentTargetRole = normalize(targetUser.getRole().getName());
+        Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
+
+        if (request.getFullName() != null) {
+            String fullName = request.getFullName().trim();
+            if (fullName.isEmpty()) {
+                throw new RuntimeException("Full name cannot be empty");
+            }
+            targetUser.setFullName(fullName);
+        }
+
+        if (request.getEmail() != null) {
+            String email = request.getEmail().trim();
+            if (email.isEmpty()) {
+                throw new RuntimeException("Email cannot be empty");
+            }
+            if (!isValidEmail(email)) {
+                throw new RuntimeException("Invalid email format");
+            }
+            if (!email.equalsIgnoreCase(targetUser.getEmail()) && userRepository.existsByEmail(email)) {
+                throw new RuntimeException("Email already exists");
+            }
+            targetUser.setEmail(email);
+        }
+
+        if (request.getPhone() != null) {
+            String phone = request.getPhone().trim();
+            if (phone.isEmpty()) {
+                throw new RuntimeException("Phone cannot be empty");
+            }
+            if (!isValidPhone(phone)) {
+                throw new RuntimeException("Phone number must be exactly 10 digits");
+            }
+            if (!phone.equals(targetUser.getPhone()) && userRepository.existsByPhone(phone)) {
+                throw new RuntimeException("Phone number already exists");
+            }
+            targetUser.setPhone(phone);
+        }
+
+        if (request.getRoleName() != null) {
+            String newRoleName = normalize(request.getRoleName());
+
+            if (!STAFF_ROLES.contains(newRoleName)) {
+                throw new RuntimeException("Only staff roles can be assigned here");
+            }
+
+            if (!newRoleName.equals(currentTargetRole)) {
+                if ("SUPER_ADMIN".equals(currentTargetRole) || "SUPER_ADMIN".equals(newRoleName)) {
+                    throw new RuntimeException("Changing to or from SUPER_ADMIN through update is not supported yet");
+                }
+
+                if ("ADMIN".equals(creatorRole) && !ADMIN_CREATABLE_ROLES.contains(newRoleName)) {
+                    throw new RuntimeException("ADMIN can assign only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
+                }
+
+                Role newRole = roleRepository.findByName(newRoleName)
+                        .orElseThrow(() -> new RuntimeException("Role not found: " + newRoleName));
+
+                targetUser.setRole(newRole);
+            }
+        }
+
+        if (targetStaff != null && request.getBranchId() != null) {
+            if ("SUPER_ADMIN".equals(creatorRole)) {
+                Branch newBranch = branchRepository.findByIdAndStatus(request.getBranchId(), BranchStatus.ACTIVE)
+                        .orElseThrow(() -> new RuntimeException("Active branch not found"));
+                targetStaff.setBranch(newBranch);
+            } else if ("ADMIN".equals(creatorRole)) {
+                Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                        .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+
+                Long adminBranchId = creatorStaff.getBranch().getId();
+
+                if (!request.getBranchId().equals(adminBranchId)) {
+                    throw new RuntimeException("ADMIN can assign staff only to their own branch");
+                }
+
+                targetStaff.setBranch(creatorStaff.getBranch());
+            }
+        }
+
+        User savedUser = userRepository.save(targetUser);
+
+        if (targetStaff != null) {
+            staffRepository.save(targetStaff);
+        }
+
+        return mapToStaffResponse(savedUser);
+    }
+
+    //Activate staff
+    @Transactional
+    public StaffResponse activateStaff(Long userId) {
+        User creator = getCurrentAuthenticatedUser();
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Staff user not found"));
+
+        if (!isStaffUser(targetUser)) {
+            throw new RuntimeException("This user is not a staff user");
+        }
+
+        ensureCanManageTarget(creator, targetUser);
+
+        targetUser.setIsActive(true);
+        User savedUser = userRepository.save(targetUser);
+
+        return mapToStaffResponse(savedUser);
+    }
+
+    //Deativate staff
+    @Transactional
+    public StaffResponse deactivateStaff(Long userId) {
+        User creator = getCurrentAuthenticatedUser();
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Staff user not found"));
+
+        if (!isStaffUser(targetUser)) {
+            throw new RuntimeException("This user is not a staff user");
+        }
+
+        ensureCanManageTarget(creator, targetUser);
+
+        targetUser.setIsActive(false);
+        User savedUser = userRepository.save(targetUser);
+
+        return mapToStaffResponse(savedUser);
+    }
+
+    private Branch resolveTargetBranch(User creator, String creatorRole, String targetRole, Long requestedBranchId) {
+
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            if ("SUPER_ADMIN".equals(targetRole)) {
+                return null;
+            }
+
+            return branchRepository.findByIdAndStatus(requestedBranchId, BranchStatus.ACTIVE)
+                    .orElseThrow(() -> new RuntimeException("Active branch not found"));
+        }
+
+        if ("ADMIN".equals(creatorRole)) {
+            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+                throw new RuntimeException("ADMIN can create only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
+            }
+
+            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+
+            Branch adminBranch = creatorStaff.getBranch();
+
+            if (requestedBranchId != null && !requestedBranchId.equals(adminBranch.getId())) {
+                throw new RuntimeException("ADMIN can create staff only for their own branch");
+            }
+
+            return adminBranch;
+        }
+
+        throw new RuntimeException("Only SUPER_ADMIN or ADMIN can create staff");
+    }
+
+    private User getCurrentAuthenticatedUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null) {
+            throw new RuntimeException("Authenticated user not found");
+        }
+
+        Object principal = authentication.getPrincipal();
+
+        if (principal instanceof JwtUserPrincipal jwtUser) {
+            return userRepository.findByEmail(jwtUser.getEmail())
+                    .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+        }
+
+        if (principal instanceof User user) {
+            return userRepository.findById(user.getId())
+                    .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+        }
+
+        String email = authentication.getName();
+        if (email != null && !email.trim().isEmpty()) {
+            return userRepository.findByEmail(email)
+                    .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+        }
+
+        throw new RuntimeException("Authenticated user not found");
+    }
+
     private String generateTempPassword() {
         int length = 10;
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*";
@@ -200,7 +543,6 @@ public class StaffService {
         return sb.toString();
     }
 
-    // ----------------- Helper: validate email format -----------------
     private boolean isValidEmail(String email) {
         if (email == null) {
             return false;
@@ -208,7 +550,6 @@ public class StaffService {
         return email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     }
 
-    // ----------------- Helper: validate 10-digit phone -----------------
     private boolean isValidPhone(String phone) {
         if (phone == null) {
             return false;
@@ -216,8 +557,189 @@ public class StaffService {
         return phone.matches("^\\d{10}$");
     }
 
-    // ----------------- Helper: check blank strings -----------------
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String normalize(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.trim().toUpperCase();
+    }
+
+    //Check if a user is part of staff-side roles
+    private boolean isStaffUser(User user) {
+        return user.getRole() != null && STAFF_ROLES.contains(normalize(user.getRole().getName()));
+    }
+
+    //Check branch ownership for admin listing
+    private boolean belongsToBranch(User user, Long branchId) {
+        return staffRepository.findByUserId(user.getId())
+                .map(staff -> staff.getBranch() != null && staff.getBranch().getId().equals(branchId))
+                .orElse(false);
+    }
+
+    //View permission helper
+    private void ensureCanViewTarget(User creator, User targetUser) {
+        String creatorRole = normalize(creator.getRole().getName());
+
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            return;
+        }
+
+        if ("ADMIN".equals(creatorRole)) {
+            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+
+            Staff targetStaff = staffRepository.findByUserId(targetUser.getId())
+                    .orElseThrow(
+                            () -> new RuntimeException("ADMIN can view only branch-linked staff in their own branch"));
+
+            Long adminBranchId = creatorStaff.getBranch().getId();
+            Long targetBranchId = targetStaff.getBranch().getId();
+
+            if (!adminBranchId.equals(targetBranchId)) {
+                throw new RuntimeException("ADMIN can view staff only in their own branch");
+            }
+
+            return;
+        }
+
+        throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff");
+    }
+
+    //Manage permission helper
+    private void ensureCanManageTarget(User creator, User targetUser) {
+        String creatorRole = normalize(creator.getRole().getName());
+        String targetRole = normalize(targetUser.getRole().getName());
+    
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            return;
+        }
+    
+        if ("ADMIN".equals(creatorRole)) {
+            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+                throw new RuntimeException("ADMIN can manage only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
+            }
+    
+            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+    
+            Staff targetStaff = staffRepository.findByUserId(targetUser.getId())
+                    .orElseThrow(() -> new RuntimeException("ADMIN can manage only branch-linked staff"));
+    
+            Long adminBranchId = creatorStaff.getBranch().getId();
+            Long targetBranchId = targetStaff.getBranch().getId();
+    
+            if (!adminBranchId.equals(targetBranchId)) {
+                throw new RuntimeException("ADMIN can manage staff only in their own branch");
+            }
+    
+            return;
+        }
+    
+        throw new RuntimeException("Only SUPER_ADMIN or ADMIN can manage staff");
+    }
+
+    //Map user to staff response
+    private StaffResponse mapToStaffResponse(User user) {
+        Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
+    
+        return StaffResponse.builder()
+                .id(user.getId())
+                .userId(user.getId())
+                .fullName(user.getFullName())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .roleName(user.getRole() != null ? user.getRole().getName() : null)
+                .active(user.getIsActive())
+                .passwordChanged(user.getPasswordChanged())
+                .inviteStatus(user.getInviteStatus())
+                .emailSent(user.getEmailSent())
+                .branchId(staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null)
+                .branchName(staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null)
+                .employmentStatus(staff != null && staff.getEmploymentStatus() != null
+                        ? staff.getEmploymentStatus().name()
+                        : null)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<StaffResponse> getStaffByBranch(Long branchId) {
+        User creator = getCurrentAuthenticatedUser();
+        String creatorRole = normalize(creator.getRole().getName());
+
+        Branch branch = branchRepository.findById(branchId)
+                .orElseThrow(() -> new RuntimeException("Branch not found"));
+
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            return userRepository.findAll().stream()
+                    .filter(this::isStaffUser)
+                    .filter(user -> belongsToBranch(user, branch.getId()))
+                    .map(this::mapToStaffResponse)
+                    .sorted(Comparator.comparing(StaffResponse::getId))
+                    .toList();
+        }
+
+        if ("ADMIN".equals(creatorRole)) {
+            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+
+            Long adminBranchId = creatorStaff.getBranch().getId();
+
+            if (!adminBranchId.equals(branchId)) {
+                throw new RuntimeException("ADMIN can view staff only in their own branch");
+            }
+
+            return userRepository.findAll().stream()
+                    .filter(this::isStaffUser)
+                    .filter(user -> belongsToBranch(user, adminBranchId))
+                    .map(this::mapToStaffResponse)
+                    .sorted(Comparator.comparing(StaffResponse::getId))
+                    .toList();
+        }
+
+        throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff by branch");
+    }
+
+    @Transactional(readOnly = true)
+    public List<StaffResponse> getStaffByRole(String roleName) {
+        User creator = getCurrentAuthenticatedUser();
+        String creatorRole = normalize(creator.getRole().getName());
+        String normalizedRoleName = normalize(roleName);
+
+        if (!STAFF_ROLES.contains(normalizedRoleName)) {
+            throw new RuntimeException("Invalid staff role");
+        }
+
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            return userRepository.findAll().stream()
+                    .filter(this::isStaffUser)
+                    .filter(user -> user.getRole() != null
+                            && normalizedRoleName.equals(normalize(user.getRole().getName())))
+                    .map(this::mapToStaffResponse)
+                    .sorted(Comparator.comparing(StaffResponse::getId))
+                    .toList();
+        }
+
+        if ("ADMIN".equals(creatorRole)) {
+            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+
+            Long adminBranchId = creatorStaff.getBranch().getId();
+
+            return userRepository.findAll().stream()
+                    .filter(this::isStaffUser)
+                    .filter(user -> user.getRole() != null
+                            && normalizedRoleName.equals(normalize(user.getRole().getName())))
+                    .filter(user -> belongsToBranch(user, adminBranchId))
+                    .map(this::mapToStaffResponse)
+                    .sorted(Comparator.comparing(StaffResponse::getId))
+                    .toList();
+        }
+
+        throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff by role");
     }
 }

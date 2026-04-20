@@ -9,7 +9,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ByteKnights.com.resturarent_system.dto.ChangePasswordRequest;
 import com.ByteKnights.com.resturarent_system.dto.LoginResponse;
 import com.ByteKnights.com.resturarent_system.dto.StaffLoginRequest;
+import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtService;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
@@ -20,13 +22,16 @@ import org.springframework.security.core.context.SecurityContextHolder;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
     public AuthService(UserRepository userRepository,
+                       StaffRepository staffRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService) {
         this.userRepository = userRepository;
+        this.staffRepository = staffRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -40,15 +45,19 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword()))
             throw new RuntimeException("Invalid password");
 
+        Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
+
         String token = jwtService.generateToken(user.getId(), user.getEmail(), user.getRole().getName());
 
         return LoginResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .role(user.getRole().getName())
+                .roleName(user.getRole().getName())
                 .active(user.getIsActive())
                 .passwordChanged(user.getPasswordChanged())
+                .branchId(staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null)
+                .branchName(staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null)
                 .token(token)
                 .tokenType("Bearer")
                 .build();
