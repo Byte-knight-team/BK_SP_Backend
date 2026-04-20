@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -16,6 +17,11 @@ public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // Human-readable display name of the staff member
+    // Kept separate from username
+    @Column(length = 150)
+    private String fullName;
 
     @Column(nullable = false, unique = true, length = 100)
     private String username;

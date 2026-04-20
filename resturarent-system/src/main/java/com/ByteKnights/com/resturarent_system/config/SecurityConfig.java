@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.security.ForcePasswordChangeFilter
 import com.ByteKnights.com.resturarent_system.security.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -38,27 +39,29 @@ public class SecurityConfig {
                 // Admin staff-management endpoints
                 .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
 
-                // Role-management endpoints
-                // SUPER_ADMIN only for changes
-                .requestMatchers("/api/roles/create").hasRole("SUPER_ADMIN")
-                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/roles/*/permissions")
-                    .hasRole("SUPER_ADMIN")
+                // Role management endpoints
+                .requestMatchers(HttpMethod.POST, "/api/roles/create").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/roles/*").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/roles/*").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/roles/*/permissions").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/roles").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/roles/*/summary").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/roles/*/permissions").hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // SUPER_ADMIN and ADMIN can view role privileges
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/roles/*/permissions")
-                    .hasAnyRole("SUPER_ADMIN", "ADMIN")
+                // Privileges endpoint
+                .requestMatchers(HttpMethod.GET, "/api/privileges").hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // General staff-only test endpoints
+                // Email testing endpoint
+                .requestMatchers("/api/email-testing/**").hasRole("SUPER_ADMIN")
+
+                // General staff endpoints
                 .requestMatchers("/api/staff/**")
-                    .hasAnyRole("ADMIN", "MANAGER", "CHEF", "RECEPTIONIST", "DELIVERY", "SUPER_ADMIN")
+                .hasAnyRole("ADMIN", "MANAGER", "CHEF", "RECEPTIONIST", "DELIVERY", "SUPER_ADMIN")
 
-                // Everything else requires authentication
+                // Everything else
                 .anyRequest().authenticated()
             )
-            // JWT must run first to load authenticated user from token
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-
-            // Password-change enforcement runs after JWT auth is already set
             .addFilterAfter(forcePasswordChangeFilter, JwtAuthenticationFilter.class);
 
         return http.build();

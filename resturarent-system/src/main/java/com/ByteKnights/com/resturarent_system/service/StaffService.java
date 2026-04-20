@@ -32,8 +32,15 @@ public class StaffService {
     public CreateStaffResponse createStaff(CreateStaffRequest request) {
 
         // ----------------- Basic input validation -----------------
-        // Validate format first before duplicate checks
         StringBuilder validationErrors = new StringBuilder();
+
+        if (isBlank(request.getFullName())) {
+            validationErrors.append("Full name is required. ");
+        }
+
+        if (isBlank(request.getUsername())) {
+            validationErrors.append("Username is required. ");
+        }
 
         if (!isValidEmail(request.getEmail())) {
             validationErrors.append("Invalid email format. ");
@@ -41,6 +48,10 @@ public class StaffService {
 
         if (!isValidPhone(request.getPhone())) {
             validationErrors.append("Phone number must be exactly 10 digits. ");
+        }
+
+        if (isBlank(request.getRoleName())) {
+            validationErrors.append("Role is required. ");
         }
 
         if (validationErrors.length() > 0) {
@@ -75,14 +86,14 @@ public class StaffService {
                 .orElseThrow(() -> new RuntimeException("Role not found: " + request.getRoleName()));
 
         // ----------------- Generate temporary password -----------------
-        // This is stored until staff changes password
         String tempPassword = generateTempPassword();
 
         // ----------------- Build new staff user -----------------
         User user = User.builder()
-                .username(request.getUsername())
-                .email(request.getEmail())
-                .phone(request.getPhone())
+                .fullName(request.getFullName().trim())
+                .username(request.getUsername().trim())
+                .email(request.getEmail().trim())
+                .phone(request.getPhone().trim())
                 .role(role)
                 .password(passwordEncoder.encode(tempPassword))
                 .passwordChanged(false)
@@ -93,18 +104,13 @@ public class StaffService {
         // ----------------- Try to send invite email -----------------
         try {
             emailService.sendStaffInviteEmail(user.getEmail(), user.getUsername(), tempPassword);
-
-            // Email send call completed successfully
             user.setEmailSent(true);
             user.setInviteStatus(InviteStatus.SENT);
 
         } catch (Exception e) {
-            // Any email problem should end here:
-            // forced fail, wrong SMTP password, auth issue, host issue, port issue, etc.
             user.setEmailSent(false);
             user.setInviteStatus(InviteStatus.FAILED);
 
-            // Keep technical reason only in backend logs
             log.error(
                     "Email sending failed while creating staff. username={}, email={}",
                     user.getUsername(),
@@ -114,14 +120,11 @@ public class StaffService {
         }
 
         // Save staff even if email failed
-        // This allows admin to resend invite later or manually share temp password
         User savedUser = userRepository.save(user);
 
-        // ----------------- Response -----------------
-        // Success: all details except temporaryPassword
-        // Fail: all details including temporaryPassword
         return CreateStaffResponse.builder()
                 .id(savedUser.getId())
+                .fullName(savedUser.getFullName())
                 .username(savedUser.getUsername())
                 .email(savedUser.getEmail())
                 .phone(savedUser.getPhone())
@@ -137,11 +140,9 @@ public class StaffService {
 
     @Transactional
     public CreateStaffResponse resendInvite(Long userId) {
-        // Find already-created staff member
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Generate a completely new temporary password on each resend
         String tempPassword = generateTempPassword();
 
         user.setPassword(passwordEncoder.encode(tempPassword));
@@ -149,10 +150,8 @@ public class StaffService {
         user.setPasswordChanged(false);
         user.setInviteStatus(InviteStatus.PENDING);
 
-        // Try sending the email again
         try {
             emailService.sendStaffInviteEmail(user.getEmail(), user.getUsername(), tempPassword);
-
             user.setEmailSent(true);
             user.setInviteStatus(InviteStatus.SENT);
 
@@ -160,7 +159,6 @@ public class StaffService {
             user.setEmailSent(false);
             user.setInviteStatus(InviteStatus.FAILED);
 
-            // Keep real reason in logs only
             log.error(
                     "Email sending failed while resending invite. userId={}, username={}, email={}",
                     user.getId(),
@@ -172,11 +170,9 @@ public class StaffService {
 
         User savedUser = userRepository.save(user);
 
-        // Same response rule:
-        // success -> no temp password
-        // fail -> include temp password
         return CreateStaffResponse.builder()
                 .id(savedUser.getId())
+                .fullName(savedUser.getFullName())
                 .username(savedUser.getUsername())
                 .email(savedUser.getEmail())
                 .phone(savedUser.getPhone())
@@ -218,5 +214,10 @@ public class StaffService {
             return false;
         }
         return phone.matches("^\\d{10}$");
+    }
+
+    // ----------------- Helper: check blank strings -----------------
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

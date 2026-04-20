@@ -6,6 +6,7 @@ import lombok.Setter;
 @Getter
 @Setter
 public class CreateStaffRequest {
+    private String fullName;
     private String username;
     private String email;
     private String phone;
