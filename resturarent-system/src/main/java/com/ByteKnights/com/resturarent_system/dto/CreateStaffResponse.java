@@ -13,9 +13,10 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@JsonInclude(JsonInclude.Include.NON_NULL) // ignore null json
+@JsonInclude(JsonInclude.Include.NON_NULL) // ignore null fields in JSON response
 public class CreateStaffResponse {
     private Long id;
+    private String fullName;
     private String username;
     private String email;
     private String phone;
