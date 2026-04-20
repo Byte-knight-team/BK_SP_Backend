@@ -34,23 +34,31 @@ public class SecurityConfig {
                 // Public endpoints
                 .requestMatchers("/api/auth/staff/login").permitAll()
                 .requestMatchers("/api/auth/change-password").authenticated()
-                
-                // Admin endpoints
+
+                // Admin staff-management endpoints
                 .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                
-                // Manager endpoints
-                .requestMatchers("/api/manager/**").hasAnyRole("ADMIN", "MANAGER", "SUPER_ADMIN")
-                
-                // Staff testing endpoints
-                .requestMatchers("/api/staff/**").hasAnyRole("ADMIN", "MANAGER", "CHEF", "RECEPTIONIST", "DELIVERY", "SUPER_ADMIN")
-                
-                // Default for any other request
+
+                // Role-management endpoints
+                // SUPER_ADMIN only for changes
+                .requestMatchers("/api/roles/create").hasRole("SUPER_ADMIN")
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/roles/*/permissions")
+                    .hasRole("SUPER_ADMIN")
+
+                // SUPER_ADMIN and ADMIN can view role privileges
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/roles/*/permissions")
+                    .hasAnyRole("SUPER_ADMIN", "ADMIN")
+
+                // General staff-only test endpoints
+                .requestMatchers("/api/staff/**")
+                    .hasAnyRole("ADMIN", "MANAGER", "CHEF", "RECEPTIONIST", "DELIVERY", "SUPER_ADMIN")
+
+                // Everything else requires authentication
                 .anyRequest().authenticated()
             )
-            // JWT filter must run first to set the authenticated principal
+            // JWT must run first to load authenticated user from token
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            
-            // Force-password-change filter runs after JWT, so principal is set
+
+            // Password-change enforcement runs after JWT auth is already set
             .addFilterAfter(forcePasswordChangeFilter, JwtAuthenticationFilter.class);
 
         return http.build();

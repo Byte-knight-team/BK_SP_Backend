@@ -40,7 +40,7 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword()))
             throw new RuntimeException("Invalid password");
 
-        String token = jwtService.generateToken(user.getEmail(), user.getRole().getName());
+        String token = jwtService.generateToken(user.getId(), user.getEmail(), user.getRole().getName());
 
         return LoginResponse.builder()
                 .id(user.getId())
@@ -60,7 +60,7 @@ public class AuthService {
         String email;
 
         if (principal instanceof JwtUserPrincipal jwtUser) {
-            email = jwtUser.email();
+            email = jwtUser.getEmail();
         } else if (principal instanceof User user) {
             email = user.getEmail();
         } else {

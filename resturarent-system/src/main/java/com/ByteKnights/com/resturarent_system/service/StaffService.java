@@ -8,225 +8,215 @@ import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.email.EmailService;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Random;
 
 @Service
+@RequiredArgsConstructor
 public class StaffService {
+
+    private static final Logger log = LoggerFactory.getLogger(StaffService.class);
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
 
-    public StaffService(UserRepository userRepository,
-                        RoleRepository roleRepository,
-                        PasswordEncoder passwordEncoder,
-                        EmailService emailService) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.emailService = emailService;
-    }
-
+    @Transactional
     public CreateStaffResponse createStaff(CreateStaffRequest request) {
 
-        if (request.getUsername() == null || request.getUsername().trim().isEmpty()) {
-            throw new RuntimeException("Username is required");
+        // ----------------- Basic input validation -----------------
+        // Validate format first before duplicate checks
+        StringBuilder validationErrors = new StringBuilder();
+
+        if (!isValidEmail(request.getEmail())) {
+            validationErrors.append("Invalid email format. ");
         }
 
-        if (request.getEmail() == null || request.getEmail().trim().isEmpty()) {
-            throw new RuntimeException("Email is required");
+        if (!isValidPhone(request.getPhone())) {
+            validationErrors.append("Phone number must be exactly 10 digits. ");
         }
 
-        if (request.getPhone() == null || request.getPhone().trim().isEmpty()) {
-            throw new RuntimeException("Phone is required");
+        if (validationErrors.length() > 0) {
+            return CreateStaffResponse.builder()
+                    .message(validationErrors.toString().trim())
+                    .build();
         }
 
-        if (request.getRoleName() == null || request.getRoleName().trim().isEmpty()) {
-            throw new RuntimeException("Role name is required");
+        // ----------------- Duplicate checks -----------------
+        StringBuilder conflictMsg = new StringBuilder();
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            conflictMsg.append("Email already exists. ");
         }
 
-        if (userRepository.existsByUsername(request.getUsername().trim())) {
-            throw new RuntimeException("Username already exists");
+        if (userRepository.existsByPhone(request.getPhone())) {
+            conflictMsg.append("Phone number already exists. ");
         }
 
-        if (userRepository.existsByEmail(request.getEmail().trim())) {
-            throw new RuntimeException("Email already exists");
+        if (userRepository.existsByUsername(request.getUsername())) {
+            conflictMsg.append("Username already exists. ");
         }
 
-        if (userRepository.existsByPhone(request.getPhone().trim())) {
-            throw new RuntimeException("Phone already exists");
+        if (conflictMsg.length() > 0) {
+            return CreateStaffResponse.builder()
+                    .message(conflictMsg.toString().trim())
+                    .build();
         }
 
-        String requestedRole = request.getRoleName().trim().toUpperCase();
+        // ----------------- Resolve role -----------------
+        Role role = roleRepository.findByName(request.getRoleName())
+                .orElseThrow(() -> new RuntimeException("Role not found: " + request.getRoleName()));
 
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // ----------------- Generate temporary password -----------------
+        // This is stored until staff changes password
+        String tempPassword = generateTempPassword();
 
-        String currentUserRole = authentication.getAuthorities()
-                .stream()
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No role found"))
-                .getAuthority()
-                .replace("ROLE_", "");
-
-        if (currentUserRole.equals("ADMIN")) {
-            if (requestedRole.equals("ADMIN") || requestedRole.equals("SUPER_ADMIN")) {
-                throw new RuntimeException("ADMIN cannot create ADMIN or SUPER_ADMIN users");
-            }
-        }
-
-        if (requestedRole.equals("CUSTOMER")) {
-            throw new RuntimeException("Staff cannot be created with CUSTOMER role");
-        }
-
-        Role role = roleRepository.findByName(requestedRole)
-                .orElseThrow(() -> new RuntimeException("Role not found: " + requestedRole));
-
-        String temporaryPassword = generateTemporaryPassword();
-
+        // ----------------- Build new staff user -----------------
         User user = User.builder()
-                .username(request.getUsername().trim())
-                .email(request.getEmail().trim())
-                .phone(request.getPhone().trim())
-                .password(passwordEncoder.encode(temporaryPassword))
-                .passwordChanged(false)
+                .username(request.getUsername())
+                .email(request.getEmail())
+                .phone(request.getPhone())
                 .role(role)
-                .isActive(true)
+                .password(passwordEncoder.encode(tempPassword))
+                .passwordChanged(false)
                 .inviteStatus(InviteStatus.PENDING)
-                .lastInviteAttemptAt(LocalDateTime.now())
+                .temporaryPassword(tempPassword)
                 .build();
+
+        // ----------------- Try to send invite email -----------------
+        try {
+            emailService.sendStaffInviteEmail(user.getEmail(), user.getUsername(), tempPassword);
+
+            // Email send call completed successfully
+            user.setEmailSent(true);
+            user.setInviteStatus(InviteStatus.SENT);
+
+        } catch (Exception e) {
+            // Any email problem should end here:
+            // forced fail, wrong SMTP password, auth issue, host issue, port issue, etc.
+            user.setEmailSent(false);
+            user.setInviteStatus(InviteStatus.FAILED);
+
+            // Keep technical reason only in backend logs
+            log.error(
+                    "Email sending failed while creating staff. username={}, email={}",
+                    user.getUsername(),
+                    user.getEmail(),
+                    e
+            );
+        }
+
+        // Save staff even if email failed
+        // This allows admin to resend invite later or manually share temp password
+        User savedUser = userRepository.save(user);
+
+        // ----------------- Response -----------------
+        // Success: all details except temporaryPassword
+        // Fail: all details including temporaryPassword
+        return CreateStaffResponse.builder()
+                .id(savedUser.getId())
+                .username(savedUser.getUsername())
+                .email(savedUser.getEmail())
+                .phone(savedUser.getPhone())
+                .role(savedUser.getRole().getName())
+                .active(savedUser.getIsActive())
+                .passwordChanged(savedUser.getPasswordChanged())
+                .inviteStatus(savedUser.getInviteStatus())
+                .emailSent(savedUser.getEmailSent())
+                .temporaryPassword(Boolean.TRUE.equals(savedUser.getEmailSent()) ? null : tempPassword)
+                .message(Boolean.TRUE.equals(savedUser.getEmailSent()) ? "Email sent successfully" : "Email failed")
+                .build();
+    }
+
+    @Transactional
+    public CreateStaffResponse resendInvite(Long userId) {
+        // Find already-created staff member
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Generate a completely new temporary password on each resend
+        String tempPassword = generateTempPassword();
+
+        user.setPassword(passwordEncoder.encode(tempPassword));
+        user.setTemporaryPassword(tempPassword);
+        user.setPasswordChanged(false);
+        user.setInviteStatus(InviteStatus.PENDING);
+
+        // Try sending the email again
+        try {
+            emailService.sendStaffInviteEmail(user.getEmail(), user.getUsername(), tempPassword);
+
+            user.setEmailSent(true);
+            user.setInviteStatus(InviteStatus.SENT);
+
+        } catch (Exception e) {
+            user.setEmailSent(false);
+            user.setInviteStatus(InviteStatus.FAILED);
+
+            // Keep real reason in logs only
+            log.error(
+                    "Email sending failed while resending invite. userId={}, username={}, email={}",
+                    user.getId(),
+                    user.getUsername(),
+                    user.getEmail(),
+                    e
+            );
+        }
 
         User savedUser = userRepository.save(user);
 
-        try {
-            emailService.sendStaffInviteEmail(
-                    savedUser.getEmail(),
-                    savedUser.getUsername(),
-                    temporaryPassword
-            );
-
-            savedUser.setInviteStatus(InviteStatus.SENT);
-            savedUser.setLastInviteAttemptAt(LocalDateTime.now());
-            userRepository.save(savedUser);
-
-            return CreateStaffResponse.builder()
-                    .id(savedUser.getId())
-                    .username(savedUser.getUsername())
-                    .email(savedUser.getEmail())
-                    .phone(savedUser.getPhone())
-                    .role(savedUser.getRole().getName())
-                    .active(savedUser.getIsActive())
-                    .passwordChanged(savedUser.getPasswordChanged())
-                    .inviteStatus(savedUser.getInviteStatus())
-                    .emailSent(true)
-                    .temporaryPassword(null)
-                    .message("Staff created successfully and invitation email sent.")
-                    .build();
-
-        } catch (Exception e) {
-            savedUser.setInviteStatus(InviteStatus.FAILED);
-            savedUser.setLastInviteAttemptAt(LocalDateTime.now());
-            userRepository.save(savedUser);
-
-            return CreateStaffResponse.builder()
-                    .id(savedUser.getId())
-                    .username(savedUser.getUsername())
-                    .email(savedUser.getEmail())
-                    .phone(savedUser.getPhone())
-                    .role(savedUser.getRole().getName())
-                    .active(savedUser.getIsActive())
-                    .passwordChanged(savedUser.getPasswordChanged())
-                    .inviteStatus(savedUser.getInviteStatus())
-                    .emailSent(false)
-                    .temporaryPassword(temporaryPassword)
-                    .message("Staff created successfully, but invitation email could not be sent.")
-                    .build();
-        }
+        // Same response rule:
+        // success -> no temp password
+        // fail -> include temp password
+        return CreateStaffResponse.builder()
+                .id(savedUser.getId())
+                .username(savedUser.getUsername())
+                .email(savedUser.getEmail())
+                .phone(savedUser.getPhone())
+                .role(savedUser.getRole().getName())
+                .active(savedUser.getIsActive())
+                .passwordChanged(savedUser.getPasswordChanged())
+                .inviteStatus(savedUser.getInviteStatus())
+                .emailSent(savedUser.getEmailSent())
+                .temporaryPassword(Boolean.TRUE.equals(savedUser.getEmailSent()) ? null : tempPassword)
+                .message(Boolean.TRUE.equals(savedUser.getEmailSent()) ? "Email resent successfully" : "Email failed")
+                .build();
     }
 
-    public CreateStaffResponse resendInvite(Long userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Staff user not found"));
+    // ----------------- Helper: generate temporary password -----------------
+    private String generateTempPassword() {
+        int length = 10;
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*";
+        Random rnd = new Random();
+        StringBuilder sb = new StringBuilder(length);
 
-        String newTemporaryPassword = generateTemporaryPassword();
-
-        user.setPassword(passwordEncoder.encode(newTemporaryPassword));
-        user.setPasswordChanged(false);
-        user.setLastInviteAttemptAt(LocalDateTime.now());
-
-        userRepository.save(user);
-
-        try {
-            emailService.sendStaffInviteEmail(
-                    user.getEmail(),
-                    user.getUsername(),
-                    newTemporaryPassword
-            );
-
-            user.setInviteStatus(InviteStatus.SENT);
-            user.setLastInviteAttemptAt(LocalDateTime.now());
-            userRepository.save(user);
-
-            return CreateStaffResponse.builder()
-                    .id(user.getId())
-                    .username(user.getUsername())
-                    .email(user.getEmail())
-                    .phone(user.getPhone())
-                    .role(user.getRole().getName())
-                    .active(user.getIsActive())
-                    .passwordChanged(user.getPasswordChanged())
-                    .inviteStatus(user.getInviteStatus())
-                    .emailSent(true)
-                    .temporaryPassword(null)
-                    .message("Invitation email resent successfully.")
-                    .build();
-
-        } catch (Exception e) {
-            user.setInviteStatus(InviteStatus.FAILED);
-            user.setLastInviteAttemptAt(LocalDateTime.now());
-            userRepository.save(user);
-
-            return CreateStaffResponse.builder()
-                    .id(user.getId())
-                    .username(user.getUsername())
-                    .email(user.getEmail())
-                    .phone(user.getPhone())
-                    .role(user.getRole().getName())
-                    .active(user.getIsActive())
-                    .passwordChanged(user.getPasswordChanged())
-                    .inviteStatus(user.getInviteStatus())
-                    .emailSent(false)
-                    .temporaryPassword(newTemporaryPassword)
-                    .message("Invitation email resend failed.")
-                    .build();
+        for (int i = 0; i < length; i++) {
+            sb.append(chars.charAt(rnd.nextInt(chars.length())));
         }
+
+        return sb.toString();
     }
 
-    private String generateTemporaryPassword() {
-        String upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-        String lower = "abcdefghijkmnopqrstuvwxyz";
-        String digits = "23456789";
-        String special = "@#$%";
-        String all = upper + lower + digits + special;
-
-        Random random = new Random();
-
-        StringBuilder password = new StringBuilder();
-        password.append(upper.charAt(random.nextInt(upper.length())));
-        password.append(lower.charAt(random.nextInt(lower.length())));
-        password.append(digits.charAt(random.nextInt(digits.length())));
-        password.append(special.charAt(random.nextInt(special.length())));
-
-        for (int i = 4; i < 10; i++) {
-            password.append(all.charAt(random.nextInt(all.length())));
+    // ----------------- Helper: validate email format -----------------
+    private boolean isValidEmail(String email) {
+        if (email == null) {
+            return false;
         }
+        return email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
+    }
 
-        return password.toString();
+    // ----------------- Helper: validate 10-digit phone -----------------
+    private boolean isValidPhone(String phone) {
+        if (phone == null) {
+            return false;
+        }
+        return phone.matches("^\\d{10}$");
     }
 }
