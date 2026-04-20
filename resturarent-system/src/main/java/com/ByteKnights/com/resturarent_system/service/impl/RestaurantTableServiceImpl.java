@@ -10,6 +10,9 @@ import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.service.RestaurantTableService;
+import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
+import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
+import com.ByteKnights.com.resturarent_system.exception.InvalidOperationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,17 +32,17 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     public TableResponse createTable(CreateTableRequest request) {
         // 1. Validate branch exists
         Branch branch = branchRepository.findById(request.getBranchId())
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Branch not found with id: " + request.getBranchId()));
 
         if (branch.getStatus() != com.ByteKnights.com.resturarent_system.entity.BranchStatus.ACTIVE) {
-            throw new RuntimeException("Cannot create table in an inactive branch: " + branch.getName());
+            throw new InvalidOperationException("Cannot create table in an inactive branch: " + branch.getName());
         }
 
         // 2. Check for duplicate table number within branch
         if (tableRepository.existsByBranchIdAndTableNumber(
                 request.getBranchId(), request.getTableNumber())) {
-            throw new RuntimeException(
+            throw new DuplicateResourceException(
                     "Table number " + request.getTableNumber()
                             + " already exists in branch " + branch.getName());
         }
@@ -86,7 +89,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
             if (!table.getTableNumber().equals(request.getTableNumber())
                     && tableRepository.existsByBranchIdAndTableNumberAndIdNot(
                             table.getBranch().getId(), request.getTableNumber(), id)) {
-                throw new RuntimeException(
+                throw new DuplicateResourceException(
                         "Table number " + request.getTableNumber()
                                 + " already exists in branch " + table.getBranch().getName());
             }
@@ -123,11 +126,11 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         RestaurantTable table = findTableOrThrow(id);
 
         if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
-            throw new RuntimeException("Cannot delete table: active orders exist");
+            throw new InvalidOperationException("Cannot delete table: active orders exist");
         }
 
         if (table.getState() != TableStatus.AVAILABLE) {
-            throw new RuntimeException("Cannot delete table: table is not AVAILABLE");
+            throw new InvalidOperationException("Cannot delete table: table is not AVAILABLE");
         }
 
         tableRepository.delete(table);
@@ -137,7 +140,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
     private RestaurantTable findTableOrThrow(Long id) {
         return tableRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Table not found with id: " + id));
     }
 
@@ -148,7 +151,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         try {
             return TableStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException(
+            throw new InvalidOperationException(
                     "Invalid table status: " + status
                             + ". Valid values: AVAILABLE, OCCUPIED, RESERVED");
         }
