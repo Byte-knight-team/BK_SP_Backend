@@ -30,9 +30,6 @@ public class QrSession {
     @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
 
-    @Column(name = "unit_session_token", nullable = false, length = 255)
-    private String unitSessionToken;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
