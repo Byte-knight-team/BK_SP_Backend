@@ -7,14 +7,13 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -32,48 +31,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        String jwt = authHeader.substring(7);
-        String email;
         try {
-            email = jwtService.extractEmail(jwt);
-        } catch (Exception e) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+            String jwt = getJwtFromRequest(request);
 
-        if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            Optional<User> userOptional = userRepository.findByEmail(email);
-            if (userOptional.isPresent()) {
-                User user = userOptional.get();
-                if (Boolean.TRUE.equals(user.getIsActive()) && jwtService.isTokenValid(jwt, user.getEmail())) {
+            if (StringUtils.hasText(jwt) && jwtService.validateToken(jwt)) {
+                Long userId = jwtService.getUserIdFromToken(jwt);
+                User userEntity = userRepository.findById(userId).orElse(null);
 
-                    JwtUserPrincipal principal = new JwtUserPrincipal(
-                            user.getId(),
-                            user.getEmail(),
-                            user.getRole().getName(),
-                            user.getPasswordChanged()
-                    );
+                if (userEntity != null && Boolean.TRUE.equals(userEntity.getIsActive())) {
+                    JwtUserPrincipal userDetails = new JwtUserPrincipal(userEntity);
 
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(
-                                    principal,
-                                    null,
-                                    List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().getName()))
-                            );
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                    authToken.setDetails(new org.springframework.security.web.authentication.WebAuthenticationDetailsSource().buildDetails(request));
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
             }
+
+        } catch (Exception ex) {
+            logger.error("Could not set user authentication in security context", ex);
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String getJwtFromRequest(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
     }
 }

@@ -2,7 +2,6 @@ package com.ByteKnights.com.resturarent_system.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.LocalDateTime;
 
 @Entity
@@ -47,6 +46,11 @@ public class User {
     @Column(nullable = false)
     private InviteStatus inviteStatus = InviteStatus.PENDING;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean emailSent = false;
+
+    private String temporaryPassword;
     private LocalDateTime lastInviteAttemptAt;
 
     @Column(updatable = false)

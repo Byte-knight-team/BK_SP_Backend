@@ -13,16 +13,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Objects;
 
 @Component
 public class ForcePasswordChangeFilter extends OncePerRequestFilter {
 
     private final UserRepository userRepository;
 
-    public ForcePasswordChangeFilter(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
+    public ForcePasswordChangeFilter(UserRepository userRepository) { this.userRepository = userRepository; }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -30,50 +27,37 @@ public class ForcePasswordChangeFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
 
         String path = request.getRequestURI();
-
         if (path.startsWith("/api/auth/staff/login") || path.startsWith("/api/auth/change-password")) {
-            filterChain.doFilter(request, response);
-            return;
+            filterChain.doFilter(request, response); return;
         }
 
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (!(auth instanceof UsernamePasswordAuthenticationToken authentication)) {
-            filterChain.doFilter(request, response);
-            return;
+            filterChain.doFilter(request, response); return;
         }
 
         Object principal = authentication.getPrincipal();
         String email = null;
-
-        if (principal instanceof JwtUserPrincipal jwtUser) {
-            email = jwtUser.email();
-        } else if (principal instanceof User user) {
-            email = user.getEmail();
-        }
+        if (principal instanceof JwtUserPrincipal jwtUser) email = jwtUser.getUsername();
+        else if (principal instanceof User user) email = user.getEmail();
 
         if (email != null) {
             User freshUser = userRepository.findByEmail(email).orElse(null);
             if (freshUser != null) {
                 String role = freshUser.getRole().getName();
                 if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) {
-                    filterChain.doFilter(request, response);
-                    return;
+                    filterChain.doFilter(request, response); return;
                 }
-
                 if (!Boolean.TRUE.equals(freshUser.getPasswordChanged())) {
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                     response.getWriter().write("""
-                        {
-                          "success": false,
-                          "message": "You must change your temporary password before accessing this resource."
-                        }
+                        {"success": false, "message": "You must change your temporary password before accessing this resource."}
                         """);
                     return;
                 }
             }
         }
-
         filterChain.doFilter(request, response);
     }
 }

@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "privileges")
+@Table(name="privileges")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,9 +16,9 @@ public class Privilege {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(nullable=false, unique=true, length=100)
     private String name;
 
-    @Column(length = 255)
+    @Column(length=255)
     private String description;
 }
