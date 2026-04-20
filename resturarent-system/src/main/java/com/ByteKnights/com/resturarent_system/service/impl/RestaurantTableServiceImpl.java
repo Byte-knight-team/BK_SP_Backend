@@ -85,7 +85,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
             // Check for duplicate table number within same branch (exclude current table)
             if (!table.getTableNumber().equals(request.getTableNumber())
                     && tableRepository.existsByBranchIdAndTableNumberAndIdNot(
-                    table.getBranch().getId(), request.getTableNumber(), id)) {
+                            table.getBranch().getId(), request.getTableNumber(), id)) {
                 throw new RuntimeException(
                         "Table number " + request.getTableNumber()
                                 + " already exists in branch " + table.getBranch().getName());
@@ -121,6 +121,15 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Transactional
     public void deleteTable(Long id) {
         RestaurantTable table = findTableOrThrow(id);
+
+        if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
+            throw new RuntimeException("Cannot delete table: active orders exist");
+        }
+
+        if (table.getState() != TableStatus.AVAILABLE) {
+            throw new RuntimeException("Cannot delete table: table is not AVAILABLE");
+        }
+
         tableRepository.delete(table);
     }
 
