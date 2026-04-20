@@ -1,7 +1,22 @@
 package com.ByteKnights.com.resturarent_system.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -12,9 +27,6 @@ import java.util.List;
 @Table(name = "orders")
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class Order {
 
     @Id
@@ -24,30 +36,16 @@ public class Order {
     @Column(name = "order_number", unique = true, length = 50)
     private String orderNumber;
 
-    @Column(name = "customer_name")
-    private String customerName;
-
-    @Column(name = "table_number")
-    private String tableNumber;
-
-    @Column(name = "guest_count")
-    private Integer guestCount;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    @Builder.Default
     private OrderStatus status = OrderStatus.PLACED;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "order_type")
     private OrderType orderType;
 
-    @Column(nullable = false, precision = 12, scale = 2)
-    @Builder.Default
-    private BigDecimal total = BigDecimal.ZERO;
-
-    @Column(name = "total_amount", precision = 12, scale = 2)
-    private BigDecimal totalAmount;
+    @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal totalAmount = BigDecimal.ZERO;
 
     @Column(name = "discount_amount", precision = 10, scale = 2)
     private BigDecimal discountAmount;
@@ -57,30 +55,26 @@ public class Order {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status")
-    @Builder.Default
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
-    @Column(name = "cancellation_reason")
-    private String cancellationReason;
-
-    @Column(name = "cancel_reason")
-    private String cancelReason;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "branch_id")
+    @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "table_id")
-    private RestaurantTable tableObj;
+    private RestaurantTable table;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id")
+    @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "approved_by")
     private Staff approvedBy;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_chef_id")
@@ -89,9 +83,8 @@ public class Order {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_delivery_id")
     private Staff assignedDelivery;
-    
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -99,6 +92,9 @@ public class Order {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    public Order() {
+    }
 
     @PrePersist
     protected void onCreate() {
@@ -108,6 +104,15 @@ public class Order {
         if (updatedAt == null) {
             updatedAt = LocalDateTime.now();
         }
+        if (totalAmount == null) {
+            totalAmount = BigDecimal.ZERO;
+        }
+        if (discountAmount == null) {
+            discountAmount = BigDecimal.ZERO;
+        }
+        if (finalAmount == null) {
+            finalAmount = totalAmount.subtract(discountAmount);
+        }
     }
 
     @PreUpdate
@@ -116,16 +121,22 @@ public class Order {
     }
 
     public void recalculateTotal() {
-        if(items != null) {
-            this.total = items.stream()
-                .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (items != null) {
+            this.totalAmount = items.stream()
+                    .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (this.discountAmount == null) {
+                this.discountAmount = BigDecimal.ZERO;
+            }
+            this.finalAmount = this.totalAmount.subtract(this.discountAmount);
         }
         this.updatedAt = LocalDateTime.now();
     }
 
     public void addItem(OrderItem item) {
-        if(items == null) items = new ArrayList<>();
+        if (items == null) {
+            items = new ArrayList<>();
+        }
         items.add(item);
         item.setOrder(this);
     }
