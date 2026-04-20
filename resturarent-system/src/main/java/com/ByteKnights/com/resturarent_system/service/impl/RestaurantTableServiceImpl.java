@@ -129,8 +129,12 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
             throw new InvalidOperationException("Cannot delete table: active orders exist");
         }
 
-        if (table.getState() != TableStatus.AVAILABLE) {
-            throw new InvalidOperationException("Cannot delete table: table is not AVAILABLE");
+        if (table.getState() == TableStatus.OCCUPIED) {
+            throw new InvalidOperationException("Cannot delete: The table is occupied");
+        }
+
+        if (table.getState() == TableStatus.RESERVED) {
+            throw new InvalidOperationException("Cannot delete: The table is reserved");
         }
 
         tableRepository.delete(table);
