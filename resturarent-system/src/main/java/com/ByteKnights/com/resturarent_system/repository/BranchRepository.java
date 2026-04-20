@@ -1,10 +1,16 @@
 package com.ByteKnights.com.resturarent_system.repository;
 
 import com.ByteKnights.com.resturarent_system.entity.Branch;
+import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
+import java.util.Optional;
+
 public interface BranchRepository extends JpaRepository<Branch, Long> {
-    // TODO: Add custom query methods as needed
+
+    Optional<Branch> findByIdAndStatus(Long id, BranchStatus status);
+
+    boolean existsByNameIgnoreCase(String name);
+
+    Optional<Branch> findByNameIgnoreCase(String name);
 }
