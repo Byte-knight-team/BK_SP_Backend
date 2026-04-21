@@ -11,5 +11,4 @@ import java.util.Optional;
 @Repository
 public interface QrSessionRepository extends JpaRepository<QrSession, Long> {
     Optional<QrSession> findByCustomerAndStatus(Customer customer, QrSessionStatus status);
-    Optional<QrSession> findByUnitSessionTokenAndStatus(String unitSessionToken, QrSessionStatus status);
 }
