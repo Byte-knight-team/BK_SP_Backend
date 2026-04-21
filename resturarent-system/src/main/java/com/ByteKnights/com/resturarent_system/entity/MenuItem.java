@@ -48,7 +48,7 @@ public class MenuItem {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private MenuItemStatus status = MenuItemStatus.DRAFT;
+    private MenuItemStatus status = MenuItemStatus.PENDING;
 
     @Column(name = "preparation_time")
     private Integer preparationTime;

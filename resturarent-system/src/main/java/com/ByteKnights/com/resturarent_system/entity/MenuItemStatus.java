@@ -1,7 +1,7 @@
 package com.ByteKnights.com.resturarent_system.entity;
 
 public enum MenuItemStatus {
-    DRAFT,
+    PENDING,
     APPROVED,
     REJECTED
 }
