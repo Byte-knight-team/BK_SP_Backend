@@ -42,7 +42,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // Peak hours graph data based on order approval time
     @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
             "FROM orders " +
-            "WHERE approved_at >= CURDATE() " +
+            "WHERE approved_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY hr", nativeQuery = true)
     List<Object[]> findOrderCountByHour();
 

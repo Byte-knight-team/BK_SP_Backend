@@ -21,6 +21,7 @@ public class DataSeeder implements CommandLineRunner {
         private final MenuCategoryRepository menuCategoryRepository;
         private final MenuItemRepository menuItemRepository;
         private final OrderItemRepository orderItemRepository;
+        private final InventoryItemRepository inventoryItemRepository;
 
         public DataSeeder(BranchRepository branchRepository,
                           CustomerRepository customerRepository,
@@ -29,7 +30,8 @@ public class DataSeeder implements CommandLineRunner {
                           RoleRepository roleRepository,
                           MenuCategoryRepository menuCategoryRepository,
                           MenuItemRepository menuItemRepository,
-                          OrderItemRepository orderItemRepository) {
+                          OrderItemRepository orderItemRepository,
+                          InventoryItemRepository inventoryItemRepository) {
                 this.branchRepository = branchRepository;
                 this.customerRepository = customerRepository;
                 this.orderRepository = orderRepository;
@@ -38,6 +40,7 @@ public class DataSeeder implements CommandLineRunner {
                 this.menuCategoryRepository = menuCategoryRepository;
                 this.menuItemRepository = menuItemRepository;
                 this.orderItemRepository = orderItemRepository;
+                this.inventoryItemRepository = inventoryItemRepository;
         }
 
         @Override
@@ -165,8 +168,22 @@ public class DataSeeder implements CommandLineRunner {
                 // slot: 6PM-8PM (30 orders) - Peak Dinner
                 seedPeakHourOrders("PH-18-", branch, customer, kottu, 30, today.atTime(19, 0));
                 
-                // slot: 8PM-10PM (10 orders)
-                seedPeakHourOrders("PH-20-", branch, customer, burger, 10, today.atTime(21, 10));
+                // ==============================================
+                // 7. Seed Inventory Items for Alerts
+                // ==============================================
+                inventoryItemRepository.deleteAll(); // පරණ දත්ත අයින් කරමු
+
+                // Normal Stock (Show no alert)
+                createInventoryItem(branch, "Basmati Rice", 100, 80, 20, "KG");
+
+                // LOW Stock (Quantity 10, Reorder 15 => LOW)
+                createInventoryItem(branch, "Maldon Sea Salt", 30, 10, 15, "KG");
+
+                // CRITICAL Stock (Quantity 2, Reorder 6 => CRITICAL since 2 <= 6/2)
+                createInventoryItem(branch, "Truffle Oil", 10, 2, 6, "LITERS");
+
+                // CRITICAL Stock (Quantity 4, Reorder 10 => CRITICAL)
+                createInventoryItem(branch, "Wagyu Beef (A5)", 20, 4, 10, "KG");
 
                 System.out.println("✅ Data seeding successfully completed!");
                 System.out.println("Expected Dashboard Stats in Frontend:");
@@ -221,5 +238,17 @@ public class DataSeeder implements CommandLineRunner {
                         orderRepository.save(order);
                         orderItemRepository.save(createOrderItem(order, menuItem, 1));
                 }
+        }
+
+        private void createInventoryItem(Branch branch, String name, double max, double current, double reorder, String unit) {
+                InventoryItem item = InventoryItem.builder()
+                        .branch(branch)
+                        .name(name)
+                        .maxStock(BigDecimal.valueOf(max))
+                        .quantity(BigDecimal.valueOf(current))
+                        .reorderLevel(BigDecimal.valueOf(reorder))
+                        .unit(unit)
+                        .build();
+                inventoryItemRepository.save(item);
         }
 }
