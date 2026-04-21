@@ -12,6 +12,8 @@ import com.ByteKnights.com.resturarent_system.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
@@ -38,6 +40,25 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryItemRepository inventoryItemRepository;
     private final ChefRequestRepository chefRequestRepository;
     private final BranchRepository branchRepository;
+
+    /**
+     * Implementation of getAllItemsByBranch.
+     * 
+     * 1. Fetches all raw InventoryItem entities from the database that belong to
+     * the branch.
+     * 2. Uses the Java Stream API to pass each entity through our private
+     * `toItemDTO` mapper.
+     * 3. Collects the mapped DTOs into a List and returns it.
+     */
+    @Override
+    public List<InventoryItemDTO> getAllItemsByBranch(Long branchId) {
+
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);
+
+        return items.stream()
+                .map(item -> toItemDTO(item))
+                .collect(Collectors.toList());
+    }
 
     // ───────────────────────── PRIVATE HELPER MAPPERS ─────────────────────────
 
