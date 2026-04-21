@@ -1,9 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.kitchen;
 
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryAlertDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenDashboardStatsDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PeakHourDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PopularMealDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 
 import java.util.List;
 
@@ -16,4 +14,6 @@ public interface KitchenService {
     List<PeakHourDTO> getPeakHoursInLast7Days();
 
     List<InventoryAlertDTO> getInventoryAlerts();
+
+    List<KitchenOrderDTO> getOrdersByStatus(OrderStatus status);
 }

@@ -93,12 +93,16 @@ public class Order {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // Tracks the exact timestamp when the order's status was last changed.
+    // This is primarily used for accurate sorting in the kitchen dashboard (FIFO/LIFO queues)
+    @Column(name = "status_updated_at")
+    private LocalDateTime statusUpdatedAt;
+
     @Column(name = "cooking_started_at")
     private LocalDateTime cookingStartedAt;
 
     @Column(name = "cooking_completed_at")
     private LocalDateTime cookingCompletedAt;
-
 
 
     @PrePersist
@@ -108,6 +112,10 @@ public class Order {
         }
         if (updatedAt == null) {
             updatedAt = LocalDateTime.now();
+        }
+        // Automatically set the timestamp when the order is first saved to the database
+        if (statusUpdatedAt == null) {
+            statusUpdatedAt = LocalDateTime.now();
         }
         if (totalAmount == null) {
             totalAmount = BigDecimal.ZERO;
@@ -123,6 +131,21 @@ public class Order {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    // Method to update timestamps automatically when a status change occurs
+    public void updateStatus(OrderStatus newStatus) {
+        this.status = newStatus;
+        this.statusUpdatedAt = LocalDateTime.now();
+
+        // Update milestone timestamps based on the specific status entered
+        if (newStatus == OrderStatus.PENDING) {
+            this.approvedAt = LocalDateTime.now();
+        } else if (newStatus == OrderStatus.PREPARING) {
+            this.cookingStartedAt = LocalDateTime.now();
+        } else if (newStatus == OrderStatus.COMPLETED) {
+            this.cookingCompletedAt = LocalDateTime.now();
+        }
     }
 
     public void recalculateTotal() {
@@ -145,4 +168,6 @@ public class Order {
         items.add(item);
         item.setOrder(this);
     }
+
+
 }
