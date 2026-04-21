@@ -42,6 +42,7 @@ public class MenuServiceImpl implements MenuService {
                 .categoryName(item.getCategory() != null ? item.getCategory().getName() : "Uncategorized")
                 .subCategory(item.getSubCategory())
                 .isAvailable(item.getIsAvailable())
+                .preparationTime(item.getPreparationTime())
                 .build()
         ).collect(Collectors.toList());
     }
