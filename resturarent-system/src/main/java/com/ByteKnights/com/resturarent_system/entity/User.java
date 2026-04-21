@@ -18,22 +18,23 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Human-readable display name of the staff member
-    // Kept separate from username
     @Column(length = 150)
     private String fullName;
 
     @Column(nullable = false, unique = true, length = 100)
     private String username;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String password;
 
-    @Column(unique = true, length = 150)
+    @Column(unique = true, length = 100)
     private String email;
 
     @Column(nullable = false, unique = true, length = 20)
     private String phone;
+
+    @Column(length = 255)
+    private String address;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
@@ -56,13 +57,15 @@ public class User {
     @Column(nullable = false)
     private Boolean emailSent = false;
 
-    // Deprecated: do not store plaintext temporary passwords in DB
+    @Transient
     private String temporaryPassword;
+
     private LocalDateTime lastInviteAttemptAt;
 
-    @Column(updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     @PrePersist

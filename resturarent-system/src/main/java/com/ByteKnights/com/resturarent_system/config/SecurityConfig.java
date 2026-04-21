@@ -31,32 +31,45 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .cors(Customizer.withDefaults())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .formLogin(form -> form.disable())
+            .httpBasic(basic -> basic.disable())
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints
-                .requestMatchers("/api/auth/staff/login").permitAll()
-                .requestMatchers("/api/auth/change-password").authenticated()
+                // Public
+                .requestMatchers(
+                    "/api/auth/staff/login",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/api-docs/**",
+                    "/v3/api-docs/**"
+                ).permitAll()
 
-                // Admin staff-management endpoints
-                .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                // Authenticated auth flow
+                .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password").authenticated()
 
-                // Role management endpoints
-                .requestMatchers(HttpMethod.POST, "/api/roles/create").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/roles/*").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/roles/*").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/roles/*/permissions").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/roles").hasAnyRole("SUPER_ADMIN", "ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/roles/*/summary").hasAnyRole("SUPER_ADMIN", "ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/roles/*/permissions").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                // Branch management - SUPER_ADMIN only
+                .requestMatchers("/api/admin/branches", "/api/admin/branches/**").hasRole("SUPER_ADMIN")
 
-                // Privileges endpoint
-                .requestMatchers(HttpMethod.GET, "/api/privileges").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                // Staff management - SUPER_ADMIN and ADMIN
+                .requestMatchers("/api/admin/staff", "/api/admin/staff/**")
+                .hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // Email testing endpoint
+                // Role management
+                .requestMatchers(HttpMethod.POST, "/api/admin/roles").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*/permissions").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions").hasAnyRole("SUPER_ADMIN", "ADMIN")
+
+                // Privileges
+                .requestMatchers(HttpMethod.GET, "/api/admin/privileges").hasAnyRole("SUPER_ADMIN", "ADMIN")
+
+                // Email testing
                 .requestMatchers("/api/email-testing/**").hasRole("SUPER_ADMIN")
 
-                // General staff endpoints
-                .requestMatchers("/api/staff/**")
-                .hasAnyRole("ADMIN", "MANAGER", "CHEF", "RECEPTIONIST", "DELIVERY", "SUPER_ADMIN")
+                // Fallback for other admin endpoints
+                .requestMatchers("/api/admin/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
 
                 // Everything else
                 .anyRequest().authenticated()
