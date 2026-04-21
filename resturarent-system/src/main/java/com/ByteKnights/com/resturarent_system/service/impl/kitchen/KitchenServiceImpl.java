@@ -1,9 +1,12 @@
 package com.ByteKnights.com.resturarent_system.service.impl.kitchen;
 
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryAlertDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenDashboardStatsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PeakHourDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PopularMealDTO;
+import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
@@ -21,6 +24,7 @@ public class KitchenServiceImpl implements KitchenService {
 
     final OrderRepository orderRepository;
     final OrderItemRepository orderItemRepository;
+    final InventoryItemRepository inventoryItemRepository;
 
     //kitchen dashboard stat
     @Override
@@ -35,18 +39,18 @@ public class KitchenServiceImpl implements KitchenService {
                 pending,
                 preparing,
                 completed,
-                avgTime != null ? Math.round(avgTime * 100.0) / 100.0 : 0.0 // Round for 2 decimal digits
+                avgTime != null ? Math.round(avgTime * 100.0) / 100.0 : 0.0 // Round to 2 decimal places
         );
     }
 
     //most popular meals
     @Override
-    public List<PopularMealDTO> getMostPopularMeals() {
-        List<Object[]> topMeals = orderItemRepository.findTop5PopularMeals();
-        Long totalSold = orderItemRepository.getTotalItemsSoldInLast24Hours();
+    public List<PopularMealDTO> getMostPopularMealsInLast7Days() {
+        List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7Days();
+        Long totalSold = orderItemRepository.getTotalItemsSoldInLast7Days();
 
         //Avoid Division by Zero
-        //Return Empty List if no meals sold in last 24 hours
+        //Return Empty List if no meals sold in last 7 days
         if (totalSold == null || totalSold == 0) {
             return new ArrayList<>();
         }
@@ -79,7 +83,7 @@ public class KitchenServiceImpl implements KitchenService {
 
     //Peak hours
     @Override
-    public List<PeakHourDTO> getPeakHours() {
+    public List<PeakHourDTO> getPeakHoursInLast7Days() {
         // 1. කලින්ම අපිට ලැබෙන්න ඕන සියලුම time slots ටික 0 count එකත් එක්ක ලෑස්ති කරගමු
         Map<String, Integer> peakHourMap = new LinkedHashMap<>();
         peakHourMap.put("8AM-10AM", 0);
@@ -119,6 +123,37 @@ public class KitchenServiceImpl implements KitchenService {
         return dtos;
     }
 
+    //inventory alerts
+    @Override
+    public List<InventoryAlertDTO> getInventoryAlerts() {
+        List<InventoryItem> items = inventoryItemRepository.findAll(); //no need to write native query
+        List<InventoryAlertDTO> alerts = new ArrayList<>();
+
+        for (InventoryItem item : items) {
+            double current = item.getQuantity().doubleValue();
+            double reorder = item.getReorderLevel().doubleValue();
+            double max = item.getMaxStock().doubleValue();
+
+            // send to the dashboard if only current amount <= Reorder level
+            if (current <= reorder) {
+                String level = (current <= reorder / 2) ? "CRITICAL" : "LOW";
+
+                // Percentage calculation
+                double percentage = (current / max) * 100;
+
+                //can the all args constructor of InventoryAlertDTO
+                alerts.add(new InventoryAlertDTO(
+                        item.getName(),
+                        Math.round(percentage * 100.0) / 100.0, // Round to 2 decimal places
+                        max,
+                        current,
+                        item.getUnit(),
+                        level
+                ));
+            }
+        }
+        return alerts;
+    }
 
 
 

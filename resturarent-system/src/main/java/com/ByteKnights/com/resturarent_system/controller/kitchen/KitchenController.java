@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryAlertDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenDashboardStatsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PeakHourDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PopularMealDTO;
@@ -35,7 +36,7 @@ public class KitchenController {
     //get most popular meals data
     @GetMapping("/popular-meals")
     public ResponseEntity<StandardResponse> getMostPopularMeals() {
-        List<PopularMealDTO> popularMeals = kitchenService.getMostPopularMeals();
+        List<PopularMealDTO> popularMeals = kitchenService.getMostPopularMealsInLast7Days();
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", popularMeals),
                 HttpStatus.OK
@@ -45,12 +46,23 @@ public class KitchenController {
     //get peak hours data
     @GetMapping("/peak-hours")
     public ResponseEntity<StandardResponse> getPeakHours() {
-        List<PeakHourDTO> peakHours = kitchenService.getPeakHours();
+        List<PeakHourDTO> peakHours = kitchenService.getPeakHoursInLast7Days();
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", peakHours),
                 HttpStatus.OK
         );
     }
+
+    //get inventory alerts data
+    @GetMapping("/inventory-alerts")
+    public ResponseEntity<StandardResponse> getInventoryAlerts() {
+        List<InventoryAlertDTO> alerts = kitchenService.getInventoryAlerts();
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", alerts),
+                HttpStatus.OK
+        );
+    }
+
 
 
 }
