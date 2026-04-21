@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenDashboardStatsDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PeakHourDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PopularMealDTO;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
@@ -10,7 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -73,6 +76,50 @@ public class KitchenServiceImpl implements KitchenService {
 
         return popularMealDtoList;
     }
+
+    //Peak hours
+    @Override
+    public List<PeakHourDTO> getPeakHours() {
+        // 1. කලින්ම අපිට ලැබෙන්න ඕන සියලුම time slots ටික 0 count එකත් එක්ක ලෑස්ති කරගමු
+        Map<String, Integer> peakHourMap = new LinkedHashMap<>();
+        peakHourMap.put("8AM-10AM", 0);
+        peakHourMap.put("10AM-12PM", 0);
+        peakHourMap.put("12PM-2PM", 0);
+        peakHourMap.put("2PM-4PM", 0);
+        peakHourMap.put("4PM-6PM", 0);
+        peakHourMap.put("6PM-8PM", 0);
+        peakHourMap.put("8PM-10PM", 0);
+
+        // 2. Database එකෙන් raw data ටික ගමු (Hour, Count)
+        List<Object[]> rawData = orderRepository.findOrderCountByHour();
+
+        // 3. Database එකෙන් ආපු පැය අනුව අදාළ bucket එකට count එක එකතු කරමු
+        for (Object[] row : rawData) {
+            int hour = ((Number) row[0]).intValue();
+            int count = ((Number) row[1]).intValue();
+
+            String slot = null;
+            if (hour >= 8 && hour < 10) slot = "8AM-10AM";
+            else if (hour >= 10 && hour < 12) slot = "10AM-12PM";
+            else if (hour >= 12 && hour < 14) slot = "12PM-2PM";
+            else if (hour >= 14 && hour < 16) slot = "2PM-4PM";
+            else if (hour >= 16 && hour < 18) slot = "4PM-6PM";
+            else if (hour >= 18 && hour < 20) slot = "6PM-8PM";
+            else if (hour >= 20 && hour < 22) slot = "8PM-10PM";
+
+            if (slot != null) {
+                peakHourMap.put(slot, peakHourMap.get(slot) + count);
+            }
+        }
+
+        // 4. Map එක DTO list එකකට හරවමු
+        List<PeakHourDTO> dtos = new ArrayList<>();
+        peakHourMap.forEach((time, mealsCount) -> dtos.add(new PeakHourDTO(time, mealsCount)));
+
+        return dtos;
+    }
+
+
 
 
 }

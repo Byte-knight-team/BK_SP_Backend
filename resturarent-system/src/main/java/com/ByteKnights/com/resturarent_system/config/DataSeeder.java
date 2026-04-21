@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Component
@@ -141,6 +142,32 @@ public class DataSeeder implements CommandLineRunner {
                 createCompletedOrder("ORD-COMP-4", branch, customer, 20, now.minusHours(5), burger, 2); // 2 Burger
                 createCompletedOrder("ORD-COMP-5", branch, customer, 15, now.minusHours(1), pizza, 1); // 1 Pizza
 
+                // ==============================================
+                // 6. Seed data for Peak Hours Graph (Approved at various times TODAY)
+                // ==============================================
+                LocalDate today = LocalDate.now();
+                
+                // slot: 8AM-10AM (5 orders)
+                seedPeakHourOrders("PH-08-", branch, customer, burger, 5, today.atTime(8, 30));
+                
+                // slot: 10AM-12PM (12 orders)
+                seedPeakHourOrders("PH-10-", branch, customer, kottu, 12, today.atTime(10, 45));
+                
+                // slot: 12PM-2PM (25 orders) - Peak Lunch
+                seedPeakHourOrders("PH-12-", branch, customer, rice, 25, today.atTime(12, 15));
+                
+                // slot: 2PM-4PM (8 orders)
+                seedPeakHourOrders("PH-14-", branch, customer, pasta, 8, today.atTime(14, 30));
+                
+                // slot: 4PM-6PM (15 orders)
+                seedPeakHourOrders("PH-16-", branch, customer, pizza, 15, today.atTime(16, 20));
+                
+                // slot: 6PM-8PM (30 orders) - Peak Dinner
+                seedPeakHourOrders("PH-18-", branch, customer, kottu, 30, today.atTime(19, 0));
+                
+                // slot: 8PM-10PM (10 orders)
+                seedPeakHourOrders("PH-20-", branch, customer, burger, 10, today.atTime(21, 10));
+
                 System.out.println("✅ Data seeding successfully completed!");
                 System.out.println("Expected Dashboard Stats in Frontend:");
                 System.out.println("- Pending Orders  : 2");
@@ -185,5 +212,14 @@ public class DataSeeder implements CommandLineRunner {
                 item.setSubtotal(menuItem.getPrice().multiply(BigDecimal.valueOf(qty)));
                 item.setQuantity(qty);
                 return item;
+        }
+
+        private void seedPeakHourOrders(String prefix, Branch branch, Customer customer, MenuItem menuItem, int orderCount, LocalDateTime approvedTime) {
+                for (int i = 1; i <= orderCount; i++) {
+                        Order order = createBaseOrder(prefix + i, branch, customer, OrderStatus.PENDING, approvedTime.minusMinutes(5));
+                        order.setApprovedAt(approvedTime); // Essential for Peak Hours logic
+                        orderRepository.save(order);
+                        orderItemRepository.save(createOrderItem(order, menuItem, 1));
+                }
         }
 }
