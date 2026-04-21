@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.dto.inventory.response;
+package com.ByteKnights.com.resturarent_system.dto.response.inventory;
 
 import lombok.*;
 
