@@ -1,7 +1,11 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.CreateMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.ApproveMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.DeleteMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.MenuItemActionResponse;
 import com.ByteKnights.com.resturarent_system.dto.MenuItemResponse;
+import com.ByteKnights.com.resturarent_system.dto.RejectMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.UpdateMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
@@ -12,6 +16,7 @@ import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundExceptio
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,6 +38,7 @@ public class MenuServiceImpl implements MenuService {
     private final MenuItemRepository menuItemRepository;
     private final BranchRepository branchRepository;
     private final MenuCategoryRepository menuCategoryRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -67,7 +74,21 @@ public class MenuServiceImpl implements MenuService {
     @Override
     @Transactional(readOnly = true)
     public List<MenuItemResponse> getAllMenuItems() {
-        return menuItemRepository.findAll()
+        return menuItemRepository.findByStatusAndIsAvailableTrue(MenuItemStatus.APPROVED)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MenuItemResponse> getPendingChefMenuItems() {
+        List<Long> chefUserIds = userRepository.findUserIdsByRoleKeyword("CHEF");
+        if (chefUserIds.isEmpty()) {
+            return List.of();
+        }
+
+        return menuItemRepository.findByStatusAndCreatedByIn(MenuItemStatus.PENDING, chefUserIds)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -141,9 +162,78 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     @Transactional
-    public void deleteMenuItem(Long id) {
+    public MenuItemActionResponse approveMenuItem(Long id, ApproveMenuItemRequest request) {
         MenuItem menuItem = findMenuItemOrThrow(id);
+
+        if (menuItem.getStatus() != MenuItemStatus.PENDING) {
+            throw new InvalidOperationException("Item is already processed");
+        }
+
+        if (!isMenuItemValidForApproval(menuItem)) {
+            throw new InvalidOperationException("Cannot approve invalid menu item");
+        }
+
+        menuItem.setStatus(MenuItemStatus.APPROVED);
+        menuItem.setApprovedAt(LocalDateTime.now());
+        menuItem.setRejectedAt(null);
+        menuItem.setRejectionReason(null);
+        menuItemRepository.save(menuItem);
+
+        return buildActionResponse("APPROVED", menuItem, "Item approved");
+    }
+
+    @Override
+    @Transactional
+    public MenuItemActionResponse rejectMenuItem(Long id, RejectMenuItemRequest request) {
+        MenuItem menuItem = findMenuItemOrThrow(id);
+
+        if (menuItem.getStatus() != MenuItemStatus.PENDING) {
+            throw new InvalidOperationException("Item is already processed");
+        }
+
+        String rejectionReason = request != null ? request.getRejectionReason() : null;
+        if (rejectionReason == null || rejectionReason.isBlank()) {
+            throw new InvalidOperationException("Rejection reason is required");
+        }
+
+        menuItem.setStatus(MenuItemStatus.REJECTED);
+        menuItem.setRejectedAt(LocalDateTime.now());
+        menuItem.setRejectionReason(rejectionReason.trim());
+        menuItem.setApprovedAt(null);
+        menuItemRepository.save(menuItem);
+
+        return buildActionResponse("REJECTED", menuItem, "Item rejected: " + rejectionReason.trim());
+    }
+
+    @Override
+    @Transactional
+    public MenuItemActionResponse toggleMenuItemAvailability(Long id, boolean isAvailable) {
+        MenuItem menuItem = findMenuItemOrThrow(id);
+
+        if (menuItem.getStatus() != MenuItemStatus.APPROVED) {
+            throw new InvalidOperationException("Cannot toggle availability if not APPROVED");
+        }
+
+        menuItem.setIsAvailable(isAvailable);
+        menuItemRepository.save(menuItem);
+        return buildActionResponse(
+            isAvailable ? "AVAILABLE" : "UNAVAILABLE",
+            menuItem,
+            "Availability updated");
+    }
+
+    @Override
+    @Transactional
+    public MenuItemActionResponse deleteMenuItem(Long id, DeleteMenuItemRequest request) {
+        MenuItem menuItem = findMenuItemOrThrow(id);
+
+        if (menuItem.getStatus() == MenuItemStatus.APPROVED) {
+            throw new InvalidOperationException("Cannot delete approved item");
+        }
+
+        MenuItemActionResponse response = buildActionResponse("DELETED", menuItem, "Menu item deleted successfully");
         menuItemRepository.delete(menuItem);
+        return response;
     }
 
     private MenuItem findMenuItemOrThrow(Long id) {
@@ -242,6 +332,24 @@ public class MenuServiceImpl implements MenuService {
         }
 
         return normalizedImageUrl;
+    }
+
+    private boolean isMenuItemValidForApproval(MenuItem menuItem) {
+        boolean hasValidName = menuItem.getName() != null && !menuItem.getName().isBlank();
+        boolean hasValidPrice = menuItem.getPrice() != null && menuItem.getPrice().compareTo(BigDecimal.ZERO) > 0;
+        boolean hasValidCategory = menuItem.getCategory() != null;
+        boolean hasValidPreparationTime = menuItem.getPreparationTime() != null && menuItem.getPreparationTime() > 0;
+        return hasValidName && hasValidPrice && hasValidCategory && hasValidPreparationTime;
+    }
+
+    private MenuItemActionResponse buildActionResponse(String type, MenuItem menuItem, String message) {
+        return MenuItemActionResponse.builder()
+                .type(type)
+                .menuItemId(menuItem.getId())
+                .menuItemName(menuItem.getName())
+                .message(message)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 
     private MenuItemResponse mapToResponse(MenuItem item) {
