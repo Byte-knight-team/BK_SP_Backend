@@ -1,8 +1,15 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -36,5 +43,24 @@ public class InventoryController {
      * service, and return the service's response back to the frontend.
      */
     private final InventoryService inventoryService;
+
+    /**
+     * Endpoint to fetch all inventory items for a specific branch.
+     * 
+     * Path: GET /api/inventory/items?branchId={id}
+     * 
+     * @param branchId Retrieved from the URL query parameter.
+     * @return 200 OK with a list of InventoryItemDTOs in the response body.
+     */
+    @GetMapping("/items")
+    public ResponseEntity<List<InventoryItemDTO>> getAllItemsByBranch(
+            @RequestParam Long branchId) {
+
+        // Ask the service layer to do the heavy lifting
+        List<InventoryItemDTO> items = inventoryService.getAllItemsByBranch(branchId);
+
+        // Wrap the result in a 200 OK HTTP Response and send it back to the frontend
+        return ResponseEntity.ok(items);
+    }
 
 }
