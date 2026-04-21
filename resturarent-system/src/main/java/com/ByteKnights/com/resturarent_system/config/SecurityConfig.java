@@ -15,17 +15,17 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
-                    .requestMatchers(
-                        "/api/v1/auth/**",
-                        "/api/tables",
-                        "/api/tables/**",
-                        "/swagger-ui/**",
-                        "/swagger-ui.html",
-                        "/api-docs/**",
-                        "/v3/api-docs/**"
-                    ).permitAll()
-                        .anyRequest().authenticated()
-                )
+                        .requestMatchers(
+                                "/api/v1/auth/**",
+                                "/api/tables",
+                                "/api/tables/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/api-docs/**",
+                                "/v3/api-docs/**",
+                                "/api/inventory/**")
+                        .permitAll()
+                        .anyRequest().authenticated())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable());
 
