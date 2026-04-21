@@ -23,13 +23,8 @@ public class RestaurantTableController {
 
     @PostMapping
     public ResponseEntity<?> createTable(@Valid @RequestBody CreateTableRequest request) {
-        try {
-            TableResponse response = tableService.createTable(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
+        TableResponse response = tableService.createTable(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping
@@ -40,60 +35,29 @@ public class RestaurantTableController {
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getTableById(@PathVariable Long id) {
-        try {
-            TableResponse response = tableService.getTableById(id);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    @GetMapping("/branch/{branchId}")
-    public ResponseEntity<?> getTablesByBranch(@PathVariable Long branchId) {
-        try {
-            List<TableResponse> tables = tableService.getTablesByBranch(branchId);
-            return ResponseEntity.ok(tables);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", e.getMessage()));
-        }
+        TableResponse response = tableService.getTableById(id);
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateTable(
             @PathVariable Long id,
             @Valid @RequestBody UpdateTableRequest request) {
-        try {
-            TableResponse response = tableService.updateTable(id, request);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
+        TableResponse response = tableService.updateTable(id, request);
+        return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<?> updateTableStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateTableStatusRequest request) {
-        try {
-            TableResponse response = tableService.updateTableStatus(id, request);
-            return ResponseEntity.ok(response);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", e.getMessage()));
-        }
+        TableResponse response = tableService.updateTableStatus(id, request);
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteTable(@PathVariable Long id) {
-        try {
-            tableService.deleteTable(id);
-            return ResponseEntity.ok(Map.of("message", "Table deleted successfully"));
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", e.getMessage()));
-        }
+        tableService.deleteTable(id);
+        return ResponseEntity.ok(Map.of("message", "Table deleted successfully"));
     }
 }
