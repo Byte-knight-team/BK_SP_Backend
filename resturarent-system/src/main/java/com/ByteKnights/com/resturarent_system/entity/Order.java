@@ -93,8 +93,13 @@ public class Order {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public Order() {
-    }
+    @Column(name = "cooking_started_at")
+    private LocalDateTime cookingStartedAt;
+
+    @Column(name = "cooking_completed_at")
+    private LocalDateTime cookingCompletedAt;
+
+
 
     @PrePersist
     protected void onCreate() {

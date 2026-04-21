@@ -15,13 +15,14 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(auth -> auth
-                    .requestMatchers(
-                        "/api/v1/auth/**",
-                        "/swagger-ui/**",
-                        "/swagger-ui.html",
-                        "/api-docs/**",
-                        "/v3/api-docs/**"
-                    ).permitAll()
+                        .requestMatchers(
+                                "/api/v1/auth/**",
+                                "/api/v1/kitchen/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/api-docs/**",
+                                "/v3/api-docs/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .formLogin(form -> form.disable())

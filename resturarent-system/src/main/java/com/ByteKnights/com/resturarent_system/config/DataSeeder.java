@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -21,13 +22,13 @@ public class DataSeeder implements CommandLineRunner {
         private final OrderItemRepository orderItemRepository;
 
         public DataSeeder(BranchRepository branchRepository,
-                        CustomerRepository customerRepository,
-                        OrderRepository orderRepository,
-                        UserRepository userRepository,
-                        RoleRepository roleRepository,
-                        MenuCategoryRepository menuCategoryRepository,
-                        MenuItemRepository menuItemRepository,
-                        OrderItemRepository orderItemRepository) {
+                          CustomerRepository customerRepository,
+                          OrderRepository orderRepository,
+                          UserRepository userRepository,
+                          RoleRepository roleRepository,
+                          MenuCategoryRepository menuCategoryRepository,
+                          MenuItemRepository menuItemRepository,
+                          OrderItemRepository orderItemRepository) {
                 this.branchRepository = branchRepository;
                 this.customerRepository = customerRepository;
                 this.orderRepository = orderRepository;
@@ -41,188 +42,134 @@ public class DataSeeder implements CommandLineRunner {
         @Override
         @Transactional
         public void run(String... args) throws Exception {
-                if (orderRepository.count() > 0) {
-                        return;
-                }
+                // Already seeded data delete karanna, nathnam thawa duplication wenawa
+                orderItemRepository.deleteAll();
+                orderRepository.deleteAll();
 
-                System.out.println("Seeding data...");
+                System.out.println("=================================================");
+                System.out.println("Starting to seed database for Kitchen Dashboard...");
 
-                // Create Role
-                Role customerRole = roleRepository.findByName("ROLE_CUSTOMER").orElseGet(() -> {
-                        Role role = Role.builder()
-                                        .name("ROLE_CUSTOMER")
-                                        .description("Customer Role")
-                                        .build();
-                        return roleRepository.save(role);
-                });
+                // 1. Create Role, User, and Customer
+                Role customerRole = roleRepository.findByName("ROLE_CUSTOMER").orElseGet(() ->
+                        roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Customer Role").build())
+                );
 
-                // Create Branch
-                Branch branch = Branch.builder()
+                Branch branch = branchRepository.findAll().stream().findFirst().orElseGet(() ->
+                        branchRepository.save(Branch.builder()
                                 .name("Main Branch")
                                 .address("123 Food St")
                                 .contactNumber("0112345678")
                                 .email("main@kitchen.com")
                                 .status(BranchStatus.ACTIVE)
-                                .build();
-                branch = branchRepository.save(branch);
+                                .build())
+                );
 
-                // Create User for Customer
-                User user = User.builder()
+                User user = userRepository.findByUsername("john_doe").orElseGet(() ->
+                        userRepository.save(User.builder()
                                 .username("john_doe")
                                 .email("john@example.com")
-                                .password("password123") // In real app, encode this
+                                .password("password123")
                                 .phone("0771234567")
                                 .role(customerRole)
-                                .build();
-                user = userRepository.save(user);
+                                .build())
+                );
 
-                // Create Customer
-                Customer customer = Customer.builder()
+                Customer customer = customerRepository.findAll().stream().findFirst().orElseGet(() ->
+                        customerRepository.save(Customer.builder()
                                 .user(user)
                                 .loyaltyPoints(100)
                                 .totalSpent(BigDecimal.ZERO)
-                                .build();
-                customer = customerRepository.save(customer);
-
-                // Create Menu Items
-                MenuCategory mainCourseCategory = menuCategoryRepository.findByName("Main Course").orElseGet(() ->
-                        menuCategoryRepository.save(MenuCategory.builder()
-                                .name("Main Course")
-                                .description("Main meal items")
                                 .build())
                 );
 
-                MenuCategory sidesCategory = menuCategoryRepository.findByName("Sides").orElseGet(() ->
-                        menuCategoryRepository.save(MenuCategory.builder()
-                                .name("Sides")
-                                .description("Side dishes")
-                                .build())
-                );
+                // 2. Create Menu Items
+                MenuCategory mainCourse = menuCategoryRepository.save(MenuCategory.builder().name("Main Course").build());
 
-                MenuItem burger = MenuItem.builder()
-                                .branch(branch)
-                                .category(mainCourseCategory)
-                                .name("Chicken Burger")
-                                .description("Grilled chicken patty with fresh lettuce")
-                                .price(BigDecimal.valueOf(15.99))
-                                .imageUrl(null)
-                                .isAvailable(true)
-                                .status(MenuItemStatus.APPROVED)
-                                .preparationTime(15)
-                                .build();
-                menuItemRepository.save(burger);
+                MenuItem burger = menuItemRepository.save(MenuItem.builder()
+                        .branch(branch).category(mainCourse).name("Chicken Burger")
+                        .price(BigDecimal.valueOf(15.99)).isAvailable(true)
+                        .status(MenuItemStatus.APPROVED).preparationTime(15).build());
 
-                MenuItem fries = MenuItem.builder()
-                                .branch(branch)
-                                .category(sidesCategory)
-                                .name("French Fries")
-                                .description("Crispy salted fries")
-                                .price(BigDecimal.valueOf(5.99))
-                                .imageUrl(null)
-                                .isAvailable(true)
-                                .status(MenuItemStatus.APPROVED)
-                                .preparationTime(10)
-                                .build();
-                menuItemRepository.save(fries);
+                LocalDateTime now = LocalDateTime.now();
 
-                // Create Order 1 (Pending) - 9:00 AM
-                Order order1 = new Order();
-                order1.setOrderNumber("ORD-1204"); // Matching frontend mock ID format
-                order1.setBranch(branch);
-                order1.setCustomer(customer);
-                order1.setOrderType(OrderType.QR);
-                order1.setStatus(OrderStatus.PLACED); // Mapping PLACED to 'pending' in frontend?
-                order1.setTotalAmount(BigDecimal.valueOf(21.98));
-                order1.setDiscountAmount(BigDecimal.ZERO);
-                order1.setFinalAmount(BigDecimal.valueOf(21.98));
-                order1.setPaymentStatus(PaymentStatus.PENDING);
-                order1.setCreatedAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
-                                java.time.LocalTime.of(9, 0)));
-                order1 = orderRepository.save(order1);
+                // ==============================================
+                // 3. Create 2 PENDING Orders
+                // ==============================================
+                for (int i = 1; i <= 2; i++) {
+                        Order pendingOrder = createBaseOrder("ORD-PEND-" + i, branch, customer, OrderStatus.PENDING, now.minusMinutes(10));
+                        orderRepository.save(pendingOrder);
+                        orderItemRepository.save(createOrderItem(pendingOrder, burger, 1));
+                }
 
-                // Add items to Order 1
-                OrderItem item1 = OrderItem.builder()
-                                .order(order1)
-                                .menuItem(burger)
-                                .itemName(burger.getName())
-                                .quantity(1)
-                                .unitPrice(burger.getPrice())
-                                .subtotal(burger.getPrice())
-                                .build();
-                orderItemRepository.save(item1);
+                // ==============================================
+                // 4. Create 3 PREPARING Orders
+                // ==============================================
+                for (int i = 1; i <= 3; i++) {
+                        Order preparingOrder = createBaseOrder("ORD-PREP-" + i, branch, customer, OrderStatus.PREPARING, now.minusMinutes(20));
+                        preparingOrder.setCookingStartedAt(now.minusMinutes(15)); // started cooking 15 mins ago
+                        orderRepository.save(preparingOrder);
+                        orderItemRepository.save(createOrderItem(preparingOrder, burger, 2));
+                }
 
-                OrderItem item2 = OrderItem.builder()
-                                .order(order1)
-                                .menuItem(fries)
-                                .itemName(fries.getName())
-                                .quantity(1)
-                                .unitPrice(fries.getPrice())
-                                .subtotal(fries.getPrice())
-                                .build();
-                orderItemRepository.save(item2);
+                // ==============================================
+                // 5. Create 4 COMPLETED Orders
+                // prep times: 10, 12, 18, 20 mins => Avg = 15 mins
+                // ==============================================
+                createCompletedOrder("ORD-COMP-1", branch, customer, 10, now.minusHours(2));
+                createCompletedOrder("ORD-COMP-2", branch, customer, 12, now.minusHours(3));
+                createCompletedOrder("ORD-COMP-3", branch, customer, 18, now.minusHours(4));
+                createCompletedOrder("ORD-COMP-4", branch, customer, 20, now.minusHours(5));
 
-                // Create Order 2 (Preparing) - 9:30 AM
-                Order order2 = new Order();
-                order2.setOrderNumber("ORD-1200");
-                order2.setBranch(branch);
-                order2.setCustomer(customer);
-                order2.setOrderType(OrderType.QR);
-                order2.setStatus(OrderStatus.PLACED);
-                order2.setTotalAmount(BigDecimal.valueOf(37.97)); // 2 Burgers + 1 Fries
-                order2.setDiscountAmount(BigDecimal.ZERO);
-                order2.setFinalAmount(BigDecimal.valueOf(37.97));
-                order2.setPaymentStatus(PaymentStatus.PAID);
-                order2.setCreatedAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
-                                java.time.LocalTime.of(9, 30)));
-                order2 = orderRepository.save(order2);
+                System.out.println("✅ Data seeding successfully completed!");
+                System.out.println("Expected Dashboard Stats in Frontend:");
+                System.out.println("- Pending Orders  : 2");
+                System.out.println("- Preparing Orders: 3");
+                System.out.println("- Completed Orders: 4");
+                System.out.println("- Avg Prep Time   : 15.0 Minutes");
+                System.out.println("=================================================");
+        }
 
-                OrderItem item3 = OrderItem.builder()
-                                .order(order2)
-                                .menuItem(burger)
-                                .itemName(burger.getName())
-                                .quantity(2)
-                                .unitPrice(burger.getPrice())
-                                .subtotal(burger.getPrice().multiply(BigDecimal.valueOf(2)))
-                                .build();
-                orderItemRepository.save(item3);
+        private Order createBaseOrder(String orderNumber, Branch branch, Customer customer, OrderStatus status, LocalDateTime createdAt) {
+                Order order = new Order();
+                order.setOrderNumber(orderNumber);
+                order.setBranch(branch);
+                order.setCustomer(customer);
+                order.setOrderType(OrderType.QR);
+                order.setStatus(status);
+                order.setTotalAmount(BigDecimal.valueOf(25.00));
+                order.setDiscountAmount(BigDecimal.ZERO);
+                order.setFinalAmount(BigDecimal.valueOf(25.00));
+                order.setPaymentStatus(PaymentStatus.PENDING);
+                order.setCreatedAt(createdAt);
+                return order;
+        }
 
-                OrderItem item3_2 = OrderItem.builder()
-                                .order(order2)
-                                .menuItem(fries)
-                                .itemName(fries.getName())
-                                .quantity(1)
-                                .unitPrice(fries.getPrice())
-                                .subtotal(fries.getPrice())
-                                .build();
-                orderItemRepository.save(item3_2);
+        private void createCompletedOrder(String orderNumber, Branch branch, Customer customer, int prepTimeMinutes, LocalDateTime startAt) {
+                Order order = createBaseOrder(orderNumber, branch, customer, OrderStatus.COMPLETED, startAt.minusMinutes(5));
+                order.setPaymentStatus(PaymentStatus.PAID);
+                order.setCookingStartedAt(startAt);
+                order.setCookingCompletedAt(startAt.plusMinutes(prepTimeMinutes));
 
-                System.out.println("Seeding completed for Order 1 & 2.");
+                order = orderRepository.save(order);
 
-                // Create Order 3 (Pending) - 11:00 AM
-                Order order3 = new Order();
-                order3.setOrderNumber("ORD-1205");
-                order3.setBranch(branch);
-                order3.setCustomer(customer);
-                order3.setOrderType(OrderType.ONLINE);
-                order3.setStatus(OrderStatus.PLACED);
-                order3.setTotalAmount(fries.getPrice());
-                order3.setDiscountAmount(BigDecimal.ZERO);
-                order3.setFinalAmount(fries.getPrice());
-                order3.setPaymentStatus(PaymentStatus.PENDING);
-                order3.setCreatedAt(java.time.LocalDateTime.of(java.time.LocalDate.now(),
-                                java.time.LocalTime.of(11, 0)));
-                order3 = orderRepository.save(order3);
+                OrderItem item = new OrderItem();
+                item.setOrder(order);
+                item.setItemName("Chicken Burger");
+                item.setQuantity(1);
+                item.setUnitPrice(BigDecimal.valueOf(15.99));
+                item.setSubtotal(BigDecimal.valueOf(15.99));
 
-                OrderItem item4 = OrderItem.builder()
-                                .order(order3)
-                                .menuItem(fries)
-                                .itemName(fries.getName())
-                                .quantity(1)
-                                .unitPrice(fries.getPrice())
-                                .subtotal(fries.getPrice())
-                                .build();
-                orderItemRepository.save(item4);
+                orderItemRepository.save(item);
+        }
 
-                System.out.println("Data seeding completed.");
+        private OrderItem createOrderItem(Order order, MenuItem menuItem, int qty) {
+                OrderItem item = new OrderItem();
+                item.setOrder(order);
+                item.setMenuItem(menuItem);
+                item.setItemName(menuItem.getName());
+                item.setUnitPrice(menuItem.getPrice());
+                item.setSubtotal(menuItem.getPrice().multiply(BigDecimal.valueOf(qty)));
+                item.setQuantity(qty);
+                return item;
         }
 }
