@@ -1,41 +1,31 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
+import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse;
+import com.ByteKnights.com.resturarent_system.service.MenuService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/api/menu")
+@RequestMapping("/api/v1/menu")
+@CrossOrigin
 public class MenuController {
 
-    // TODO: Inject MenuItemService
+    private final MenuService menuService;
 
-    @GetMapping
-    public ResponseEntity<?> getAllMenuItems() {
-        // TODO: Return list of menu items (public)
-        return null;
+    public MenuController(MenuService menuService) {
+        this.menuService = menuService;
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<?> getMenuItemById(@PathVariable Long id) {
-        // TODO: Return single menu item by ID
-        return null;
-    }
-
-    @PostMapping
-    public ResponseEntity<?> createMenuItem(/* TODO: @RequestBody MenuItemDto dto */) {
-        // TODO: Create menu item (admin/manager only)
-        return null;
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<?> updateMenuItem(@PathVariable Long id /* TODO: @RequestBody MenuItemDto dto */) {
-        // TODO: Update menu item (admin/manager only)
-        return null;
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteMenuItem(@PathVariable Long id) {
-        // TODO: Delete menu item (admin/manager only)
-        return null;
+    //CUSTOMER ENDPOINT (Only active items)
+    @GetMapping("/customer")
+    public ResponseEntity<ApiResponse<List<MenuItemResponse>>> getMenu(
+            @RequestParam(required = false) Long branchId) {
+        
+        List<MenuItemResponse> menuItems = menuService.fetchCustomerMenu(branchId);
+        
+        return ResponseEntity.ok(ApiResponse.success("Menu fetched successfully", menuItems));
     }
 }
