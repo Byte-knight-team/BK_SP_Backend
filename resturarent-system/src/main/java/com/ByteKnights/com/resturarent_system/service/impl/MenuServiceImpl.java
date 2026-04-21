@@ -56,7 +56,7 @@ public class MenuServiceImpl implements MenuService {
                 .price(request.getPrice())
                 .imageUrl(validateAndNormalizeImageUrl(request.getImageUrl()))
                 .isAvailable(request.getIsAvailable() != null ? request.getIsAvailable() : true)
-                .status(parseStatus(request.getStatus(), MenuItemStatus.PENDING))
+                .status(parseStatus(request.getStatus(), MenuItemStatus.DRAFT))
                 .preparationTime(request.getPreparationTime())
                 .build();
 
@@ -170,7 +170,7 @@ public class MenuServiceImpl implements MenuService {
             return MenuItemStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new InvalidOperationException(
-                    "Invalid menu item status: " + status + ". Valid values: PENDING, APPROVED, REJECTED");
+                    "Invalid menu item status: " + status + ". Valid values: DRAFT, APPROVED, REJECTED");
         }
     }
 
