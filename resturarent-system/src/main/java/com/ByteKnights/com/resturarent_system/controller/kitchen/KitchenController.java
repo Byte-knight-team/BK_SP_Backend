@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenDashboardStatsDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PeakHourDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PopularMealDTO;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,8 @@ public class KitchenController {
                 HttpStatus.OK
         );
     }
+
+
 }
 
 
