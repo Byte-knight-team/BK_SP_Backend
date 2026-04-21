@@ -29,4 +29,7 @@ public interface MenuService {
     MenuItemActionResponse toggleMenuItemAvailability(Long id, boolean isAvailable);
 
     MenuItemActionResponse deleteMenuItem(Long id, DeleteMenuItemRequest request);
+
+    List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(Long branchId);
+
 }

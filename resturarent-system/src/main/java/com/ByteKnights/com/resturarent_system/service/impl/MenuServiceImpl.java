@@ -18,7 +18,6 @@ import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +28,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class MenuServiceImpl implements MenuService {
 
     private static final BigDecimal MAX_MENU_ITEM_PRICE = new BigDecimal("99999999.99");
@@ -39,6 +37,13 @@ public class MenuServiceImpl implements MenuService {
     private final BranchRepository branchRepository;
     private final MenuCategoryRepository menuCategoryRepository;
     private final UserRepository userRepository;
+
+    public MenuServiceImpl(MenuItemRepository menuItemRepository, BranchRepository branchRepository, MenuCategoryRepository menuCategoryRepository, UserRepository userRepository) {
+        this.menuItemRepository = menuItemRepository;
+        this.branchRepository = branchRepository;
+        this.menuCategoryRepository = menuCategoryRepository;
+        this.userRepository = userRepository;
+    }
 
     @Override
     @Transactional
@@ -58,13 +63,14 @@ public class MenuServiceImpl implements MenuService {
                 .branch(branch)
                 .category(category)
                 .subCategory(request.getSubCategory())
-            .name(validatedName)
+                .name(validatedName)
                 .description(request.getDescription())
                 .price(request.getPrice())
                 .imageUrl(validateAndNormalizeImageUrl(request.getImageUrl()))
                 .isAvailable(request.getIsAvailable() != null ? request.getIsAvailable() : true)
                 .status(parseStatus(request.getStatus(), MenuItemStatus.PENDING))
                 .preparationTime(request.getPreparationTime())
+                .createdBy(resolveCreatedByUserId())
                 .build();
 
         MenuItem saved = menuItemRepository.save(menuItem);
@@ -99,6 +105,34 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemResponse getMenuItemById(Long id) {
         MenuItem menuItem = findMenuItemOrThrow(id);
         return mapToResponse(menuItem);
+    }
+
+    @Override
+    public List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(Long branchId) {
+        // ENFORCE BUSINESS RULE: Default to Branch 1 for Online customers
+        // only branch 1 is doing online services
+        Long targetBranchId = (branchId != null) ? branchId : 1;
+
+        // Fetch only APPROVED and AVAILABLE items for this specific branch
+        List<MenuItem> items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(
+                targetBranchId, 
+                MenuItemStatus.APPROVED
+        );
+
+        // Convert the database Entities into clean DTOs for React
+        return items.stream().map(item -> com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse.builder()
+                .id(item.getId())
+                .name(item.getName())
+                .description(item.getDescription())
+                .price(item.getPrice())
+                .imageUrl(item.getImageUrl())
+                // Prevent NullPointerExceptions if a category was deleted
+                .categoryName(item.getCategory() != null ? item.getCategory().getName() : "Uncategorized")
+                .subCategory(item.getSubCategory())
+                .isAvailable(item.getIsAvailable())
+                .preparationTime(item.getPreparationTime())
+                .build()
+        ).collect(Collectors.toList());
     }
 
     @Override
@@ -352,20 +386,28 @@ public class MenuServiceImpl implements MenuService {
                 .build();
     }
 
+    private Long resolveCreatedByUserId() {
+        List<Long> chefUserIds = userRepository.findUserIdsByRoleKeyword("CHEF");
+        if (!chefUserIds.isEmpty()) {
+            return chefUserIds.get(0);
+        }
+        return 1L;
+    }
+
     private MenuItemResponse mapToResponse(MenuItem item) {
         return MenuItemResponse.builder()
                 .id(item.getId())
-                .branchId(item.getBranch().getId())
-                .branchName(item.getBranch().getName())
-                .categoryId(item.getCategory().getId())
-                .categoryName(item.getCategory().getName())
+                .branchId(item.getBranch() != null ? item.getBranch().getId() : null)
+                .branchName(item.getBranch() != null ? item.getBranch().getName() : null)
+                .categoryId(item.getCategory() != null ? item.getCategory().getId() : null)
+                .categoryName(item.getCategory() != null ? item.getCategory().getName() : null)
                 .subCategory(item.getSubCategory())
                 .name(item.getName())
                 .description(item.getDescription())
                 .price(item.getPrice())
                 .imageUrl(item.getImageUrl())
                 .isAvailable(item.getIsAvailable())
-                .status(item.getStatus().name())
+                .status(item.getStatus() != null ? item.getStatus().name() : null)
                 .preparationTime(item.getPreparationTime())
                 .createdAt(item.getCreatedAt())
                 .build();
