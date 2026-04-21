@@ -1,7 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.request.QrSessionStartRequest;
-import com.ByteKnights.com.resturarent_system.dto.response.QrSessionStartResponseData;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.QrSessionStartRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.QrSessionStartResponseData;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.QrSession;
 import com.ByteKnights.com.resturarent_system.entity.QrSessionStatus;

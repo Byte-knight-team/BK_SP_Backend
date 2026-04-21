@@ -1,9 +1,9 @@
 package com.ByteKnights.com.resturarent_system.service;
 
-import com.ByteKnights.com.resturarent_system.dto.request.CustomerLoginRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.CustomerRegisterRequest;
-import com.ByteKnights.com.resturarent_system.dto.response.CustomerLoginResponseData;
-import com.ByteKnights.com.resturarent_system.dto.response.CustomerRegisterResponseData;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerLoginRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerRegisterRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerLoginResponseData;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerRegisterResponseData;
 
 public interface CustomerAuthService {
     CustomerRegisterResponseData register(CustomerRegisterRequest request);
