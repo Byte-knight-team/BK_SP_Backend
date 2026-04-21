@@ -11,7 +11,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class UpdateOrderRequest {
-    private String tableNumber;
+    private Long tableId;
     private List<UpdateOrderItemRequest> items;
 
     @Getter

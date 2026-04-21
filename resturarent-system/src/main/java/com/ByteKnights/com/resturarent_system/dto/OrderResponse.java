@@ -18,15 +18,16 @@ public class OrderResponse {
 
     private Long id;
     private String orderNumber;
+    private Long customerId;
+    private Long branchId;
+    private Long tableId;
     private String status;
     private String orderType;
-    private String paymentMethod;
+    private Long paymentMethodId;
     private String paymentStatus;
     private BigDecimal totalAmount;
     private BigDecimal discountAmount;
     private BigDecimal finalAmount;
-    private String customerName;
-    private String customerPhone;
     private String deliveryAddress;
     private LocalDateTime createdAt;
     private List<OrderItemResponse> items;
