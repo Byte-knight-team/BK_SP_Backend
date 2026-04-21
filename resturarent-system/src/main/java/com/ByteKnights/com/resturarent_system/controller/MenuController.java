@@ -7,9 +7,9 @@ import com.ByteKnights.com.resturarent_system.dto.MenuItemActionResponse;
 import com.ByteKnights.com.resturarent_system.dto.MenuItemResponse;
 import com.ByteKnights.com.resturarent_system.dto.RejectMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.UpdateMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,16 +19,14 @@ import java.util.Map;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/menu")
-@RequiredArgsConstructor
+@RequestMapping("/api/v1/menu")
+@CrossOrigin
 public class MenuController {
 
     private final MenuService menuService;
 
-    @GetMapping
-    public ResponseEntity<List<MenuItemResponse>> getAllMenuItems() {
-        List<MenuItemResponse> menuItems = menuService.getAllMenuItems();
-        return ResponseEntity.ok(menuItems);
+    public MenuController(MenuService menuService) {
+        this.menuService = menuService;
     }
 
     @GetMapping("/pending-chef-items")
@@ -90,5 +88,15 @@ public class MenuController {
     public ResponseEntity<MenuItemActionResponse> deleteMenuItem(@PathVariable Long id, @Valid @RequestBody DeleteMenuItemRequest request) {
         MenuItemActionResponse response = menuService.deleteMenuItem(id, request);
         return ResponseEntity.ok(response);
+    }
+
+    //CUSTOMER ENDPOINT (Only active items)
+    @GetMapping("/customer")
+    public ResponseEntity<ApiResponse<List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse>>> getMenu(
+            @RequestParam(required = false) Long branchId) {
+
+        List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> menuItems = menuService.fetchCustomerMenu(branchId);
+
+        return ResponseEntity.ok(ApiResponse.success("Menu fetched successfully", menuItems));
     }
 }
