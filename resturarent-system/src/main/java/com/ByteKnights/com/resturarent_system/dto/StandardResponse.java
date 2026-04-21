@@ -14,4 +14,4 @@ public class StandardResponse {
 }
 
 // example
-// return new ResponseEntity<>(new StandaredResponse(200, "Success", obj),HttpStatus.OK);
+// return new ResponseEntity<>(new StandardResponse(200, "Success", obj),HttpStatus.OK);

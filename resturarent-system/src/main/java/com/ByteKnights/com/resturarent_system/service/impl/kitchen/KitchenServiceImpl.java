@@ -1,18 +1,19 @@
 package com.ByteKnights.com.resturarent_system.service.impl.kitchen;
 
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryAlertDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenDashboardStatsDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PeakHourDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PopularMealDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
+import com.ByteKnights.com.resturarent_system.entity.Order;
+import com.ByteKnights.com.resturarent_system.entity.OrderItem;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -155,6 +156,30 @@ public class KitchenServiceImpl implements KitchenService {
         return alerts;
     }
 
+    //get orders
+    @Override
+    public List<KitchenOrderDTO> getOrdersByStatus(OrderStatus status) {
+        // Sorting logic (Pending/Preparing = ASC, Completed = DESC)
+        Sort sort = (status == OrderStatus.COMPLETED)
+                ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
+                : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
+        List<Order> orders = orderRepository.findByStatus(status, sort);
+        List<KitchenOrderDTO> kitchenOrderDTOS = new ArrayList<>();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
+
+        for (Order order : orders) {
+            // Sum of quantities for all items in the order
+            int totalQty = order.getItems().stream().mapToInt(OrderItem::getQuantity).sum();
+
+            kitchenOrderDTOS.add(new KitchenOrderDTO(
+                    order.getId(),
+                    order.getStatus().toString(), // Enum -> String
+                    order.getStatusUpdatedAt().format(formatter),
+                    totalQty
+            ));
+        }
+        return kitchenOrderDTOS;
+    }
 
 }

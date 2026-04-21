@@ -1,10 +1,8 @@
 package com.ByteKnights.com.resturarent_system.controller.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryAlertDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenDashboardStatsDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PeakHourDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.PopularMealDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -63,6 +61,15 @@ public class KitchenController {
         );
     }
 
+    //get orders by status
+    @GetMapping("/orders")
+    public ResponseEntity<StandardResponse> getOrdersByStatus(@RequestParam OrderStatus status) {
+        List<KitchenOrderDTO> orders = kitchenService.getOrdersByStatus(status);
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", orders),
+                HttpStatus.OK
+        );
+    }
 
 
 }
