@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.dto.request;
+package com.ByteKnights.com.resturarent_system.dto.request.customer;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
