@@ -6,5 +6,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
-    // TODO: Add custom query methods as needed
+    boolean existsByBranchIdAndCategoryIdAndNameIgnoreCase(Long branchId, Long categoryId, String name);
+
+    boolean existsByBranchIdAndCategoryIdAndNameIgnoreCaseAndIdNot(Long branchId, Long categoryId, String name, Long id);
 }

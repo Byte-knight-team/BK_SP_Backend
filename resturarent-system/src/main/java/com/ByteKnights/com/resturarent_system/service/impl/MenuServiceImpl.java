@@ -17,12 +17,17 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.net.URI;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class MenuServiceImpl implements MenuService {
+
+    private static final BigDecimal MAX_MENU_ITEM_PRICE = new BigDecimal("99999999.99");
+    private static final int MAX_PREPARATION_TIME_MINUTES = 240;
 
     private final MenuItemRepository menuItemRepository;
     private final BranchRepository branchRepository;
@@ -33,15 +38,23 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemResponse createMenuItem(CreateMenuItemRequest request) {
         Branch branch = findBranchOrThrow(request.getBranchId());
         MenuCategory category = findCategoryOrThrow(request.getCategoryId());
+        String validatedName = validateAndNormalizeRequiredName(request.getName());
+        validatePriceRange(request.getPrice());
+        validatePreparationTime(request.getPreparationTime());
+
+        if (menuItemRepository.existsByBranchIdAndCategoryIdAndNameIgnoreCase(
+            branch.getId(), category.getId(), validatedName)) {
+            throw new InvalidOperationException("Menu item name already exists in this branch and category");
+        }
 
         MenuItem menuItem = MenuItem.builder()
                 .branch(branch)
                 .category(category)
                 .subCategory(request.getSubCategory())
-                .name(request.getName())
+            .name(validatedName)
                 .description(request.getDescription())
                 .price(request.getPrice())
-                .imageUrl(request.getImageUrl())
+                .imageUrl(validateAndNormalizeImageUrl(request.getImageUrl()))
                 .isAvailable(request.getIsAvailable() != null ? request.getIsAvailable() : true)
                 .status(parseStatus(request.getStatus(), MenuItemStatus.PENDING))
                 .preparationTime(request.getPreparationTime())
@@ -85,7 +98,15 @@ public class MenuServiceImpl implements MenuService {
         }
 
         if (request.getName() != null && !request.getName().isBlank()) {
-            menuItem.setName(request.getName());
+            menuItem.setName(validateAndNormalizeRequiredName(request.getName()));
+        }
+
+        if (menuItemRepository.existsByBranchIdAndCategoryIdAndNameIgnoreCaseAndIdNot(
+                menuItem.getBranch().getId(),
+                menuItem.getCategory().getId(),
+                menuItem.getName(),
+                menuItem.getId())) {
+            throw new InvalidOperationException("Menu item name already exists in this branch and category");
         }
 
         if (request.getDescription() != null) {
@@ -93,11 +114,12 @@ public class MenuServiceImpl implements MenuService {
         }
 
         if (request.getPrice() != null) {
+            validatePriceRange(request.getPrice());
             menuItem.setPrice(request.getPrice());
         }
 
         if (request.getImageUrl() != null) {
-            menuItem.setImageUrl(request.getImageUrl());
+            menuItem.setImageUrl(validateAndNormalizeImageUrl(request.getImageUrl()));
         }
 
         if (request.getIsAvailable() != null) {
@@ -109,6 +131,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         if (request.getPreparationTime() != null) {
+            validatePreparationTime(request.getPreparationTime());
             menuItem.setPreparationTime(request.getPreparationTime());
         }
 
@@ -149,6 +172,76 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException(
                     "Invalid menu item status: " + status + ". Valid values: PENDING, APPROVED, REJECTED");
         }
+    }
+
+    private String validateAndNormalizeRequiredName(String name) {
+        if (name == null || name.isBlank()) {
+            throw new InvalidOperationException("Name is required");
+        }
+
+        String normalizedName = name.trim();
+        if (normalizedName.length() < 3) {
+            throw new InvalidOperationException("Name must be at least 3 characters");
+        }
+
+        return normalizedName;
+    }
+
+    private void validatePriceRange(BigDecimal price) {
+        if (price == null) {
+            throw new InvalidOperationException("Price is required");
+        }
+
+        if (price.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidOperationException("Price must be greater than zero");
+        }
+
+        if (price.compareTo(MAX_MENU_ITEM_PRICE) > 0) {
+            throw new InvalidOperationException(
+                    "Price must be less than or equal to " + MAX_MENU_ITEM_PRICE.toPlainString());
+        }
+    }
+
+    private void validatePreparationTime(Integer preparationTime) {
+        if (preparationTime == null) {
+            return;
+        }
+
+        if (preparationTime <= 0) {
+            throw new InvalidOperationException("Preparation time must be greater than zero");
+        }
+
+        if (preparationTime > MAX_PREPARATION_TIME_MINUTES) {
+            throw new InvalidOperationException(
+                    "Preparation time must be less than or equal to " + MAX_PREPARATION_TIME_MINUTES + " minutes");
+        }
+    }
+
+    private String validateAndNormalizeImageUrl(String imageUrl) {
+        if (imageUrl == null) {
+            return null;
+        }
+
+        String normalizedImageUrl = imageUrl.trim();
+        if (normalizedImageUrl.isEmpty()) {
+            return null;
+        }
+
+        URI parsedUri;
+        try {
+            parsedUri = URI.create(normalizedImageUrl);
+        } catch (IllegalArgumentException ex) {
+            throw new InvalidOperationException("Image URL must be a valid HTTP/HTTPS URL");
+        }
+
+        String scheme = parsedUri.getScheme();
+        if (scheme == null
+                || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
+                || parsedUri.getHost() == null) {
+            throw new InvalidOperationException("Image URL must be a valid HTTP/HTTPS URL");
+        }
+
+        return normalizedImageUrl;
     }
 
     private MenuItemResponse mapToResponse(MenuItem item) {
