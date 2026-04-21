@@ -16,12 +16,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByPhone(String phone);
     boolean existsByUsername(String username);
 
-    // Count only active users for a given role
     long countByRoleAndIsActiveTrue(Role role);
 
-    // Count all users for a given role
     long countByRole(Role role);
 
-    // Used before deleting a role
     boolean existsByRole(Role role);
 }

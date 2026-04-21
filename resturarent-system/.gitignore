@@ -32,8 +32,9 @@ build/
 ### VS Code ###
 .vscode/
 
-### Local Configuration ###
+### Configuration ###
 .env.properties
+.env
 
 # junk files
 build.log

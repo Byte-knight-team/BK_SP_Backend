@@ -26,7 +26,6 @@ public class DataSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
-        // Create privileges
         Privilege createStaff = createPrivilege("CREATE_STAFF");
         Privilege assignPrivileges = createPrivilege("ASSIGN_PRIVILEGES");
         Privilege updateConfig = createPrivilege("UPDATE_CONFIG");
@@ -47,12 +46,12 @@ public class DataSeeder implements CommandLineRunner {
         Privilege viewOrders = createPrivilege("VIEW_ORDERS");
         Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
 
-        // Create roles with privileges
         Role superAdminRole = createRole("SUPER_ADMIN");
         superAdminRole.setPermissions(new HashSet<>(Set.of(
                 createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, manageSystemConfig,
                 manageOrders, manageMenu, manageReservations, updateOrderStatus, updateDeliveryStatus,
-                createOrders, viewBranch, viewCustomer, viewOwnOrders, viewOwnProfile, viewReports, viewOrders, viewDelivery
+                createOrders, viewBranch, viewCustomer, viewOwnOrders, viewOwnProfile, viewReports,
+                viewOrders, viewDelivery
         )));
         roleRepository.save(superAdminRole);
 
@@ -95,15 +94,15 @@ public class DataSeeder implements CommandLineRunner {
 
     private Privilege createPrivilege(String name) {
         return privilegeRepository.findByName(name).orElseGet(() -> {
-            Privilege p = Privilege.builder().name(name).build();
-            return privilegeRepository.save(p);
+            Privilege privilege = Privilege.builder().name(name).build();
+            return privilegeRepository.save(privilege);
         });
     }
 
     private Role createRole(String name) {
         return roleRepository.findByName(name).orElseGet(() -> {
-            Role r = Role.builder().name(name).build();
-            return roleRepository.save(r);
+            Role role = Role.builder().name(name).build();
+            return roleRepository.save(role);
         });
     }
 }
