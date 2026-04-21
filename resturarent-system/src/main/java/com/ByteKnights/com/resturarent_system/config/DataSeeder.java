@@ -18,6 +18,8 @@ public class DataSeeder implements CommandLineRunner {
         private final RoleRepository roleRepository;
         private final MenuItemRepository menuItemRepository;
         private final OrderItemRepository orderItemRepository;
+        private final InventoryItemRepository inventoryItemRepository;
+        private final ChefRequestRepository chefRequestRepository;
 
         public DataSeeder(BranchRepository branchRepository,
                         CustomerRepository customerRepository,
@@ -25,7 +27,9 @@ public class DataSeeder implements CommandLineRunner {
                         UserRepository userRepository,
                         RoleRepository roleRepository,
                         MenuItemRepository menuItemRepository,
-                        OrderItemRepository orderItemRepository) {
+                        OrderItemRepository orderItemRepository,
+                        InventoryItemRepository inventoryItemRepository,
+                        ChefRequestRepository chefRequestRepository) {
                 this.branchRepository = branchRepository;
                 this.customerRepository = customerRepository;
                 this.orderRepository = orderRepository;
@@ -33,6 +37,8 @@ public class DataSeeder implements CommandLineRunner {
                 this.roleRepository = roleRepository;
                 this.menuItemRepository = menuItemRepository;
                 this.orderItemRepository = orderItemRepository;
+                this.inventoryItemRepository = inventoryItemRepository;
+                this.chefRequestRepository = chefRequestRepository;
         }
 
         @Override
@@ -205,5 +211,87 @@ public class DataSeeder implements CommandLineRunner {
                 orderItemRepository.save(item4);
 
                 System.out.println("Data seeding completed.");
+
+                // Seed Inventory Items
+                System.out.println("Seeding Inventory Items...");
+
+                // Item 1: Good Stock
+                InventoryItem inventoryItem1 = InventoryItem.builder()
+                                .branch(branch)
+                                .name("Premium Pizza Flour")
+                                .category("Grains")
+                                .unitPrice(new BigDecimal("12.50"))
+                                .unit("kg")
+                                .quantity(new BigDecimal("50.00")) // Current Stock
+                                .reorderLevel(new BigDecimal("15.00")) // Low Stock Threshold
+                                .build();
+                inventoryItemRepository.save(inventoryItem1);
+
+                // Item 2: Warning Status (Quantity <= ReorderLevel)
+                InventoryItem inventoryItem2 = InventoryItem.builder()
+                                .branch(branch)
+                                .name("Mozzarella Cheese")
+                                .category("Dairy")
+                                .unitPrice(new BigDecimal("24.00"))
+                                .unit("kg")
+                                .quantity(new BigDecimal("8.00")) // Current Stock (WARNING!)
+                                .reorderLevel(new BigDecimal("10.00")) // Low Stock Threshold
+                                .build();
+                inventoryItemRepository.save(inventoryItem2);
+
+                // Item 3: Good Stock (Pcs)
+                InventoryItem inventoryItem3 = InventoryItem.builder()
+                                .branch(branch)
+                                .name("Pizza Boxes (Large)")
+                                .category("Packaging")
+                                .unitPrice(new BigDecimal("0.50"))
+                                .unit("Pcs")
+                                .quantity(new BigDecimal("500.00"))
+                                .reorderLevel(new BigDecimal("100.00"))
+                                .build();
+                inventoryItemRepository.save(inventoryItem3);
+
+                // Seed Chef Requests
+                System.out.println("Seeding Chef Requests...");
+
+                // Request 1: Pending
+                ChefRequest req1 = ChefRequest.builder()
+                                .branch(branch)
+                                .chefName("Chef Adikaram")
+                                .chefRole("EXECUTIVE CHEF")
+                                .itemName("Olive Oil")
+                                .requestedQuantity(new BigDecimal("10.00"))
+                                .unit("Liters")
+                                .chefNote("Running very low for weekend rush.")
+                                .status(com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus.PENDING)
+                                .build();
+                chefRequestRepository.save(req1);
+
+                // Request 2: Pending
+                ChefRequest req2 = ChefRequest.builder()
+                                .branch(branch)
+                                .chefName("Chef Silva")
+                                .chefRole("SOUS CHEF")
+                                .itemName("Fresh Basil")
+                                .requestedQuantity(new BigDecimal("2.00"))
+                                .unit("kg")
+                                .chefNote("Supplier missed last delivery.")
+                                .status(com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus.PENDING)
+                                .build();
+                chefRequestRepository.save(req2);
+
+                // Request 3: Pending
+                ChefRequest req3 = ChefRequest.builder()
+                                .branch(branch)
+                                .chefName("Chef Kumara")
+                                .chefRole("SOUS CHEF")
+                                .itemName("Chicken")
+                                .requestedQuantity(new BigDecimal("4.00"))
+                                .unit("kg")
+                                .chefNote("Running low for high demand.")
+                                .status(com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus.PENDING)
+                                .build();
+                chefRequestRepository.save(req3);
+
         }
 }
