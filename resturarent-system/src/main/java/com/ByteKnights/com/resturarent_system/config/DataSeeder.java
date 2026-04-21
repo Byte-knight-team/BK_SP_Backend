@@ -87,8 +87,28 @@ public class DataSeeder implements CommandLineRunner {
 
                 MenuItem burger = menuItemRepository.save(MenuItem.builder()
                         .branch(branch).category(mainCourse).name("Chicken Burger")
-                        .price(BigDecimal.valueOf(15.99)).isAvailable(true)
+                        .price(BigDecimal.valueOf(1500.00)).isAvailable(true)
                         .status(MenuItemStatus.APPROVED).preparationTime(15).build());
+
+                MenuItem rice = menuItemRepository.save(MenuItem.builder()
+                        .branch(branch).category(mainCourse).name("Mixed Fried Rice")
+                        .price(BigDecimal.valueOf(1200.00)).isAvailable(true)
+                        .status(MenuItemStatus.APPROVED).preparationTime(20).build());
+
+                MenuItem kottu = menuItemRepository.save(MenuItem.builder()
+                        .branch(branch).category(mainCourse).name("Chicken Kottu")
+                        .price(BigDecimal.valueOf(1100.00)).isAvailable(true)
+                        .status(MenuItemStatus.APPROVED).preparationTime(18).build());
+
+                MenuItem pasta = menuItemRepository.save(MenuItem.builder()
+                        .branch(branch).category(mainCourse).name("Pasta Carbonara")
+                        .price(BigDecimal.valueOf(1800.00)).isAvailable(true)
+                        .status(MenuItemStatus.APPROVED).preparationTime(25).build());
+
+                MenuItem pizza = menuItemRepository.save(MenuItem.builder()
+                        .branch(branch).category(mainCourse).name("Seafood Pizza")
+                        .price(BigDecimal.valueOf(2500.00)).isAvailable(true)
+                        .status(MenuItemStatus.APPROVED).preparationTime(30).build());
 
                 LocalDateTime now = LocalDateTime.now();
 
@@ -109,16 +129,17 @@ public class DataSeeder implements CommandLineRunner {
                         preparingOrder.setCookingStartedAt(now.minusMinutes(15)); // started cooking 15 mins ago
                         orderRepository.save(preparingOrder);
                         orderItemRepository.save(createOrderItem(preparingOrder, burger, 2));
+                        orderItemRepository.save(createOrderItem(preparingOrder, rice, 1));
                 }
 
                 // ==============================================
                 // 5. Create 4 COMPLETED Orders
-                // prep times: 10, 12, 18, 20 mins => Avg = 15 mins
                 // ==============================================
-                createCompletedOrder("ORD-COMP-1", branch, customer, 10, now.minusHours(2));
-                createCompletedOrder("ORD-COMP-2", branch, customer, 12, now.minusHours(3));
-                createCompletedOrder("ORD-COMP-3", branch, customer, 18, now.minusHours(4));
-                createCompletedOrder("ORD-COMP-4", branch, customer, 20, now.minusHours(5));
+                createCompletedOrder("ORD-COMP-1", branch, customer, 10, now.minusHours(2), rice, 5); // 5 Rice
+                createCompletedOrder("ORD-COMP-2", branch, customer, 12, now.minusHours(3), kottu, 4); // 4 Kottu
+                createCompletedOrder("ORD-COMP-3", branch, customer, 18, now.minusHours(4), pasta, 3); // 3 Pasta
+                createCompletedOrder("ORD-COMP-4", branch, customer, 20, now.minusHours(5), burger, 2); // 2 Burger
+                createCompletedOrder("ORD-COMP-5", branch, customer, 15, now.minusHours(1), pizza, 1); // 1 Pizza
 
                 System.out.println("✅ Data seeding successfully completed!");
                 System.out.println("Expected Dashboard Stats in Frontend:");
@@ -144,7 +165,7 @@ public class DataSeeder implements CommandLineRunner {
                 return order;
         }
 
-        private void createCompletedOrder(String orderNumber, Branch branch, Customer customer, int prepTimeMinutes, LocalDateTime startAt) {
+        private void createCompletedOrder(String orderNumber, Branch branch, Customer customer, int prepTimeMinutes, LocalDateTime startAt, MenuItem menuItem, int qty) {
                 Order order = createBaseOrder(orderNumber, branch, customer, OrderStatus.COMPLETED, startAt.minusMinutes(5));
                 order.setPaymentStatus(PaymentStatus.PAID);
                 order.setCookingStartedAt(startAt);
@@ -152,14 +173,7 @@ public class DataSeeder implements CommandLineRunner {
 
                 order = orderRepository.save(order);
 
-                OrderItem item = new OrderItem();
-                item.setOrder(order);
-                item.setItemName("Chicken Burger");
-                item.setQuantity(1);
-                item.setUnitPrice(BigDecimal.valueOf(15.99));
-                item.setSubtotal(BigDecimal.valueOf(15.99));
-
-                orderItemRepository.save(item);
+                orderItemRepository.save(createOrderItem(order, menuItem, qty));
         }
 
         private OrderItem createOrderItem(Order order, MenuItem menuItem, int qty) {
