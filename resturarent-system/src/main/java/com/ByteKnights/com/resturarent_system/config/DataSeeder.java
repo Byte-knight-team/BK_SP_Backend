@@ -43,9 +43,9 @@ public class DataSeeder implements CommandLineRunner {
         public void run(String... args) {
                 System.out.println("Seeding data...");
 
-                roleRepository.findByName("ROLE_CUSTOMER").orElseGet(() -> roleRepository.save(
+                roleRepository.findByName("CUSTOMER").orElseGet(() -> roleRepository.save(
                         Role.builder()
-                                .name("ROLE_CUSTOMER")
+                                .name("CUSTOMER")
                                 .description("Customer Role")
                                 .build()
                 ));
