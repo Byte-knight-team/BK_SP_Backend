@@ -27,7 +27,7 @@ public class ForcePasswordChangeFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
 
         String path = request.getRequestURI();
-        if (path.startsWith("/api/auth/staff/login") || path.startsWith("/api/auth/change-password")) {
+        if (path.startsWith("/api/auth/staff/login") || path.startsWith("/api/auth/staff/change-password")) {
             filterChain.doFilter(request, response); return;
         }
 
@@ -45,6 +45,10 @@ public class ForcePasswordChangeFilter extends OncePerRequestFilter {
             User freshUser = userRepository.findByEmail(email).orElse(null);
             if (freshUser != null) {
                 String role = freshUser.getRole().getName();
+                // Customer flow is independent and must not be blocked by staff temporary-password policy.
+                if ("CUSTOMER".equalsIgnoreCase(role) || "ROLE_CUSTOMER".equalsIgnoreCase(role)) {
+                    filterChain.doFilter(request, response); return;
+                }
                 if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) {
                     filterChain.doFilter(request, response); return;
                 }
