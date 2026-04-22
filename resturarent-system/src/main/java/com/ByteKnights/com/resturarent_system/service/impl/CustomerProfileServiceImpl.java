@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerProfileUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerProfileResponse;
 import com.ByteKnights.com.resturarent_system.entity.Customer;
 import com.ByteKnights.com.resturarent_system.entity.User;
@@ -49,5 +50,49 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
                 .loyaltyPoints(customer.getLoyaltyPoints())
                 .memberSince(formattedDate)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public CustomerProfileResponse updateCustomerProfile(String currentEmail, CustomerProfileUpdateRequest request) {
+        //Find the current user
+        User user = userRepository.findByEmail(currentEmail)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
+
+        //Check and Update Username
+        String newUsername = request.getUsername().trim();
+        if (!user.getUsername().equalsIgnoreCase(newUsername)) {
+            if (userRepository.findByUsername(newUsername).isPresent()) {
+                throw new CustomerAuthException(HttpStatus.CONFLICT, "Username is already taken");
+            }
+            user.setUsername(newUsername);
+        }
+
+        //Check and Update Email
+        String newEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (!user.getEmail().equalsIgnoreCase(newEmail)) {
+            if (userRepository.findByEmail(newEmail).isPresent()) {
+                throw new CustomerAuthException(HttpStatus.CONFLICT, "Email is already in use");
+            }
+            user.setEmail(newEmail);
+        }
+
+        //Check and Update Phone
+        String newPhone = request.getPhone().trim();
+        if (!user.getPhone().equals(newPhone)) {
+            if (userRepository.findByPhone(newPhone).isPresent()) {
+                throw new CustomerAuthException(HttpStatus.CONFLICT, "Phone number is already in use");
+            }
+            user.setPhone(newPhone);
+        }
+
+        //Update Address (No unique check needed for address)
+        user.setAddress(request.getAddress() != null ? request.getAddress().trim() : null);
+
+        //Save to DB
+        userRepository.save(user);
+
+        //Return the updated profile (reusing your existing GET logic!)
+        return getCustomerProfile(user.getEmail()); 
     }
 }
