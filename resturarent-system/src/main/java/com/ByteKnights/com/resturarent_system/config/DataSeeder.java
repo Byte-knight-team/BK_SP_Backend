@@ -3,177 +3,180 @@ package com.ByteKnights.com.resturarent_system.config;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
 
-        private final BranchRepository branchRepository;
-        private final CustomerRepository customerRepository;
-        private final OrderRepository orderRepository;
-        private final UserRepository userRepository;
-        private final RoleRepository roleRepository;
-        private final MenuCategoryRepository menuCategoryRepository;
-        private final MenuItemRepository menuItemRepository;
-        private final OrderItemRepository orderItemRepository;
-        private final InventoryItemRepository inventoryItemRepository;
+    private final BranchRepository branchRepository;
+    private final CustomerRepository customerRepository;
+    private final OrderRepository orderRepository;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final MenuCategoryRepository menuCategoryRepository;
+    private final MenuItemRepository menuItemRepository;
+    private final OrderItemRepository orderItemRepository;
 
-        public DataSeeder(BranchRepository branchRepository,
-                          CustomerRepository customerRepository,
-                          OrderRepository orderRepository,
-                          UserRepository userRepository,
-                          RoleRepository roleRepository,
-                          MenuCategoryRepository menuCategoryRepository,
-                          MenuItemRepository menuItemRepository,
-                          OrderItemRepository orderItemRepository,
-                          InventoryItemRepository inventoryItemRepository) {
-                this.branchRepository = branchRepository;
-                this.customerRepository = customerRepository;
-                this.orderRepository = orderRepository;
-                this.userRepository = userRepository;
-                this.roleRepository = roleRepository;
-                this.menuCategoryRepository = menuCategoryRepository;
-                this.menuItemRepository = menuItemRepository;
-                this.orderItemRepository = orderItemRepository;
-                this.inventoryItemRepository = inventoryItemRepository;
+    public DataSeeder(BranchRepository branchRepository,
+            CustomerRepository customerRepository,
+            OrderRepository orderRepository,
+            UserRepository userRepository,
+            RoleRepository roleRepository,
+            MenuCategoryRepository menuCategoryRepository,
+            MenuItemRepository menuItemRepository,
+            OrderItemRepository orderItemRepository) {
+        this.branchRepository = branchRepository;
+        this.customerRepository = customerRepository;
+        this.orderRepository = orderRepository;
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.menuCategoryRepository = menuCategoryRepository;
+        this.menuItemRepository = menuItemRepository;
+        this.orderItemRepository = orderItemRepository;
+    }
+
+    @Override
+    @Transactional
+    public void run(String... args) throws Exception {
+        // Already seeded data delete karanna, nathnam thawa duplication wenawa
+        orderItemRepository.deleteAll();
+        orderRepository.deleteAll();
+
+        System.out.println("=================================================");
+        System.out.println("Starting to seed database for Kitchen Dashboard...");
+
+        // 1. Create Role, User, and Customer
+        Role customerRole = roleRepository.findByName("ROLE_CUSTOMER").orElseGet(
+                () -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Customer Role").build()));
+
+        Branch branch = branchRepository.findAll().stream().findFirst()
+                .orElseGet(() -> branchRepository.save(Branch.builder()
+                        .name("Main Branch")
+                        .address("123 Food St")
+                        .contactNumber("0112345678")
+                        .email("main@kitchen.com")
+                        .status(BranchStatus.ACTIVE)
+                        .build()));
+
+        User user = userRepository.findByUsername("john_doe").orElseGet(() -> userRepository.save(User.builder()
+                .username("john_doe")
+                .email("john@example.com")
+                .password("password123")
+                .phone("0771234567")
+                .role(customerRole)
+                .build()));
+
+        Customer customer = customerRepository.findAll().stream().findFirst()
+                .orElseGet(() -> customerRepository.save(Customer.builder()
+                        .user(user)
+                        .loyaltyPoints(100)
+                        .totalSpent(BigDecimal.ZERO)
+                        .build()));
+
+        // 2. Create Menu Items
+        MenuCategory mainCourse = menuCategoryRepository.save(MenuCategory.builder().name("Main Course").build());
+
+        MenuItem burger = menuItemRepository.save(MenuItem.builder()
+                .branch(branch).category(mainCourse).name("Chicken Burger")
+                .price(BigDecimal.valueOf(15.99)).isAvailable(true)
+                .status(MenuItemStatus.APPROVED).preparationTime(15).build());
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // ==============================================
+        // 3. Create 2 PENDING Orders
+        // ==============================================
+        for (int i = 1; i <= 2; i++) {
+            Order pendingOrder = createBaseOrder("ORD-PEND-" + i, branch, customer, OrderStatus.PENDING,
+                    now.minusMinutes(10));
+            orderRepository.save(pendingOrder);
+            orderItemRepository.save(createOrderItem(pendingOrder, burger, 1));
         }
 
-        @Override
-        @Transactional
-        public void run(String... args) throws Exception {
-                // පරණ දත්ත ඉවත් කිරීම
-                orderItemRepository.deleteAll();
-                orderRepository.deleteAll();
-                inventoryItemRepository.deleteAll();
-
-                System.out.println("=================================================");
-                System.out.println("Starting to seed database for Kitchen Dashboard...");
-
-                // 1. Create Role, Branch, User, and Customer
-                Role customerRole = roleRepository.findByName("ROLE_CUSTOMER").orElseGet(() ->
-                        roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Customer Role").build())
-                );
-
-                Branch branch = branchRepository.findAll().stream().findFirst().orElseGet(() ->
-                        branchRepository.save(Branch.builder()
-                                .name("Main Branch")
-                                .address("123 Food St")
-                                .contactNumber("0112345678")
-                                .email("main@kitchen.com")
-                                .status(BranchStatus.ACTIVE)
-                                .build())
-                );
-
-                User user = userRepository.findByUsername("john_doe").orElseGet(() ->
-                        userRepository.save(User.builder()
-                                .username("john_doe")
-                                .email("john@example.com")
-                                .password("password123")
-                                .phone("0771234567")
-                                .role(customerRole)
-                                .build())
-                );
-
-                Customer customer = customerRepository.findAll().stream().findFirst().orElseGet(() ->
-                        customerRepository.save(Customer.builder()
-                                .user(user)
-                                .loyaltyPoints(100)
-                                .totalSpent(BigDecimal.ZERO)
-                                .build())
-                );
-
-                // 2. Create Menu Items
-                MenuCategory mainCourse = menuCategoryRepository.save(MenuCategory.builder().name("Main Course").build());
-
-                MenuItem burger = menuItemRepository.save(MenuItem.builder()
-                        .branch(branch).category(mainCourse).name("Chicken Burger")
-                        .price(BigDecimal.valueOf(1500.00)).isAvailable(true)
-                        .status(MenuItemStatus.APPROVED).preparationTime(15).build());
-
-                MenuItem rice = menuItemRepository.save(MenuItem.builder()
-                        .branch(branch).category(mainCourse).name("Mixed Fried Rice")
-                        .price(BigDecimal.valueOf(1200.00)).isAvailable(true)
-                        .status(MenuItemStatus.APPROVED).preparationTime(20).build());
-
-                MenuItem kottu = menuItemRepository.save(MenuItem.builder()
-                        .branch(branch).category(mainCourse).name("Chicken Kottu")
-                        .price(BigDecimal.valueOf(1100.00)).isAvailable(true)
-                        .status(MenuItemStatus.APPROVED).preparationTime(18).build());
-
-                MenuItem pasta = menuItemRepository.save(MenuItem.builder()
-                        .branch(branch).category(mainCourse).name("Pasta Carbonara")
-                        .price(BigDecimal.valueOf(1800.00)).isAvailable(true)
-                        .status(MenuItemStatus.APPROVED).preparationTime(25).build());
-
-                MenuItem pizza = menuItemRepository.save(MenuItem.builder()
-                        .branch(branch).category(mainCourse).name("Seafood Pizza")
-                        .price(BigDecimal.valueOf(2500.00)).isAvailable(true)
-                        .status(MenuItemStatus.APPROVED).preparationTime(30).build());
-
-                LocalDate today = LocalDate.now();
-
-                // 3. Seed Orders for Sorting Testing (FIFO/LIFO)
-                // --- PENDING Orders (8AM oldest) ---
-                createTestOrder(branch, customer, burger, OrderStatus.PENDING, today.atTime(8, 0));
-                createTestOrder(branch, customer, pizza, OrderStatus.PENDING, today.atTime(10, 0));
-
-                // --- PREPARING Orders (9AM oldest) ---
-                createTestOrder(branch, customer, pasta, OrderStatus.PREPARING, today.atTime(9, 0));
-                createTestOrder(branch, customer, rice, OrderStatus.PREPARING, today.atTime(11, 0));
-
-                // --- COMPLETED Orders (History: 3PM newest) ---
-                createTestOrder(branch, customer, kottu, OrderStatus.COMPLETED, today.atTime(13, 0));
-                createTestOrder(branch, customer, burger, OrderStatus.COMPLETED, today.atTime(15, 0));
-
-                // 4. Seed Inventory Items for Alerts
-                createInventoryItem(branch, "Basmati Rice", 100, 80, 20, "KG");
-                createInventoryItem(branch, "Maldon Sea Salt", 30, 10, 15, "KG");
-                createInventoryItem(branch, "Truffle Oil", 10, 2, 6, "LITERS");
-                createInventoryItem(branch, "Wagyu Beef (A5)", 20, 4, 10, "KG");
-
-                System.out.println("✅ Data seeding successfully completed!");
-                System.out.println("=================================================");
+        // ==============================================
+        // 4. Create 3 PREPARING Orders
+        // ==============================================
+        for (int i = 1; i <= 3; i++) {
+            Order preparingOrder = createBaseOrder("ORD-PREP-" + i, branch, customer, OrderStatus.PREPARING,
+                    now.minusMinutes(20));
+            preparingOrder.setCookingStartedAt(now.minusMinutes(15)); // started cooking 15 mins ago
+            orderRepository.save(preparingOrder);
+            orderItemRepository.save(createOrderItem(preparingOrder, burger, 2));
         }
 
-        private void createTestOrder(Branch branch, Customer customer, MenuItem menuItem, OrderStatus status, LocalDateTime statusTime) {
-                Order order = new Order();
-                order.setBranch(branch);
-                order.setCustomer(customer);
-                order.setStatus(status);
-                order.setOrderType(OrderType.QR);
-                order.setStatusUpdatedAt(statusTime);
-                order.setCreatedAt(statusTime.minusMinutes(30));
-                order.setTotalAmount(menuItem.getPrice());
-                order.setItems(new ArrayList<>()); // Initialize the list
+        // ==============================================
+        // 5. Create 4 COMPLETED Orders
+        // prep times: 10, 12, 18, 20 mins => Avg = 15 mins
+        // ==============================================
+        createCompletedOrder("ORD-COMP-1", branch, customer, 10, now.minusHours(2));
+        createCompletedOrder("ORD-COMP-2", branch, customer, 12, now.minusHours(3));
+        createCompletedOrder("ORD-COMP-3", branch, customer, 18, now.minusHours(4));
+        createCompletedOrder("ORD-COMP-4", branch, customer, 20, now.minusHours(5));
 
-                OrderItem item = new OrderItem();
-                item.setOrder(order);
-                item.setMenuItem(menuItem);
-                item.setItemName(menuItem.getName());
-                item.setQuantity(2);
-                item.setUnitPrice(menuItem.getPrice());
-                item.setSubtotal(menuItem.getPrice().multiply(BigDecimal.valueOf(2)));
+        System.out.println("✅ Data seeding successfully completed!");
+        System.out.println("Expected Dashboard Stats in Frontend:");
+        System.out.println("- Pending Orders  : 2");
+        System.out.println("- Preparing Orders: 3");
+        System.out.println("- Completed Orders: 4");
+        System.out.println("- Avg Prep Time   : 15.0 Minutes");
+        System.out.println("=================================================");
+    }
 
-                order.addItem(item);
-                orderRepository.save(order);
+    private Order createBaseOrder(String orderNumber, Branch branch, Customer customer, OrderStatus status,
+            LocalDateTime createdAt) {
+        Order order = new Order();
+        order.setOrderNumber(orderNumber);
+        order.setBranch(branch);
+        order.setCustomer(customer);
+        order.setOrderType(OrderType.QR);
+        order.setStatus(status);
+        order.setTotalAmount(BigDecimal.valueOf(25.00));
+        order.setDiscountAmount(BigDecimal.ZERO);
+        order.setFinalAmount(BigDecimal.valueOf(25.00));
+        order.setPaymentStatus(PaymentStatus.PENDING);
+        order.setCreatedAt(createdAt);
+        return order;
+    }
+
+    private void createCompletedOrder(String orderNumber, Branch branch, Customer customer, int prepTimeMinutes,
+            LocalDateTime startAt) {
+        Order order = createBaseOrder(orderNumber, branch, customer, OrderStatus.COMPLETED, startAt.minusMinutes(5));
+        order.setPaymentStatus(PaymentStatus.PAID);
+        order.setCookingStartedAt(startAt);
+        order.setCookingCompletedAt(startAt.plusMinutes(prepTimeMinutes));
+
+        order = orderRepository.save(order);
+
+        OrderItem item = new OrderItem();
+        item.setOrder(order);
+        item.setItemName("Chicken Burger");
+        item.setQuantity(1);
+        item.setUnitPrice(BigDecimal.valueOf(15.99));
+        item.setSubtotal(BigDecimal.valueOf(15.99));
+
+        orderItemRepository.save(item);
+    }
+
+    private OrderItem createOrderItem(Order o, MenuItem mi, int qty) {
+        OrderItem item = new OrderItem();
+        item.setOrder(o);
+        item.setMenuItem(mi);
+        item.setItemName(mi.getName());
+        item.setQuantity(qty);
+        item.setUnitPrice(mi.getPrice());
+        item.setSubtotal(mi.getPrice().multiply(BigDecimal.valueOf(qty)));
+
+        // Add a test note for "Mixed Fried Rice"
+        if (mi.getName().contains("Rice")) {
+            item.setKitchenNotes("Add less salt and more pepper");
+        } else if (mi.getName().contains("Pizza")) {
+            item.setKitchenNotes("Extra cheese on top please");
         }
 
-        private void createInventoryItem(Branch branch, String name, double max, double current, double reorder, String unit) {
-                InventoryItem item = InventoryItem.builder()
-                        .branch(branch)
-                        .name(name)
-                        .maxStock(BigDecimal.valueOf(max))
-                        .quantity(BigDecimal.valueOf(current))
-                        .reorderLevel(BigDecimal.valueOf(reorder))
-                        .unit(unit)
-                        .build();
-                inventoryItemRepository.save(item);
-        }
+        return item;
+    }
 }
