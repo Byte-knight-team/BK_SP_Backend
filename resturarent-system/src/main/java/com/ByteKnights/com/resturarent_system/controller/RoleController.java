@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping("/api/admin/roles")
 public class RoleController {
 
     private final RoleService roleService;
@@ -24,22 +24,33 @@ public class RoleController {
         this.roleService = roleService;
     }
 
-    // Get all role summaries for roles page
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<List<RoleSummaryResponse>> getAllRoles() {
         return ResponseEntity.ok(roleService.getAllRoleSummaries());
     }
 
-    // Get one role summary
-    @GetMapping("/{roleId}/summary")
+    @GetMapping("/{roleId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<RoleSummaryResponse> getRoleSummary(@PathVariable Long roleId) {
         return ResponseEntity.ok(roleService.getRoleSummaryById(roleId));
     }
 
-    // Only SUPER_ADMIN can assign privileges to roles
-    @PostMapping("/{roleId}/permissions")
+    @GetMapping("/{roleId}/permissions")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    public ResponseEntity<Set<String>> getPermissions(@PathVariable Long roleId) {
+        return ResponseEntity.ok(roleService.getPermissionsOfRole(roleId));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Role> createRole(@RequestBody Map<String, String> payload) {
+        String name = payload.get("name");
+        String desc = payload.get("description");
+        return ResponseEntity.ok(roleService.createRole(name, desc));
+    }
+
+    @PutMapping("/{roleId}/permissions")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Role> assignPermissions(
             @PathVariable Long roleId,
@@ -49,23 +60,6 @@ public class RoleController {
         return ResponseEntity.ok(role);
     }
 
-    // SUPER_ADMIN and ADMIN can view role privileges
-    @GetMapping("/{roleId}/permissions")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
-    public ResponseEntity<Set<String>> getPermissions(@PathVariable Long roleId) {
-        return ResponseEntity.ok(roleService.getPermissionsOfRole(roleId));
-    }
-
-    // Only SUPER_ADMIN can create new roles
-    @PostMapping("/create")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Role> createRole(@RequestBody Map<String, String> payload) {
-        String name = payload.get("name");
-        String desc = payload.get("description");
-        return ResponseEntity.ok(roleService.createRole(name, desc));
-    }
-
-    // Only SUPER_ADMIN can update role name/description
     @PutMapping("/{roleId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Role> updateRole(@PathVariable Long roleId,
@@ -73,7 +67,6 @@ public class RoleController {
         return ResponseEntity.ok(roleService.updateRole(roleId, request));
     }
 
-    // Only SUPER_ADMIN can delete roles
     @DeleteMapping("/{roleId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Map<String, String>> deleteRole(@PathVariable Long roleId) {
