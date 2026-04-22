@@ -33,7 +33,7 @@ build/
 .vscode/
 
 ### Local Configuration ###
-.env
+../.env
 .env.properties
 
 # junk files
