@@ -85,7 +85,7 @@ public class KitchenServiceImpl implements KitchenService {
     //Peak hours
     @Override
     public List<PeakHourDTO> getPeakHoursInLast7Days() {
-        // 1.set initial counts as zero
+        // 1. Initialize the map with zero counts for all time slots
         Map<String, Integer> peakHourMap = new LinkedHashMap<>();
         peakHourMap.put("8AM-10AM", 0);
         peakHourMap.put("10AM-12PM", 0);
@@ -95,10 +95,10 @@ public class KitchenServiceImpl implements KitchenService {
         peakHourMap.put("6PM-8PM", 0);
         peakHourMap.put("8PM-10PM", 0);
 
-        // 2. Database එකෙන් raw data ටික ගමු (Hour, Count)
+        // 2. Fetch raw data from the database (Hour, Count)
         List<Object[]> rawData = orderRepository.findOrderCountByHour();
 
-        // 3. Database එකෙන් ආපු පැය අනුව අදාළ bucket එකට count එක එකතු කරමු
+        // 3. Map the count from the database to the corresponding time bucket (slot)
         for (Object[] row : rawData) {
             int hour = ((Number) row[0]).intValue();
             int count = ((Number) row[1]).intValue();
@@ -117,7 +117,7 @@ public class KitchenServiceImpl implements KitchenService {
             }
         }
 
-        // 4. Map එක DTO list එකකට හරවමු
+        // 4. Convert the Map to a DTO list for the response
         List<PeakHourDTO> dtos = new ArrayList<>();
         peakHourMap.forEach((time, mealsCount) -> dtos.add(new PeakHourDTO(time, mealsCount)));
 
