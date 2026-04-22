@@ -1,0 +1,7 @@
+package com.ByteKnights.com.resturarent_system.service;
+
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerProfileResponse;
+
+public interface CustomerProfileService {
+    CustomerProfileResponse getCustomerProfile(String email);
+}
