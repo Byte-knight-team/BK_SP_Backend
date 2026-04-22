@@ -107,6 +107,7 @@ public class MenuServiceImpl implements MenuService {
         return mapToResponse(menuItem);
     }
 
+    //for customer menu - (dileepa)
     @Override
     public List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(Long branchId) {
         // ENFORCE BUSINESS RULE: Default to Branch 1 for Online customers
