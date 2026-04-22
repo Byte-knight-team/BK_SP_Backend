@@ -1,12 +1,12 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.CreateMenuItemRequest;
-import com.ByteKnights.com.resturarent_system.dto.ApproveMenuItemRequest;
-import com.ByteKnights.com.resturarent_system.dto.DeleteMenuItemRequest;
-import com.ByteKnights.com.resturarent_system.dto.MenuItemActionResponse;
-import com.ByteKnights.com.resturarent_system.dto.MenuItemResponse;
-import com.ByteKnights.com.resturarent_system.dto.RejectMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.UpdateMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.admin.ApproveMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.admin.DeleteMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.admin.RejectMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuItemActionResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuItemResponse;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
 import com.ByteKnights.com.resturarent_system.entity.MenuItem;
