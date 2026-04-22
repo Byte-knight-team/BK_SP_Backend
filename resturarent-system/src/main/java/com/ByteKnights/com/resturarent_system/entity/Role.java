@@ -6,7 +6,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "roles")
+@Table(name="roles")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -18,18 +18,18 @@ public class Role {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(nullable=false, unique=true, length=50)
     private String name;
 
-    @Column(length = 255)
+    @Column(length=255)
     private String description;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
-            name = "role_privileges",
-            joinColumns = @JoinColumn(name = "role_id"),
-            inverseJoinColumns = @JoinColumn(name = "privilege_id")
+        name="role_permissions",
+        joinColumns=@JoinColumn(name="role_id"),
+        inverseJoinColumns=@JoinColumn(name="permission_id")
     )
     @Builder.Default
-    private Set<Privilege> privileges = new HashSet<>();
+    private Set<Privilege> permissions = new HashSet<>();
 }
