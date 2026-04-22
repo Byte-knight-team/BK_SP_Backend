@@ -47,9 +47,8 @@ public class DataSeeder implements CommandLineRunner {
         @Override
         @Transactional
         public void run(String... args) throws Exception {
-                if (orderRepository.count() > 0) {
-                        return;
-                }
+                // Only seed users/orders if none exist
+                boolean shouldSeedOrders = orderRepository.count() == 0;
 
                 System.out.println("Seeding data...");
 
@@ -62,76 +61,89 @@ public class DataSeeder implements CommandLineRunner {
                         return roleRepository.save(role);
                 });
 
-                // Create Branch
-                Branch branch = Branch.builder()
-                                .name("Main Branch")
-                                .address("123 Food St")
-                                .contactNumber("0112345678")
-                                .email("main@kitchen.com")
-                                .status(BranchStatus.ACTIVE)
-                                .build();
-                branch = branchRepository.save(branch);
+                // Fetch or Create Branch
+                Branch branch;
+                if (branchRepository.count() > 0) {
+                        branch = branchRepository.findAll().get(0);
+                } else {
+                        branch = Branch.builder()
+                                        .name("Main Branch")
+                                        .address("123 Food St")
+                                        .contactNumber("0112345678")
+                                        .email("main@kitchen.com")
+                                        .status(BranchStatus.ACTIVE)
+                                        .build();
+                        branch = branchRepository.save(branch);
+                }
 
-                // Create User for Customer
-                User user = User.builder()
-                                .username("john_doe")
-                                .email("john@example.com")
-                                .password("password123") // In real app, encode this
-                                .phone("0771234567")
-                                .role(customerRole)
-                                .build();
-                user = userRepository.save(user);
+                Customer customer = null;
+                if (shouldSeedOrders) {
+                        // Create User for Customer
+                        User user = User.builder()
+                                        .username("john_doe_2") // Avoid duplicate key from legacy DB
+                                        .email("john2@example.com")
+                                        .password("password123")
+                                        .phone("0771234568")
+                                        .role(customerRole)
+                                        .build();
+                        user = userRepository.save(user);
 
-                // Create Customer
-                Customer customer = Customer.builder()
-                                .user(user)
-                                .loyaltyPoints(100)
-                                .totalSpent(BigDecimal.ZERO)
-                                .build();
-                customer = customerRepository.save(customer);
+                        // Create Customer
+                        customer = Customer.builder()
+                                        .user(user)
+                                        .loyaltyPoints(100)
+                                        .totalSpent(BigDecimal.ZERO)
+                                        .build();
+                        customer = customerRepository.save(customer);
+                }
 
                 // Create Menu Items
-                MenuCategory mainCourseCategory = menuCategoryRepository.findByName("Main Course").orElseGet(() ->
-                        menuCategoryRepository.save(MenuCategory.builder()
-                                .name("Main Course")
-                                .description("Main meal items")
-                                .build())
-                );
+                MenuItem burger = null;
+                MenuItem fries = null;
+                if (shouldSeedOrders) {
+                        MenuCategory mainCourseCategory = menuCategoryRepository.findByName("Main Course").orElseGet(() ->
+                                menuCategoryRepository.save(MenuCategory.builder()
+                                        .name("Main Course")
+                                        .description("Main meal items")
+                                        .build())
+                        );
 
-                MenuCategory sidesCategory = menuCategoryRepository.findByName("Sides").orElseGet(() ->
-                        menuCategoryRepository.save(MenuCategory.builder()
-                                .name("Sides")
-                                .description("Side dishes")
-                                .build())
-                );
+                        MenuCategory sidesCategory = menuCategoryRepository.findByName("Sides").orElseGet(() ->
+                                menuCategoryRepository.save(MenuCategory.builder()
+                                        .name("Sides")
+                                        .description("Side dishes")
+                                        .build())
+                        );
 
-                MenuItem burger = MenuItem.builder()
-                                .branch(branch)
-                                .category(mainCourseCategory)
-                                .name("Chicken Burger")
-                                .description("Grilled chicken patty with fresh lettuce")
-                                .price(BigDecimal.valueOf(15.99))
-                                .imageUrl(null)
-                                .isAvailable(true)
-                                .status(MenuItemStatus.APPROVED)
-                                .preparationTime(15)
-                                .build();
-                menuItemRepository.save(burger);
+                        burger = MenuItem.builder()
+                                        .branch(branch)
+                                        .category(mainCourseCategory)
+                                        .name("Chicken Burger")
+                                        .description("Grilled chicken patty with fresh lettuce")
+                                        .price(BigDecimal.valueOf(15.99))
+                                        .imageUrl(null)
+                                        .isAvailable(true)
+                                        .status(MenuItemStatus.APPROVED)
+                                        .preparationTime(15)
+                                        .build();
+                        burger = menuItemRepository.save(burger);
 
-                MenuItem fries = MenuItem.builder()
-                                .branch(branch)
-                                .category(sidesCategory)
-                                .name("French Fries")
-                                .description("Crispy salted fries")
-                                .price(BigDecimal.valueOf(5.99))
-                                .imageUrl(null)
-                                .isAvailable(true)
-                                .status(MenuItemStatus.APPROVED)
-                                .preparationTime(10)
-                                .build();
-                menuItemRepository.save(fries);
+                        fries = MenuItem.builder()
+                                        .branch(branch)
+                                        .category(sidesCategory)
+                                        .name("French Fries")
+                                        .description("Crispy salted fries")
+                                        .price(BigDecimal.valueOf(5.99))
+                                        .imageUrl(null)
+                                        .isAvailable(true)
+                                        .status(MenuItemStatus.APPROVED)
+                                        .preparationTime(10)
+                                        .build();
+                        fries = menuItemRepository.save(fries);
+                }
 
-                // Create Order 1 (Pending) - 9:00 AM
+                if (shouldSeedOrders) {
+                        // Create Order 1 (Pending) - 9:00 AM
                 Order order1 = new Order();
                 order1.setOrderNumber("ORD-1204"); // Matching frontend mock ID format
                 order1.setBranch(branch);
@@ -229,7 +241,11 @@ public class DataSeeder implements CommandLineRunner {
                                 .build();
                 orderItemRepository.save(item4);
 
-                System.out.println("Data seeding completed.");
+                }
+                
+                System.out.println("Data seeding checked/completed for orders.");
+
+                if (inventoryItemRepository.count() == 0) {
 
                 // Seed Inventory Items
                 System.out.println("Seeding Inventory Items...");
@@ -311,6 +327,9 @@ public class DataSeeder implements CommandLineRunner {
                                 .status(com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus.PENDING)
                                 .build();
                 chefRequestRepository.save(req3);
+                } else {
+                        System.out.println("Inventory items and Chef Requests already exist, skipping...");
+                }
 
         }
 }
