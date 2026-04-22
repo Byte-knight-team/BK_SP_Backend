@@ -1,8 +1,8 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.UpdateTableRequest;
-import com.ByteKnights.com.resturarent_system.dto.UpdateTableStatusRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateTableRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableStatusRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.TableResponse;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
