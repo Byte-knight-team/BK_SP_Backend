@@ -15,8 +15,6 @@ public interface RestaurantTableService {
 
     List<TableResponse> getAllTables();
 
-    List<TableResponse> getTablesByBranch(Long branchId);
-
     TableResponse updateTable(Long id, UpdateTableRequest request);
 
     TableResponse updateTableStatus(Long id, UpdateTableStatusRequest request);

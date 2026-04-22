@@ -10,6 +10,9 @@ import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.service.RestaurantTableService;
+import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
+import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
+import com.ByteKnights.com.resturarent_system.exception.InvalidOperationException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,13 +32,17 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     public TableResponse createTable(CreateTableRequest request) {
         // 1. Validate branch exists
         Branch branch = branchRepository.findById(request.getBranchId())
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Branch not found with id: " + request.getBranchId()));
+
+        if (branch.getStatus() != com.ByteKnights.com.resturarent_system.entity.BranchStatus.ACTIVE) {
+            throw new InvalidOperationException("Cannot create table in an inactive branch: " + branch.getName());
+        }
 
         // 2. Check for duplicate table number within branch
         if (tableRepository.existsByBranchIdAndTableNumber(
                 request.getBranchId(), request.getTableNumber())) {
-            throw new RuntimeException(
+            throw new DuplicateResourceException(
                     "Table number " + request.getTableNumber()
                             + " already exists in branch " + branch.getName());
         }
@@ -72,20 +79,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<TableResponse> getTablesByBranch(Long branchId) {
-        // Validate branch exists
-        if (!branchRepository.existsById(branchId)) {
-            throw new RuntimeException("Branch not found with id: " + branchId);
-        }
-
-        return tableRepository.findByBranchId(branchId)
-                .stream()
-                .map(this::mapToResponse)
-                .collect(Collectors.toList());
-    }
-
-    @Override
     @Transactional
     public TableResponse updateTable(Long id, UpdateTableRequest request) {
         RestaurantTable table = findTableOrThrow(id);
@@ -95,8 +88,8 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
             // Check for duplicate table number within same branch (exclude current table)
             if (!table.getTableNumber().equals(request.getTableNumber())
                     && tableRepository.existsByBranchIdAndTableNumberAndIdNot(
-                    table.getBranch().getId(), request.getTableNumber(), id)) {
-                throw new RuntimeException(
+                            table.getBranch().getId(), request.getTableNumber(), id)) {
+                throw new DuplicateResourceException(
                         "Table number " + request.getTableNumber()
                                 + " already exists in branch " + table.getBranch().getName());
             }
@@ -131,6 +124,19 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Transactional
     public void deleteTable(Long id) {
         RestaurantTable table = findTableOrThrow(id);
+
+        if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
+            throw new InvalidOperationException("Cannot delete table: active orders exist");
+        }
+
+        if (table.getState() == TableStatus.OCCUPIED) {
+            throw new InvalidOperationException("Cannot delete: The table is occupied");
+        }
+
+        if (table.getState() == TableStatus.RESERVED) {
+            throw new InvalidOperationException("Cannot delete: The table is reserved");
+        }
+
         tableRepository.delete(table);
     }
 
@@ -138,7 +144,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
     private RestaurantTable findTableOrThrow(Long id) {
         return tableRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException(
+                .orElseThrow(() -> new ResourceNotFoundException(
                         "Table not found with id: " + id));
     }
 
@@ -149,7 +155,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         try {
             return TableStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new RuntimeException(
+            throw new InvalidOperationException(
                     "Invalid table status: " + status
                             + ". Valid values: AVAILABLE, OCCUPIED, RESERVED");
         }

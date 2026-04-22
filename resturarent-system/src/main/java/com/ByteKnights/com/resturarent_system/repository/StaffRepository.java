@@ -1,10 +1,16 @@
 package com.ByteKnights.com.resturarent_system.repository;
 
 import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
-@Repository
+import java.util.Optional;
+
 public interface StaffRepository extends JpaRepository<Staff, Long> {
-    // TODO: Add custom query methods as needed
+
+    Optional<Staff> findByUser(User user);
+
+    Optional<Staff> findByUserId(Long userId);
+
+    boolean existsByUser(User user);
 }

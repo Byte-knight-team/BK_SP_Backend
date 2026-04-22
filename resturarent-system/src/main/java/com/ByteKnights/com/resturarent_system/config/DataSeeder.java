@@ -1,182 +1,159 @@
 package com.ByteKnights.com.resturarent_system.config;
 
-import com.ByteKnights.com.resturarent_system.entity.*;
-import com.ByteKnights.com.resturarent_system.repository.*;
+import com.ByteKnights.com.resturarent_system.entity.Branch;
+import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
+import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
+import com.ByteKnights.com.resturarent_system.entity.MenuItem;
+import com.ByteKnights.com.resturarent_system.entity.MenuItemStatus;
+import com.ByteKnights.com.resturarent_system.entity.Role;
+import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
+import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
+import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Objects;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
 
-    private final BranchRepository branchRepository;
-    private final CustomerRepository customerRepository;
-    private final OrderRepository orderRepository;
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
-    private final MenuCategoryRepository menuCategoryRepository;
-    private final MenuItemRepository menuItemRepository;
-    private final OrderItemRepository orderItemRepository;
+        private static final Long SEED_CREATED_BY = 1L;
 
-    public DataSeeder(BranchRepository branchRepository,
-            CustomerRepository customerRepository,
-            OrderRepository orderRepository,
-            UserRepository userRepository,
-            RoleRepository roleRepository,
-            MenuCategoryRepository menuCategoryRepository,
-            MenuItemRepository menuItemRepository,
-            OrderItemRepository orderItemRepository) {
-        this.branchRepository = branchRepository;
-        this.customerRepository = customerRepository;
-        this.orderRepository = orderRepository;
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.menuCategoryRepository = menuCategoryRepository;
-        this.menuItemRepository = menuItemRepository;
-        this.orderItemRepository = orderItemRepository;
-    }
+        private final BranchRepository branchRepository;
+        private final RoleRepository roleRepository;
+        private final MenuCategoryRepository menuCategoryRepository;
+        private final MenuItemRepository menuItemRepository;
 
-    @Override
-    @Transactional
-    public void run(String... args) throws Exception {
-        // Already seeded data delete karanna, nathnam thawa duplication wenawa
-        orderItemRepository.deleteAll();
-        orderRepository.deleteAll();
-
-        System.out.println("=================================================");
-        System.out.println("Starting to seed database for Kitchen Dashboard...");
-
-        // 1. Create Role, User, and Customer
-        Role customerRole = roleRepository.findByName("ROLE_CUSTOMER").orElseGet(
-                () -> roleRepository.save(Role.builder().name("ROLE_CUSTOMER").description("Customer Role").build()));
-
-        Branch branch = branchRepository.findAll().stream().findFirst()
-                .orElseGet(() -> branchRepository.save(Branch.builder()
-                        .name("Main Branch")
-                        .address("123 Food St")
-                        .contactNumber("0112345678")
-                        .email("main@kitchen.com")
-                        .status(BranchStatus.ACTIVE)
-                        .build()));
-
-        User user = userRepository.findByUsername("john_doe").orElseGet(() -> userRepository.save(User.builder()
-                .username("john_doe")
-                .email("john@example.com")
-                .password("password123")
-                .phone("0771234567")
-                .role(customerRole)
-                .build()));
-
-        Customer customer = customerRepository.findAll().stream().findFirst()
-                .orElseGet(() -> customerRepository.save(Customer.builder()
-                        .user(user)
-                        .loyaltyPoints(100)
-                        .totalSpent(BigDecimal.ZERO)
-                        .build()));
-
-        // 2. Create Menu Items
-        MenuCategory mainCourse = menuCategoryRepository.save(MenuCategory.builder().name("Main Course").build());
-
-        MenuItem burger = menuItemRepository.save(MenuItem.builder()
-                .branch(branch).category(mainCourse).name("Chicken Burger")
-                .price(BigDecimal.valueOf(15.99)).isAvailable(true)
-                .status(MenuItemStatus.APPROVED).preparationTime(15).build());
-
-        LocalDateTime now = LocalDateTime.now();
-
-        // ==============================================
-        // 3. Create 2 PENDING Orders
-        // ==============================================
-        for (int i = 1; i <= 2; i++) {
-            Order pendingOrder = createBaseOrder("ORD-PEND-" + i, branch, customer, OrderStatus.PENDING,
-                    now.minusMinutes(10));
-            orderRepository.save(pendingOrder);
-            orderItemRepository.save(createOrderItem(pendingOrder, burger, 1));
+        public DataSeeder(BranchRepository branchRepository,
+                          RoleRepository roleRepository,
+                          MenuCategoryRepository menuCategoryRepository,
+                          MenuItemRepository menuItemRepository) {
+                this.branchRepository = branchRepository;
+                this.roleRepository = roleRepository;
+                this.menuCategoryRepository = menuCategoryRepository;
+                this.menuItemRepository = menuItemRepository;
         }
 
-        // ==============================================
-        // 4. Create 3 PREPARING Orders
-        // ==============================================
-        for (int i = 1; i <= 3; i++) {
-            Order preparingOrder = createBaseOrder("ORD-PREP-" + i, branch, customer, OrderStatus.PREPARING,
-                    now.minusMinutes(20));
-            preparingOrder.setCookingStartedAt(now.minusMinutes(15)); // started cooking 15 mins ago
-            orderRepository.save(preparingOrder);
-            orderItemRepository.save(createOrderItem(preparingOrder, burger, 2));
+        @Override
+        @Transactional
+        public void run(String... args) {
+                System.out.println("Seeding data...");
+
+                roleRepository.findByName("CUSTOMER").orElseGet(() -> roleRepository.save(
+                        Role.builder()
+                                .name("CUSTOMER")
+                                .description("Customer Role")
+                                .build()
+                ));
+
+                Branch branch = branchRepository.findByNameIgnoreCase("Main Branch").orElseGet(() -> branchRepository.save(
+                        Branch.builder()
+                                .name("Main Branch")
+                                .address("123 Food St")
+                                .contactNumber("0112345678")
+                                .email("main@kitchen.com")
+                                .status(BranchStatus.ACTIVE)
+                                .build()
+                ));
+
+                Map<String, MenuCategory> categoriesByName = Map.of(
+                        "Burgers", upsertCategory("Burgers", "Premium handcrafted burgers"),
+                        "Pizza", upsertCategory("Pizza", "Stone-baked artisan pizzas"),
+                        "Desserts", upsertCategory("Desserts", "Signature desserts"),
+                        "Pasta", upsertCategory("Pasta", "Italian pasta collection"),
+                        "Salads", upsertCategory("Salads", "Fresh healthy bowls and salads"),
+                        "Beverages", upsertCategory("Beverages", "Fresh and crafted drinks")
+                );
+
+                upsertMenuItem(branch, categoriesByName.get("Burgers"), "Wagyu Beef Burger", "Signature Burgers",
+                        "Premium Japanese wagyu patty, aged cheddar, caramelized onions, truffle aioli",
+                        BigDecimal.valueOf(500.00),
+                        "https://cdn.prod.website-files.com/65fc1fa2c1e7707c3f051466/69263773f626fe9424210272_750f721e-ad71-4daa-8601-bc3c78b9587d.webp",
+                        22);
+
+                upsertMenuItem(branch, categoriesByName.get("Pizza"), "Margherita Napoletana", "Classic Pizza",
+                        "San Marzano tomatoes, buffalo mozzarella, fresh basil, extra virgin",
+                        BigDecimal.valueOf(1200.00),
+                        "https://mediterraneanrecipes.com.au/wp-content/uploads/2024/01/Margherita-Pizza.jpg",
+                        18);
+
+                upsertMenuItem(branch, categoriesByName.get("Desserts"), "Molten Chocolate Souffle", "Dessert Specials",
+                        "Valrhona dark chocolate, vanilla bean ice cream, gold leaf, raspberry coulis",
+                        BigDecimal.valueOf(850.00),
+                        "https://karenehman.com/wp-content/uploads/2024/10/Hot-Fudge-Sundae-Cake-Take-two.jpg",
+                        25);
+
+                upsertMenuItem(branch, categoriesByName.get("Burgers"), "Signature BBQ Burger", "Signature Burgers",
+                        "Double angus beef, applewood bacon, aged cheddar, house BBQ sauce.",
+                        BigDecimal.valueOf(950.00),
+                        "https://mefamilyfarm.com/cdn/shop/files/mae-mu-I7A_pHLcQK8-unsplash.jpg?v=1751451226&width=1445",
+                        22);
+
+                upsertMenuItem(branch, categoriesByName.get("Pizza"), "Tartufo Bianco Pizza", "Gourmet Pizza",
+                        "White truffle cream, wild mushrooms, fontina cheese, arugula, white truffle oil",
+                        BigDecimal.valueOf(1400.00),
+                        "https://images.unsplash.com/photo-1628840042765-356cda07504e?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cGVwcGVyb25pJTIwcGl6emF8ZW58MHx8MHx8fDA=",
+                        18);
+
+                upsertMenuItem(branch, categoriesByName.get("Pasta"), "Truffle Carbonara", "Classic Pasta",
+                        "Fresh pasta, Italian pancetta, organic eggs, aged parmesan",
+                        BigDecimal.valueOf(1200.00),
+                        "https://www.salepepe.com/media-library/image.jpg?id=26691626&width=1200&height=1200&coordinates=1058,0,1058,0",
+                        20);
+
+                upsertMenuItem(branch, categoriesByName.get("Salads"), "Mediterranean Quinoa Bowl", "Healthy Bowls",
+                        "Organic quinoa, roasted vegetables, feta cheese, olives, lemon herb",
+                        BigDecimal.valueOf(890.00),
+                        "https://cafeconnection.org/wp-content/uploads/2021/10/monika-grabkowska-pCxJvSeSB5A-unsplash-edited-scaled.jpg",
+                        15);
+
+                upsertMenuItem(branch, categoriesByName.get("Beverages"), "Artisan Lemonade", "Fresh Drinks",
+                        "Fresh-squeezed lemons, organic honey, fresh mint, sparkling water",
+                        BigDecimal.valueOf(990.00),
+                        "https://ellis.be/content/uploads/2021/07/CraftLemonadeLemon_Website.jpg",
+                        8);
+
+                System.out.println("Data seeding completed.");
         }
 
-        // ==============================================
-        // 5. Create 4 COMPLETED Orders
-        // prep times: 10, 12, 18, 20 mins => Avg = 15 mins
-        // ==============================================
-        createCompletedOrder("ORD-COMP-1", branch, customer, 10, now.minusHours(2));
-        createCompletedOrder("ORD-COMP-2", branch, customer, 12, now.minusHours(3));
-        createCompletedOrder("ORD-COMP-3", branch, customer, 18, now.minusHours(4));
-        createCompletedOrder("ORD-COMP-4", branch, customer, 20, now.minusHours(5));
+        private MenuCategory upsertCategory(String name, String description) {
+                MenuCategory category = menuCategoryRepository.findByName(name)
+                        .orElseGet(() -> MenuCategory.builder().name(name).build());
 
-        System.out.println("✅ Data seeding successfully completed!");
-        System.out.println("Expected Dashboard Stats in Frontend:");
-        System.out.println("- Pending Orders  : 2");
-        System.out.println("- Preparing Orders: 3");
-        System.out.println("- Completed Orders: 4");
-        System.out.println("- Avg Prep Time   : 15.0 Minutes");
-        System.out.println("=================================================");
-    }
-
-    private Order createBaseOrder(String orderNumber, Branch branch, Customer customer, OrderStatus status,
-            LocalDateTime createdAt) {
-        Order order = new Order();
-        order.setOrderNumber(orderNumber);
-        order.setBranch(branch);
-        order.setCustomer(customer);
-        order.setOrderType(OrderType.QR);
-        order.setStatus(status);
-        order.setTotalAmount(BigDecimal.valueOf(25.00));
-        order.setDiscountAmount(BigDecimal.ZERO);
-        order.setFinalAmount(BigDecimal.valueOf(25.00));
-        order.setPaymentStatus(PaymentStatus.PENDING);
-        order.setCreatedAt(createdAt);
-        return order;
-    }
-
-    private void createCompletedOrder(String orderNumber, Branch branch, Customer customer, int prepTimeMinutes,
-            LocalDateTime startAt) {
-        Order order = createBaseOrder(orderNumber, branch, customer, OrderStatus.COMPLETED, startAt.minusMinutes(5));
-        order.setPaymentStatus(PaymentStatus.PAID);
-        order.setCookingStartedAt(startAt);
-        order.setCookingCompletedAt(startAt.plusMinutes(prepTimeMinutes));
-
-        order = orderRepository.save(order);
-
-        OrderItem item = new OrderItem();
-        item.setOrder(order);
-        item.setItemName("Chicken Burger");
-        item.setQuantity(1);
-        item.setUnitPrice(BigDecimal.valueOf(15.99));
-        item.setSubtotal(BigDecimal.valueOf(15.99));
-
-        orderItemRepository.save(item);
-    }
-
-    private OrderItem createOrderItem(Order o, MenuItem mi, int qty) {
-        OrderItem item = new OrderItem();
-        item.setOrder(o);
-        item.setMenuItem(mi);
-        item.setItemName(mi.getName());
-        item.setQuantity(qty);
-        item.setUnitPrice(mi.getPrice());
-        item.setSubtotal(mi.getPrice().multiply(BigDecimal.valueOf(qty)));
-
-        // Add a test note for "Mixed Fried Rice"
-        if (mi.getName().contains("Rice")) {
-            item.setKitchenNotes("Add less salt and more pepper");
-        } else if (mi.getName().contains("Pizza")) {
-            item.setKitchenNotes("Extra cheese on top please");
+                category.setDescription(description);
+                return menuCategoryRepository.save(category);
         }
 
-        return item;
-    }
+        private MenuItem upsertMenuItem(Branch branch,
+                                        MenuCategory category,
+                                        String name,
+                                        String subCategory,
+                                        String description,
+                                        BigDecimal price,
+                                        String imageUrl,
+                                        Integer preparationTime) {
+                MenuItem item = menuItemRepository.findAll().stream()
+                        .filter(existing -> existing.getBranch() != null
+                                && Objects.equals(existing.getBranch().getId(), branch.getId())
+                                && existing.getName() != null
+                                && existing.getName().equalsIgnoreCase(name))
+                        .findFirst()
+                        .orElseGet(() -> MenuItem.builder().branch(branch).name(name).build());
+
+                item.setCategory(category);
+                item.setSubCategory(subCategory);
+                item.setDescription(description);
+                item.setPrice(price);
+                item.setImageUrl(imageUrl);
+                item.setIsAvailable(true);
+                item.setStatus(MenuItemStatus.APPROVED);
+                item.setPreparationTime(preparationTime);
+                item.setCreatedBy(SEED_CREATED_BY);
+
+                return menuItemRepository.save(item);
+        }
 }
