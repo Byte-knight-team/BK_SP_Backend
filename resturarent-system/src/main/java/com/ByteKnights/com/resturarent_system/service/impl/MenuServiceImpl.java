@@ -109,6 +109,7 @@ public class MenuServiceImpl implements MenuService {
 
     //for customer menu - (dileepa)
     @Override
+    @Transactional(readOnly = true)
     public List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(Long branchId) {
         // ENFORCE BUSINESS RULE: Default to Branch 1 for Online customers
         // only branch 1 is doing online services
