@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerPasswordUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerProfileUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerProfileResponse;
 import com.ByteKnights.com.resturarent_system.entity.Customer;
@@ -8,22 +9,28 @@ import com.ByteKnights.com.resturarent_system.exception.CustomerAuthException;
 import com.ByteKnights.com.resturarent_system.repository.CustomerRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.CustomerProfileService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Service
 public class CustomerProfileServiceImpl implements CustomerProfileService {
 
+    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
+
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public CustomerProfileServiceImpl(UserRepository userRepository, CustomerRepository customerRepository) {
+    public CustomerProfileServiceImpl(UserRepository userRepository, CustomerRepository customerRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.customerRepository = customerRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -95,4 +102,29 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         //Return the updated profile (reusing your existing GET logic!)
         return getCustomerProfile(user.getEmail()); 
     }
+
+    @Override
+    @Transactional
+    public void updatePassword(String email, CustomerPasswordUpdateRequest request) {
+        //Find the user
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
+
+        //Verify the current password
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Incorrect current password");
+        }
+
+        // 3. ENFORCE THE REGEX RULES
+        if (!PASSWORD_PATTERN.matcher(request.getNewPassword()).matches()) {
+            throw new CustomerAuthException(HttpStatus.UNPROCESSABLE_ENTITY, 
+                    "Password must be at least 8 characters, with 1 uppercase, 1 lowercase, 1 number, and 1 special character");
+        }
+
+        // 4. Encode and save the new password
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+    }
+
+
 }

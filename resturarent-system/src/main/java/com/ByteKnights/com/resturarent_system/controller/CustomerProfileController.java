@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerPasswordUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerProfileUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerProfileResponse;
 import com.ByteKnights.com.resturarent_system.service.CustomerProfileService;
@@ -50,5 +51,17 @@ public class CustomerProfileController {
                 "message", "Profile updated successfully",
                 "data", updatedProfile
         ));
+    }
+
+    @PutMapping("/profile/password")
+    public ResponseEntity<?> updatePassword(Principal principal, @RequestBody CustomerPasswordUpdateRequest request) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
+        }
+
+        String userEmail = principal.getName();
+        customerProfileService.updatePassword(userEmail, request);
+
+        return ResponseEntity.ok(Map.of("message", "Password updated successfully"));
     }
 }
