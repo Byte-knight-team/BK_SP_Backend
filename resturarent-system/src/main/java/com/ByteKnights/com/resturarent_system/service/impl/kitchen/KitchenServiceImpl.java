@@ -85,7 +85,7 @@ public class KitchenServiceImpl implements KitchenService {
     //Peak hours
     @Override
     public List<PeakHourDTO> getPeakHoursInLast7Days() {
-        // 1. කලින්ම අපිට ලැබෙන්න ඕන සියලුම time slots ටික 0 count එකත් එක්ක ලෑස්ති කරගමු
+        // 1.set initial counts as zero
         Map<String, Integer> peakHourMap = new LinkedHashMap<>();
         peakHourMap.put("8AM-10AM", 0);
         peakHourMap.put("10AM-12PM", 0);
