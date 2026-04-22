@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.dto;
+package com.ByteKnights.com.resturarent_system.dto.response.admin;
 
 import lombok.*;
 import java.time.LocalDateTime;
