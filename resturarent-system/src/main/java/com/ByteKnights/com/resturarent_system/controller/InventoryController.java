@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
 import lombok.RequiredArgsConstructor;
 
@@ -61,6 +62,28 @@ public class InventoryController {
 
         // Wrap the result in a 200 OK HTTP Response and send it back to the frontend
         return ResponseEntity.ok(items);
+    }
+
+    /**
+     * REST Endpoint to fetch the top dashboard summary metrics.
+     * 
+     * Path: GET /api/inventory/summary?branchId={id}
+     * 
+     * This endpoint is called when the Inventory Management page first loads.
+     * It returns the aggregated financial values, stock alerts, and pending
+     * requests.
+     * 
+     * @param branchId Retrieved from the URL query parameter.
+     * @return 200 OK with the populated InventorySummaryDTO.
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<InventorySummaryDTO> getInventorySummary(@RequestParam Long branchId) {
+
+        // Ask the service layer to do all the heavy math and database fetching
+        InventorySummaryDTO summary = inventoryService.getInventorySummary(branchId);
+
+        // Return the packaged data as a JSON response
+        return ResponseEntity.ok(summary);
     }
 
 }
