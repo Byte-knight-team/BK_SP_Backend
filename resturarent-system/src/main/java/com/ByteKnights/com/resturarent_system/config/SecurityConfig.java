@@ -48,8 +48,13 @@ public class SecurityConfig {
                     "/v3/api-docs/**"
                 ).permitAll()
 
+                
+
                 // Authenticated auth flow
                 .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password").authenticated()
+
+                // customer opereations customer only
+                .requestMatchers("/api/v1/customer/**").hasRole("CUSTOMER")
 
                 // Branch management - SUPER_ADMIN only
                 .requestMatchers("/api/admin/branches", "/api/admin/branches/**").hasRole("SUPER_ADMIN")
