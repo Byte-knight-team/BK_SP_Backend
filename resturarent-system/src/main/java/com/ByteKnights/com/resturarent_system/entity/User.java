@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -17,7 +18,10 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 60)
+    @Column(length = 150)
+    private String fullName;
+
+    @Column(nullable = false, unique = true, length = 100)
     private String username;
 
     @Column(nullable = false, length = 100)
@@ -40,6 +44,24 @@ public class User {
     @Column(nullable = false)
     private Boolean isActive = true;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean passwordChanged = false;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private InviteStatus inviteStatus = InviteStatus.PENDING;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean emailSent = false;
+
+    @Transient
+    private String temporaryPassword;
+
+    private LocalDateTime lastInviteAttemptAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -56,7 +78,4 @@ public class User {
     protected void onUpdate() {
         this.updatedAt = LocalDateTime.now();
     }
-
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private Customer customer;
 }
