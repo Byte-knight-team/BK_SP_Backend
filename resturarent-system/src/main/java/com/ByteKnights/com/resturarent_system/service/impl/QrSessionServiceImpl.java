@@ -1,7 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.request.QrSessionStartRequest;
-import com.ByteKnights.com.resturarent_system.dto.response.QrSessionStartResponseData;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.QrSessionStartRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.QrSessionStartResponseData;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.QrSession;
 import com.ByteKnights.com.resturarent_system.entity.QrSessionStatus;
@@ -77,7 +77,6 @@ public class QrSessionServiceImpl implements QrSessionService {
         QrSession qrSession = QrSession.builder()
                 .branch(branch)
                 .table(table)
-                .unitSessionToken("PENDING")
                 .status(QrSessionStatus.ACTIVE)
                 .build();
 
@@ -85,8 +84,6 @@ public class QrSessionServiceImpl implements QrSessionService {
 
     Instant expiry = Instant.now().plusMillis(sessionExpirationMs);
     String sessionToken = generateSessionToken(qrSession.getId(), branchId, tableId, qrId, expiry);
-        qrSession.setUnitSessionToken(sessionToken);
-        qrSession = qrSessionRepository.save(qrSession);
 
         return QrSessionStartResponseData.builder()
                 .sessionId(qrSession.getId())

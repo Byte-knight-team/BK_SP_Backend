@@ -1,9 +1,9 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.request.CustomerLoginRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.CustomerRegisterRequest;
-import com.ByteKnights.com.resturarent_system.dto.response.CustomerLoginResponseData;
-import com.ByteKnights.com.resturarent_system.dto.response.CustomerRegisterResponseData;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerLoginRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerRegisterRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerLoginResponseData;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerRegisterResponseData;
 import com.ByteKnights.com.resturarent_system.entity.Customer;
 import com.ByteKnights.com.resturarent_system.entity.Role;
 import com.ByteKnights.com.resturarent_system.entity.User;
@@ -58,8 +58,19 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
         validateRegisterRequest(request);
 
-        if (userRepository.findByEmail(request.getEmail().trim()).isPresent()) {
+        //Check if email already exsist
+        if (userRepository.findByEmail(request.getEmail().trim().toLowerCase(Locale.ROOT)).isPresent()) {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Email already exists");
+        }
+
+        //Check if Username exists
+        if (userRepository.findByUsername(request.getUsername().trim()).isPresent()) {
+            throw new CustomerAuthException(HttpStatus.CONFLICT, "Username already exists");
+        }
+
+        //Check if Phone exists
+        if (userRepository.findByPhone(request.getPhone().trim()).isPresent()) {
+            throw new CustomerAuthException(HttpStatus.CONFLICT, "Phone number already exists");
         }
 
         //getting role entity for customer from database
