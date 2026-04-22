@@ -2,3 +2,4 @@
 .vscode/
 resturarent-system/target/
 .envsit statu
+.env
