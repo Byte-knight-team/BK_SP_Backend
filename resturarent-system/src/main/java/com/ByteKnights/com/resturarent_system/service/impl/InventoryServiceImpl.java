@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
 import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
@@ -11,6 +12,7 @@ import com.ByteKnights.com.resturarent_system.service.InventoryService;
 
 import lombok.RequiredArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,7 +44,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final BranchRepository branchRepository;
 
     /**
-     * Implementation of getAllItemsByBranch.
+     * 1.______Implementation of getAllItemsByBranch.
      * 
      * 1. Fetches all raw InventoryItem entities from the database that belong to
      * the branch.
@@ -58,6 +60,68 @@ public class InventoryServiceImpl implements InventoryService {
         return items.stream()
                 .map(item -> toItemDTO(item))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 2.______________ Implements the logic to calculate the inventory dashboard
+     * summary.
+     * 
+     * @param branchId The ID of the branch.
+     * @return InventorySummaryDTO populated with real-time calculated metrics.
+     */
+    @Override
+    public InventorySummaryDTO getInventorySummary(Long branchId) {
+
+        // 1. Fetch all items from the database for this specific branch
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);
+
+        BigDecimal totalValue = BigDecimal.ZERO;
+        int lowStockCount = 0;
+
+        /*
+         * 2. Loop through every single inventory item to calculate two things:
+         * a) The total financial value of the entire inventory.
+         * b) How many items have critically low stock.
+         */
+        for (InventoryItem item : items) {
+
+            // Calculate Total Value: (Item Quantity * Item Unit Price)
+            if (item.getQuantity() != null && item.getUnitPrice() != null) {
+                BigDecimal itemValue = item.getQuantity().multiply(item.getUnitPrice());
+                totalValue = totalValue.add(itemValue);
+            }
+
+            // Calculate Low Stock: If current stock <= reorder threshold, trigger an alert!
+            if (item.getQuantity() != null && item.getReorderLevel() != null) {
+                if (item.getQuantity().compareTo(item.getReorderLevel()) <= 0) {
+                    lowStockCount++; // Increment the alert counter
+                }
+            }
+        }
+
+        /*
+         * 3. Fetch all Chef Requests for this branch that are currently 'PENDING'.
+         * We don't want to show APPROVED or REJECTED requests on the dashboard.
+         */
+        List<ChefRequest> pendingRequests = chefRequestRepository.findByBranchIdAndStatus(
+                branchId,
+                com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus.PENDING);
+
+        // Convert the raw database entities into clean DTOs for the frontend
+        List<ChefRequestDTO> chefRequestDTOs = pendingRequests.stream()
+                .map(this::toChefRequestDTO)
+                .toList();
+
+        /*
+         * 4. Package all our calculations into the Summary DTO and return it.
+         */
+        return InventorySummaryDTO.builder()
+                .branch("Colombo Main") // Hardcoded for now; can fetch from Branch entity later
+                .totalInventoryValue(totalValue)
+                .lowStockAlerts(lowStockCount)
+                .pendingChefDrafts(chefRequestDTOs.size()) // The number of pending drafts is just the size of the list!
+                .chefRequests(chefRequestDTOs)
+                .build();
     }
 
     // ───────────────────────── PRIVATE HELPER MAPPERS ─────────────────────────
