@@ -39,6 +39,7 @@ public class SecurityConfig {
                     "/api/v1/auth/**",
                     "/api/v1/qr-sessions/**",
                     "/api/v1/menu/customer",
+                    "/api/v1/auth/customer",
                     "/api/tables",
                     "/api/tables/**",
                     "/api/auth/staff/login",
