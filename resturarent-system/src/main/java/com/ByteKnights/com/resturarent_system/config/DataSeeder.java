@@ -17,7 +17,8 @@ public class DataSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final PrivilegeRepository privilegeRepository;
 
-    public DataSeeder(RoleRepository roleRepository, PrivilegeRepository privilegeRepository) {
+    public DataSeeder(RoleRepository roleRepository,
+                      PrivilegeRepository privilegeRepository) {
         this.roleRepository = roleRepository;
         this.privilegeRepository = privilegeRepository;
     }
@@ -26,7 +27,6 @@ public class DataSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
-        //Creating the privileges
         Privilege createStaff = createPrivilege("CREATE_STAFF");
         Privilege assignPrivileges = createPrivilege("ASSIGN_PRIVILEGES");
         Privilege updateConfig = createPrivilege("UPDATE_CONFIG");
@@ -46,10 +46,8 @@ public class DataSeeder implements CommandLineRunner {
         Privilege viewReports = createPrivilege("VIEW_REPORTS");
         Privilege viewOrders = createPrivilege("VIEW_ORDERS");
         Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
-        
-        //Creating the roles
+
         Role superAdminRole = createRole("SUPER_ADMIN");
-        //Adding the privileges to the super admin role
         superAdminRole.setPermissions(new HashSet<>(Set.of(
                 createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, manageSystemConfig,
                 manageOrders, manageMenu, manageReservations, updateOrderStatus, updateDeliveryStatus,
@@ -71,7 +69,6 @@ public class DataSeeder implements CommandLineRunner {
         roleRepository.save(managerRole);
 
         Role chefRole = createRole("CHEF");
-        //Adding the privileges to the chef role
         chefRole.setPermissions(new HashSet<>(Set.of(
                 manageMenu, updateOrderStatus, viewOrders
         )));

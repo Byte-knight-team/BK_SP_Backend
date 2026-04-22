@@ -2,6 +2,13 @@ package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.CreateStaffRequest;
 import com.ByteKnights.com.resturarent_system.dto.CreateStaffResponse;
+import com.ByteKnights.com.resturarent_system.dto.StaffResponse;
+import com.ByteKnights.com.resturarent_system.dto.UpdateStaffRequest;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
 import com.ByteKnights.com.resturarent_system.entity.EmploymentStatus;
@@ -15,9 +22,6 @@ import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.email.EmailService;
-import com.ByteKnights.com.resturarent_system.dto.StaffResponse;
-import com.ByteKnights.com.resturarent_system.dto.UpdateStaffRequest;
-
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,12 +31,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-
-import java.util.Comparator;
-import java.util.List;
-
 
 @Service
 @RequiredArgsConstructor
@@ -62,6 +66,7 @@ public class StaffService {
     private final StaffRepository staffRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public CreateStaffResponse createStaff(CreateStaffRequest request) {
@@ -180,6 +185,20 @@ public class StaffService {
         }
 
         User finalSavedUser = userRepository.save(savedUser);
+        Staff finalStaff = staffRepository.findByUserId(finalSavedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                finalSavedUser.getId(),
+                getBranchId(finalStaff),
+                "Staff created successfully",
+                null,
+                buildStaffAuditSnapshot(finalSavedUser, finalStaff)
+        );
 
         return CreateStaffResponse.builder()
                 .id(finalSavedUser.getId())
@@ -209,6 +228,7 @@ public class StaffService {
         String targetRole = normalize(targetUser.getRole().getName());
 
         Staff targetStaff = staffRepository.findByUserId(userId).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
 
         if ("SUPER_ADMIN".equals(creatorRole)) {
             // SUPER_ADMIN can resend for anyone in staff flow
@@ -256,10 +276,25 @@ public class StaffService {
                     targetUser.getId(),
                     targetUser.getUsername(),
                     targetUser.getEmail(),
-                    e);
+                    e
+            );
         }
 
         User savedUser = userRepository.save(targetUser);
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.INVITE_RESENT,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff invite resent successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff)
+        );
 
         return CreateStaffResponse.builder()
                 .id(savedUser.getId())
@@ -273,13 +308,12 @@ public class StaffService {
                 .inviteStatus(savedUser.getInviteStatus())
                 .emailSent(savedUser.getEmailSent())
                 .temporaryPassword(Boolean.TRUE.equals(savedUser.getEmailSent()) ? null : tempPassword)
-                .branchId(targetStaff != null ? targetStaff.getBranch().getId() : null)
-                .branchName(targetStaff != null ? targetStaff.getBranch().getName() : null)
+                .branchId(savedStaff != null && savedStaff.getBranch() != null ? savedStaff.getBranch().getId() : null)
+                .branchName(savedStaff != null && savedStaff.getBranch() != null ? savedStaff.getBranch().getName() : null)
                 .message(Boolean.TRUE.equals(savedUser.getEmailSent()) ? "Email resent successfully" : "Email failed")
                 .build();
     }
 
-    //Get all staff
     @Transactional(readOnly = true)
     public List<StaffResponse> getAllStaff() {
         User creator = getCurrentAuthenticatedUser();
@@ -310,7 +344,6 @@ public class StaffService {
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff");
     }
 
-    //Get one staff member
     @Transactional(readOnly = true)
     public StaffResponse getStaffById(Long userId) {
         User creator = getCurrentAuthenticatedUser();
@@ -326,7 +359,6 @@ public class StaffService {
         return mapToStaffResponse(targetUser);
     }
 
-    //Upadte staff
     @Transactional
     public StaffResponse updateStaff(Long userId, UpdateStaffRequest request) {
         User creator = getCurrentAuthenticatedUser();
@@ -343,6 +375,7 @@ public class StaffService {
 
         String currentTargetRole = normalize(targetUser.getRole().getName());
         Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
 
         if (request.getFullName() != null) {
             String fullName = request.getFullName().trim();
@@ -428,10 +461,24 @@ public class StaffService {
             staffRepository.save(targetStaff);
         }
 
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff updated successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff)
+        );
+
         return mapToStaffResponse(savedUser);
     }
 
-    //Activate staff
     @Transactional
     public StaffResponse activateStaff(Long userId) {
         User creator = getCurrentAuthenticatedUser();
@@ -445,13 +492,29 @@ public class StaffService {
 
         ensureCanManageTarget(creator, targetUser);
 
+        Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
+
         targetUser.setIsActive(true);
         User savedUser = userRepository.save(targetUser);
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_ACTIVATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff activated successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff)
+        );
 
         return mapToStaffResponse(savedUser);
     }
 
-    //Deativate staff
     @Transactional
     public StaffResponse deactivateStaff(Long userId) {
         User creator = getCurrentAuthenticatedUser();
@@ -465,8 +528,25 @@ public class StaffService {
 
         ensureCanManageTarget(creator, targetUser);
 
+        Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
+
         targetUser.setIsActive(false);
         User savedUser = userRepository.save(targetUser);
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_DEACTIVATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff deactivated successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff)
+        );
 
         return mapToStaffResponse(savedUser);
     }
@@ -568,19 +648,16 @@ public class StaffService {
         return value.trim().toUpperCase();
     }
 
-    //Check if a user is part of staff-side roles
     private boolean isStaffUser(User user) {
         return user.getRole() != null && STAFF_ROLES.contains(normalize(user.getRole().getName()));
     }
 
-    //Check branch ownership for admin listing
     private boolean belongsToBranch(User user, Long branchId) {
         return staffRepository.findByUserId(user.getId())
                 .map(staff -> staff.getBranch() != null && staff.getBranch().getId().equals(branchId))
                 .orElse(false);
     }
 
-    //View permission helper
     private void ensureCanViewTarget(User creator, User targetUser) {
         String creatorRole = normalize(creator.getRole().getName());
 
@@ -593,8 +670,7 @@ public class StaffService {
                     .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
 
             Staff targetStaff = staffRepository.findByUserId(targetUser.getId())
-                    .orElseThrow(
-                            () -> new RuntimeException("ADMIN can view only branch-linked staff in their own branch"));
+                    .orElseThrow(() -> new RuntimeException("ADMIN can view only branch-linked staff in their own branch"));
 
             Long adminBranchId = creatorStaff.getBranch().getId();
             Long targetBranchId = targetStaff.getBranch().getId();
@@ -609,43 +685,41 @@ public class StaffService {
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff");
     }
 
-    //Manage permission helper
     private void ensureCanManageTarget(User creator, User targetUser) {
         String creatorRole = normalize(creator.getRole().getName());
         String targetRole = normalize(targetUser.getRole().getName());
-    
+
         if ("SUPER_ADMIN".equals(creatorRole)) {
             return;
         }
-    
+
         if ("ADMIN".equals(creatorRole)) {
             if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
                 throw new RuntimeException("ADMIN can manage only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
             }
-    
+
             Staff creatorStaff = staffRepository.findByUserId(creator.getId())
                     .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
-    
+
             Staff targetStaff = staffRepository.findByUserId(targetUser.getId())
                     .orElseThrow(() -> new RuntimeException("ADMIN can manage only branch-linked staff"));
-    
+
             Long adminBranchId = creatorStaff.getBranch().getId();
             Long targetBranchId = targetStaff.getBranch().getId();
-    
+
             if (!adminBranchId.equals(targetBranchId)) {
                 throw new RuntimeException("ADMIN can manage staff only in their own branch");
             }
-    
+
             return;
         }
-    
+
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can manage staff");
     }
 
-    //Map user to staff response
     private StaffResponse mapToStaffResponse(User user) {
         Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
-    
+
         return StaffResponse.builder()
                 .id(user.getId())
                 .userId(user.getId())
@@ -664,6 +738,32 @@ public class StaffService {
                         ? staff.getEmploymentStatus().name()
                         : null)
                 .build();
+    }
+
+    private Map<String, Object> buildStaffAuditSnapshot(User user, Staff staff) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        snapshot.put("userId", user.getId());
+        snapshot.put("fullName", user.getFullName());
+        snapshot.put("username", user.getUsername());
+        snapshot.put("email", user.getEmail());
+        snapshot.put("phone", user.getPhone());
+        snapshot.put("roleName", user.getRole() != null ? user.getRole().getName() : null);
+        snapshot.put("active", user.getIsActive());
+        snapshot.put("passwordChanged", user.getPasswordChanged());
+        snapshot.put("inviteStatus", user.getInviteStatus() != null ? user.getInviteStatus().name() : null);
+        snapshot.put("emailSent", user.getEmailSent());
+        snapshot.put("branchId", staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null);
+        snapshot.put("branchName", staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null);
+        snapshot.put("employmentStatus", staff != null && staff.getEmploymentStatus() != null
+                ? staff.getEmploymentStatus().name()
+                : null);
+
+        return snapshot;
+    }
+
+    private Long getBranchId(Staff staff) {
+        return staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null;
     }
 
     @Transactional(readOnly = true)
