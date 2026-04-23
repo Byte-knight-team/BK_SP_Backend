@@ -59,7 +59,7 @@ public class KitchenController {
     @GetMapping("/inventory-alerts")
     @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getInventoryAlerts() {
-        List<InventoryAlertDTO> alerts = kitchenService.getInventoryAlerts();
+        List<InventoryDetailsDTO> alerts = kitchenService.getInventoryAlerts();
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", alerts),
                 HttpStatus.OK
@@ -81,7 +81,7 @@ public class KitchenController {
     @GetMapping("/inventory/all")
     @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getAllInventory() {
-        List<InventoryAlertDTO> items = kitchenService.getAllInventoryItems();
+        List<InventoryDetailsDTO> items = kitchenService.getAllInventoryItems();
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", items),
                 HttpStatus.OK

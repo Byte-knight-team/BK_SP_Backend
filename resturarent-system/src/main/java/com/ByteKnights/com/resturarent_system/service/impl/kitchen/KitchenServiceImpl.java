@@ -128,9 +128,9 @@ public class KitchenServiceImpl implements KitchenService {
 
     // inventory alerts
     @Override
-    public List<InventoryAlertDTO> getInventoryAlerts() {
+    public List<InventoryDetailsDTO> getInventoryAlerts() {
         List<InventoryItem> items = inventoryItemRepository.findAll(); //no need to write native query
-        List<InventoryAlertDTO> alerts = new ArrayList<>();
+        List<InventoryDetailsDTO> alerts = new ArrayList<>();
 
         for (InventoryItem item : items) {
             double current = item.getQuantity().doubleValue();
@@ -142,10 +142,10 @@ public class KitchenServiceImpl implements KitchenService {
                 String level = (current <= reorder / 2) ? "CRITICAL" : "LOW";
 
                 // Percentage calculation
-                double percentage = (current / max) * 100;
+                double percentage = (max > 0) ? (current / max) * 100 : 0;
 
-                //can the all args constructor of InventoryAlertDTO
-                alerts.add(new InventoryAlertDTO(
+                //call the all args constructor of InventoryAlertDTO
+                alerts.add(new InventoryDetailsDTO(
                         item.getName(),
                         Math.round(percentage * 100.0) / 100.0, // Round to 2 decimal places
                         max,
@@ -186,14 +186,35 @@ public class KitchenServiceImpl implements KitchenService {
 
     //get all inventory details
     @Override
-    public List<InventoryAlertDTO> getAllInventoryItems() {
+    public List<InventoryDetailsDTO> getAllInventoryItems() {
         List<InventoryItem> items = inventoryItemRepository.findAll();
-        // can be used same InventoryAlertDTO for this
-        List<InventoryAlertDTO> dtoList = new ArrayList<>();
+        // can be used same InventoryDetailsDTO for this
+        List<InventoryDetailsDTO> dtoList = new ArrayList<>();
+
+        String warningLevel;
 
         for (InventoryItem item : items) {
-            InventoryAlertDTO InventoryDetailsDTO = modelMapper.map(item, InventoryAlertDTO.class);
-            dtoList.add(InventoryDetailsDTO);
+            double current = item.getQuantity().doubleValue();
+            double max = item.getMaxStock().doubleValue();
+            double reorder = item.getReorderLevel().doubleValue();
+
+            if (current <= reorder) {
+                warningLevel = (current <= reorder / 2) ? "CRITICAL" : "LOW";
+            } else {
+                warningLevel = "OK";
+            }
+            // Percentage calculation
+            double percentage = (max > 0) ? (current / max) * 100 : 0;
+
+            //call the all args constructor
+            dtoList.add(new InventoryDetailsDTO(
+                    item.getName(),
+                    Math.round(percentage * 100.0) / 100.0, // Round to 2 decimal places
+                    max,
+                    current,
+                    item.getUnit(),
+                    warningLevel // No alert level needed here, so set as NORMAL or you can modify the DTO to make it optional
+            ));
         }
         return dtoList;
     }

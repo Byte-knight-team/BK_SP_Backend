@@ -7,11 +7,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class InventoryAlertDTO {
-    private String itemName;
+//same DTO use to display inventory alerts and display inventory table
+public class InventoryDetailsDTO {
+    private String name;
     private double percentage;
     private double maxStock; //initial count
-    private double availableCount;
+    private double quantity; //available count
     private String unit;
     private String warningLevel; // LOW or CRITICAL
 }
