@@ -1,16 +1,20 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.CreateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
+import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
 import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
+import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
-import com.ByteKnights.com.resturarent_system.service.InventoryService;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
-import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.service.InventoryService;
+import org.springframework.transaction.annotation.Transactional;
 
 import lombok.RequiredArgsConstructor;
 
@@ -143,6 +147,43 @@ public class InventoryServiceImpl implements InventoryService {
                 .pendingChefDrafts(chefRequestDTOs.size()) // The number of pending drafts is just the size of the list!
                 .chefRequests(chefRequestDTOs)
                 .build();
+    }
+
+    /**
+     * 3.__________ Adds a new inventory item to the database.
+     * 
+     * This method validates the existence of the branch, maps the request
+     * data to a new InventoryItem entity, and saves it. It then returns
+     * the saved item as a DTO.
+     * 
+     * @param request        The DTO containing item details (name, qty, price,
+     *                       etc).
+     * @param targetBranchId The ID of the branch the item belongs to.
+     * @return The newly created InventoryItemDTO.
+     */
+    @Override
+    @Transactional
+    public InventoryItemDTO addInventoryItem(CreateInventoryItemRequest request, Long targetBranchId) {
+        // 1. Verify the branch exists
+        Branch branch = branchRepository.findById(targetBranchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + targetBranchId));
+
+        // 2. Build the entity from the request data
+        InventoryItem item = InventoryItem.builder()
+                .name(request.getName())
+                .category(request.getCategory())
+                .quantity(request.getQuantity())
+                .unit(request.getUnit())
+                .reorderLevel(request.getReorderLevel())
+                .unitPrice(request.getUnitPrice())
+                .branch(branch)
+                .build();
+
+        // 3. Save the new item to the database
+        InventoryItem savedItem = inventoryItemRepository.save(item);
+
+        // 4. Return the DTO
+        return toItemDTO(savedItem);
     }
 
     // ───────────────────────── PRIVATE HELPER MAPPERS ─────────────────────────

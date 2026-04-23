@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 
 /**
  * Controller responsible for handling all HTTP requests related to Inventory
