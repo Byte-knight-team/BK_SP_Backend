@@ -9,4 +9,8 @@ public interface CustomerAuthService {
     CustomerRegisterResponseData register(CustomerRegisterRequest request);
 
     CustomerLoginResponseData login(CustomerLoginRequest request);
+
+    CustomerLoginResponseData verifyOtp(String phone, String code);
+
+    public void requestOtp(String phone);
 }
