@@ -108,7 +108,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customerRepository.save(customer);
 
 
-        //normalize role name and create jwt token
+        //create jwt token
         String normalizedRole = normalizeRole(customerRole.getName());
         String token = customerJwtService.generateToken(savedUser.getId(), savedUser.getEmail(), normalizedRole);
 
@@ -122,7 +122,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         return CustomerRegisterResponseData.builder()
                 .userId(savedUser.getId())
                 .username(savedUser.getUsername())
-                .role(normalizedRole)
                 .token(token)
                 .createdAt(createdAtUtc)
                 .build();
@@ -151,14 +150,13 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
         }
 
-        //normalize role and create jwt token
+        //create jwt token
         String normalizedRole = normalizeRole(user.getRole().getName());
         String token = customerJwtService.generateToken(user.getId(), user.getEmail(), normalizedRole);
 
         //return response
         return CustomerLoginResponseData.builder()
                 .userId(user.getId())
-                .role(normalizedRole)
                 .token(token)
                 .build();
     }
@@ -246,7 +244,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         return CustomerLoginResponseData.builder()
                 .userId(user.getId())
-                .role(normalizedRole)
                 .token(token)
                 .build();
     }

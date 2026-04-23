@@ -13,7 +13,6 @@ public class CustomerRegisterResponseData {
     private Long userId;
 
     private String username;
-    private String role;
     private String token;
 
     @JsonProperty("created_at")
