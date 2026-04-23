@@ -24,7 +24,7 @@ public class ChefRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /*
+    /**
      * The branch associated with this entity.
      * Mapped as a many-to-one relationship using lazy loading to optimize
      * performance.
@@ -37,10 +37,6 @@ public class ChefRequest {
     // Full name of the chef who submitted this request
     @Column(name = "chef_name", nullable = false, length = 150)
     private String chefName;
-
-    // Role/title of the chef (e.g., "EXECUTIVE CHEF", "SOUS CHEF")
-    @Column(name = "chef_role", length = 50)
-    private String chefRole;
 
     // Name of the inventory item being requested
     @Column(name = "item_name", nullable = false, length = 150)
@@ -67,6 +63,11 @@ public class ChefRequest {
     @Builder.Default
     @Column(name = "status", nullable = false)
     private ChefRequestStatus status = ChefRequestStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "request_type", nullable = false)
+    private ChefRequestType requestType;
+
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

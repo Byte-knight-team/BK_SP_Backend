@@ -1,16 +1,11 @@
 package com.ByteKnights.com.resturarent_system.service.impl.kitchen;
 
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
-import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
-import com.ByteKnights.com.resturarent_system.entity.Order;
-import com.ByteKnights.com.resturarent_system.entity.OrderItem;
-import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
-import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
-import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
-import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
+import com.ByteKnights.com.resturarent_system.entity.*;
+import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
 import lombok.RequiredArgsConstructor;
-import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -27,7 +22,9 @@ public class KitchenServiceImpl implements KitchenService {
     final OrderRepository orderRepository;
     final OrderItemRepository orderItemRepository;
     final InventoryItemRepository inventoryItemRepository;
-    private final ModelMapper modelMapper;
+    final ChefRequestRepository chefRequestRepository;
+    final UserRepository userRepository;
+    final StaffRepository staffRepository;
 
     // kitchen dashboard stat
     @Override
@@ -218,4 +215,33 @@ public class KitchenServiceImpl implements KitchenService {
         }
         return dtoList;
     }
+
+    // create stock refill requests and new inventory item requests
+    @Override
+    public void createRequest(CreateChefRequestDTO requestDTO, String userEmail) {
+
+        // get the logged-in User to get the username
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // get the Staff profile to find their branch to identify the specific branch making the request
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // create and save the request
+        ChefRequest chefRequest = ChefRequest.builder()
+                .branch(staff.getBranch())
+                .chefName(user.getFullName())
+                .itemName(requestDTO.getItemName())
+                .requestedQuantity(requestDTO.getRequestedQuantity())
+                .unit(requestDTO.getUnit())
+                .chefNote(requestDTO.getChefNote())
+                .requestType(requestDTO.getRequestType())
+                .status(ChefRequestStatus.PENDING)
+                .build();
+
+        chefRequestRepository.save(chefRequest);
+    }
+
+
 }

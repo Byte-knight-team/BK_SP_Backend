@@ -1,15 +1,18 @@
 package com.ByteKnights.com.resturarent_system.controller.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 
@@ -87,6 +90,26 @@ public class KitchenController {
                 HttpStatus.OK
         );
     }
+
+    // inventory requests submitted by Chefs.
+    // one endpoint for both request types ("REFILL_STOCK", "ADD_NEW_ITEM")
+    @PostMapping("/inventory/request")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> createRequest(
+            @Valid @RequestBody CreateChefRequestDTO requestDTO,
+            Principal principal) {
+
+        // principal.getName() returns the email of the logged-in user from the JWT token - extract user email from the JWT token's Principal
+        String userEmail = principal.getName();
+
+        kitchenService.createRequest(requestDTO, userEmail);
+
+        return new ResponseEntity<>(
+                new StandardResponse(201, "Inventory request submitted successfully!", null),
+                HttpStatus.CREATED
+        );
+    }
+
 }
 
 
