@@ -37,6 +37,9 @@ public class InventoryItem {
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
 
+    @Column(name = "max_stock", precision = 10, scale = 2)
+    private BigDecimal maxStock;
+
     @Column(length = 50)
     private String category;
 
