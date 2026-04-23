@@ -12,6 +12,5 @@ public class CustomerLoginResponseData {
     @JsonProperty("user_id")
     private Long userId;
 
-    private String role;
     private String token;
 }
