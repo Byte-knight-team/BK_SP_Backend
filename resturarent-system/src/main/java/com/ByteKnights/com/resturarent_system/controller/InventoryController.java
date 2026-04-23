@@ -1,19 +1,20 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.CreateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
+
+import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import lombok.RequiredArgsConstructor;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
@@ -99,6 +100,37 @@ public class InventoryController {
 
         // Return the packaged data as a JSON response
         return ResponseEntity.ok(summary);
+    }
+
+    /**
+     * 3. Adds a new inventory item to the system.
+     * 
+     * Path: POST /api/inventory/items
+     * 
+     * This endpoint allows authorized staff to create a new item in the
+     * inventory. The branch is determined securely based on the user's
+     * profile or provided in the request if the user is a Super Admin.
+     * 
+     * @param request   The DTO containing the details of the item to be created.
+     * @param principal The authenticated user principal.
+     * @return 201 Created with the newly created InventoryItemDTO.
+     */
+    @PostMapping("/items")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    public ResponseEntity<InventoryItemDTO> addInventoryItem(
+            @Valid @RequestBody CreateInventoryItemRequest request,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        // Determine the target branch (Super Admin flexibility vs. Manager strictness)
+        Long targetBranchId = resolveTargetBranchId(request.getBranchId(), principal);
+
+        Long userId = principal.getUser().getId(); // Get the user ID
+
+        // Call the service to create the item
+        InventoryItemDTO createdItem = inventoryService.addInventoryItem(request, targetBranchId, userId);
+
+        // Return 201 Created along with the new item data
+        return new ResponseEntity<>(createdItem, HttpStatus.CREATED);
     }
 
     /**
