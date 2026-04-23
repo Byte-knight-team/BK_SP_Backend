@@ -81,6 +81,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .username(request.getUsername().trim())
                 .email(request.getEmail().trim().toLowerCase(Locale.ROOT))
                 .phone(request.getPhone().trim())
+                .passwordChanged(true)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .address(normalizeAddress(request.getAddress()))
                 .role(customerRole)
