@@ -33,7 +33,7 @@ public class QrCode {
     @Column(name = "is_active", nullable = false)
     private Boolean active = true;
 
-    @Column(name = "last_generated_at")
+    @Column(name = "last_generated_at", nullable = false)
     private LocalDateTime lastGeneratedAt;
 
     @Column(name = "revoked_at")
