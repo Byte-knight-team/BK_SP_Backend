@@ -68,44 +68,64 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
         validateRegisterRequest(request);
 
+        String normalizedEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        String normalizedPhone = request.getPhone().trim();
+        String normalizedUsername = request.getUsername().trim();
+
         //Check if email already exsist
-        if (userRepository.findByEmail(request.getEmail().trim().toLowerCase(Locale.ROOT)).isPresent()) {
+        if (userRepository.findByEmail(normalizedEmail).isPresent()) {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Email already exists");
         }
 
         //Check if Username exists
-        if (userRepository.findByUsername(request.getUsername().trim()).isPresent()) {
+        if (userRepository.findByUsername(normalizedUsername).isPresent()) {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Username already exists");
         }
 
-        //Check if Phone exists
-        if (userRepository.findByPhone(request.getPhone().trim()).isPresent()) {
-            throw new CustomerAuthException(HttpStatus.CONFLICT, "Phone number already exists");
+        // 3. THE GHOST ACCOUNT CHECK (Phone check)
+        Optional<User> existingUserOpt = userRepository.findByPhone(normalizedPhone);
+        User user;
+        boolean isGhostAccount = false;
+
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            // If the user has an email, it's a real, fully registered account. Block them.
+            if (existingUser.getEmail() != null && !existingUser.getEmail().isEmpty()) {
+                throw new CustomerAuthException(HttpStatus.CONFLICT, "Phone number already exists and is linked to an account.");
+            } else {
+                // No email means it's a QR Ghost Account! We will upgrade it.
+                user = existingUser;
+                isGhostAccount = true;
+            }
+        } else {
+            // Phone doesn't exist, create a brand new User
+            user = new User();
+            user.setRole(findCustomerRole());
+        }
+
+        // 4. Set/Update all the user details
+        user.setUsername(normalizedUsername);
+        user.setEmail(normalizedEmail);
+        user.setPhone(normalizedPhone);
+        user.setPasswordChanged(true);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setAddress(normalizeAddress(request.getAddress()));
+        user.setIsActive(true);
+
+        // Save the User
+        User savedUser = userRepository.save(user);
+
+        // 5. If it's a brand new user, create the Customer profile. 
+        // (If it was a ghost account, the Customer profile already exists!)
+        if (!isGhostAccount) {
+            Customer customer = Customer.builder()
+                    .user(savedUser)
+                    .build();
+            customerRepository.save(customer);
         }
 
         //getting role entity for customer from database
         Role customerRole = findCustomerRole();
-
-        //build user entity
-        User user = User.builder()
-                .username(request.getUsername().trim())
-                .email(request.getEmail().trim().toLowerCase(Locale.ROOT))
-                .phone(request.getPhone().trim())
-                .passwordChanged(true)
-                .password(passwordEncoder.encode(request.getPassword()))
-                .address(normalizeAddress(request.getAddress()))
-                .role(customerRole)
-                .isActive(true)
-                .build();
-
-        //save it to database
-        User savedUser = userRepository.save(user);
-
-        //build customer entity
-        Customer customer = Customer.builder()
-                .user(savedUser)
-                .build();
-        customerRepository.save(customer);
 
 
         //create jwt token
