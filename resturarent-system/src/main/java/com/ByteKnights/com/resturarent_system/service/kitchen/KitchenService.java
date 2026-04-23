@@ -16,4 +16,6 @@ public interface KitchenService {
     List<InventoryAlertDTO> getInventoryAlerts();
 
     List<KitchenOrderDTO> getOrdersByStatus(OrderStatus status);
+
+    List<InventoryAlertDTO> getAllInventoryItems();
 }
