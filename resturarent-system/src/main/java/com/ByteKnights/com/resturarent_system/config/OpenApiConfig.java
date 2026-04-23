@@ -1,6 +1,9 @@
 package com.ByteKnights.com.resturarent_system.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.Components;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
@@ -22,6 +25,17 @@ public class OpenApiConfig {
                                 .email("support@byteknights.local"))
                         .license(new License()
                                 .name("Internal Use")
-                                .url("https://example.com/license")));
+                                .url("https://example.com/license")))
+                // ===== JWT AUTHORIZE BUTTON (START) =====
+                .addSecurityItem(new SecurityRequirement().addList("Bearer Token"))
+                .components(new Components()
+                        .addSecuritySchemes("Bearer Token", new SecurityScheme()
+                                .name("Authorization")
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")
+                                .description("Paste your JWT token here (without 'Bearer ' prefix)")
+                        ));
+                // ===== JWT AUTHORIZE BUTTON (END) =====
     }
 }

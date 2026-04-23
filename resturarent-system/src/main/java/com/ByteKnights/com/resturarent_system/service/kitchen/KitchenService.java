@@ -13,9 +13,9 @@ public interface KitchenService {
 
     List<PeakHourDTO> getPeakHoursInLast7Days();
 
-    List<InventoryAlertDTO> getInventoryAlerts();
+    List<InventoryDetailsDTO> getInventoryAlerts();
 
     List<KitchenOrderDTO> getOrdersByStatus(OrderStatus status);
 
-    List<InventoryAlertDTO> getAllInventoryItems();
+    List<InventoryDetailsDTO> getAllInventoryItems();
 }
