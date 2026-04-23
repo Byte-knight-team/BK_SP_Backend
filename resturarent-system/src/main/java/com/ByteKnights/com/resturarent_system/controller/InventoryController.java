@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
+
 /**
  * Controller responsible for handling all HTTP requests related to Inventory
  * Management.
@@ -54,11 +58,16 @@ public class InventoryController {
      * @return 200 OK with a list of InventoryItemDTOs in the response body.
      */
     @GetMapping("/items")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'CHEF')")
     public ResponseEntity<List<InventoryItemDTO>> getAllItemsByBranch(
-            @RequestParam Long branchId) {
+            @RequestParam(required = false) Long branchId,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        Long targetBranchId = resolveTargetBranchId(branchId, principal);
+        Long userId = principal.getUser().getId();
 
         // Ask the service layer to do the heavy lifting
-        List<InventoryItemDTO> items = inventoryService.getAllItemsByBranch(branchId);
+        List<InventoryItemDTO> items = inventoryService.getAllItemsByBranch(targetBranchId, userId);
 
         // Wrap the result in a 200 OK HTTP Response and send it back to the frontend
         return ResponseEntity.ok(items);
@@ -77,13 +86,30 @@ public class InventoryController {
      * @return 200 OK with the populated InventorySummaryDTO.
      */
     @GetMapping("/summary")
-    public ResponseEntity<InventorySummaryDTO> getInventorySummary(@RequestParam Long branchId) {
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'CHEF')")
+    public ResponseEntity<InventorySummaryDTO> getInventorySummary(
+            @RequestParam(required = false) Long branchId,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        Long targetBranchId = resolveTargetBranchId(branchId, principal);
+        Long userId = principal.getUser().getId();
 
         // Ask the service layer to do all the heavy math and database fetching
-        InventorySummaryDTO summary = inventoryService.getInventorySummary(branchId);
+        InventorySummaryDTO summary = inventoryService.getInventorySummary(targetBranchId, userId);
 
         // Return the packaged data as a JSON response
         return ResponseEntity.ok(summary);
+    }
+
+    /**
+     * Helper method to resolve which branch ID to query.
+     * SUPER_ADMINs can query the requested branch. Everyone else gets null
+     * (forcing the service to look up their assigned branch).
+     */
+    private Long resolveTargetBranchId(Long requestedBranchId, JwtUserPrincipal principal) {
+        boolean isSuperAdmin = principal.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_SUPER_ADMIN"));
+        return isSuperAdmin ? requestedBranchId : null;
     }
 
 }

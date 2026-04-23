@@ -36,6 +36,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Public
                         .requestMatchers(
+                                "/api/v1/auth/**",
+                                "/api/v1/qr-sessions/**",
+                                "/api/v1/menu/customer",
+                                "/api/v1/auth/customer",
+                                "/api/tables",
+                                "/api/tables/**",
                                 "/api/auth/staff/login",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -71,6 +77,11 @@ public class SecurityConfig {
 
                         // Fallback for other admin endpoints
                         .requestMatchers("/api/admin/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
+
+                        // Inventory management
+                        // (Specific Role checks are handled by @PreAuthorize inside
+                        // InventoryController)
+                        .requestMatchers("/api/inventory/**").authenticated()
 
                         // Everything else
                         .anyRequest().authenticated())
