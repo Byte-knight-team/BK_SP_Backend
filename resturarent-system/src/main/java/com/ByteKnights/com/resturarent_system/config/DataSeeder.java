@@ -46,6 +46,18 @@ public class DataSeeder implements CommandLineRunner {
         Privilege viewReports = createPrivilege("VIEW_REPORTS");
         Privilege viewOrders = createPrivilege("VIEW_ORDERS");
         Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
+
+        Privilege  createQRCode= createPrivilege("createQRCode");
+        Privilege  revokeQRCode= createPrivilege("revokeQRCode");
+        Privilege  regenerateQRCode= createPrivilege("regenerateQRCode");
+        Privilege  createTable= createPrivilege("createTable");
+        Privilege  deleteTable= createPrivilege("deleteTable");
+        Privilege  updateTable= createPrivilege("updateTable");
+        //Privilege  createQRCode= createPrivilege("createQRCode");
+
+
+
+
         
         //Creating the roles
         Role superAdminRole = createRole("SUPER_ADMIN");
@@ -60,7 +72,8 @@ public class DataSeeder implements CommandLineRunner {
 
         Role adminRole = createRole("ADMIN");
         adminRole.setPermissions(new HashSet<>(Set.of(
-                createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch
+                createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, createQRCode, revokeQRCode, 
+                regenerateQRCode, createTable, deleteTable, updateTable
         )));
         roleRepository.save(adminRole);
 
