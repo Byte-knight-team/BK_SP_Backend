@@ -46,6 +46,10 @@ public class SecurityConfig {
                 // Authenticated auth flow
                 .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password").authenticated()
 
+                // Export / backup - SUPER_ADMIN only
+                .requestMatchers("/api/admin/exports", "/api/admin/exports/**").hasRole("SUPER_ADMIN")
+                .requestMatchers("/api/admin/backups", "/api/admin/backups/**").hasRole("SUPER_ADMIN")
+
                 // Branch management - SUPER_ADMIN only
                 .requestMatchers("/api/admin/branches", "/api/admin/branches/**").hasRole("SUPER_ADMIN")
 

@@ -47,12 +47,16 @@ public class DataSeeder implements CommandLineRunner {
         Privilege viewOrders = createPrivilege("VIEW_ORDERS");
         Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
 
+        // New phase 1 export / backup privileges
+        Privilege exportData = createPrivilege("EXPORT_DATA");
+        Privilege downloadBackup = createPrivilege("DOWNLOAD_BACKUP");
+
         Role superAdminRole = createRole("SUPER_ADMIN");
         superAdminRole.setPermissions(new HashSet<>(Set.of(
                 createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, manageSystemConfig,
                 manageOrders, manageMenu, manageReservations, updateOrderStatus, updateDeliveryStatus,
                 createOrders, viewBranch, viewCustomer, viewOwnOrders, viewOwnProfile, viewReports,
-                viewOrders, viewDelivery
+                viewOrders, viewDelivery, exportData, downloadBackup
         )));
         roleRepository.save(superAdminRole);
 
