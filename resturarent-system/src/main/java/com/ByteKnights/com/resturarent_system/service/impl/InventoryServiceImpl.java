@@ -9,6 +9,8 @@ import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
+import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.entity.Staff;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,6 +44,20 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryItemRepository inventoryItemRepository;
     private final ChefRequestRepository chefRequestRepository;
     private final BranchRepository branchRepository;
+    private final StaffRepository staffRepository; // Added StaffRepository
+
+    /**
+     * Helper method to securely resolve the branch ID.
+     */
+    private Long resolveBranchId(Long targetBranchId, Long userId) {
+        if (targetBranchId != null) {
+            return targetBranchId; // Super Admin provided a specific branch
+        }
+        // Everyone else: Look up their assigned branch from the database
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User is not assigned to any branch as staff"));
+        return staff.getBranch().getId();
+    }
 
     /**
      * 1.______Implementation of getAllItemsByBranch.
@@ -53,9 +69,11 @@ public class InventoryServiceImpl implements InventoryService {
      * 3. Collects the mapped DTOs into a List and returns it.
      */
     @Override
-    public List<InventoryItemDTO> getAllItemsByBranch(Long branchId) {
+    public List<InventoryItemDTO> getAllItemsByBranch(Long targetBranchId, Long userId) {
 
-        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);
+        Long finalBranchId = resolveBranchId(targetBranchId, userId);
+
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(finalBranchId);
 
         return items.stream()
                 .map(item -> toItemDTO(item))
@@ -66,14 +84,17 @@ public class InventoryServiceImpl implements InventoryService {
      * 2.______________ Implements the logic to calculate the inventory dashboard
      * summary.
      * 
-     * @param branchId The ID of the branch.
+     * @param targetBranchId The ID of the branch (if Super Admin).
+     * @param userId         The ID of the logged in user.
      * @return InventorySummaryDTO populated with real-time calculated metrics.
      */
     @Override
-    public InventorySummaryDTO getInventorySummary(Long branchId) {
+    public InventorySummaryDTO getInventorySummary(Long targetBranchId, Long userId) {
+
+        Long finalBranchId = resolveBranchId(targetBranchId, userId);
 
         // 1. Fetch all items from the database for this specific branch
-        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(finalBranchId);
 
         BigDecimal totalValue = BigDecimal.ZERO;
         int lowStockCount = 0;
@@ -104,7 +125,7 @@ public class InventoryServiceImpl implements InventoryService {
          * We don't want to show APPROVED or REJECTED requests on the dashboard.
          */
         List<ChefRequest> pendingRequests = chefRequestRepository.findByBranchIdAndStatus(
-                branchId,
+                finalBranchId,
                 com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus.PENDING);
 
         // Convert the raw database entities into clean DTOs for the frontend
