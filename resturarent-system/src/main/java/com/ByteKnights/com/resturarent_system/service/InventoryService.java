@@ -38,8 +38,10 @@ public interface InventoryService {
      * to the entity and persisting it to the database.
      * 
      * @param request        The DTO containing the new item details.
-     * @param targetBranchId The resolved ID of the branch where the item will be added.
+     * @param targetBranchId The resolved ID of the branch where the item will be
+     *                       added.
      * @return InventoryItemDTO The newly created item, formatted for the frontend.
      */
-    InventoryItemDTO addInventoryItem(CreateInventoryItemRequest request, Long targetBranchId);
+    InventoryItemDTO addInventoryItem(CreateInventoryItemRequest request, Long targetBranchId, Long userId);
+
 }

@@ -163,10 +163,13 @@ public class InventoryServiceImpl implements InventoryService {
      */
     @Override
     @Transactional
-    public InventoryItemDTO addInventoryItem(CreateInventoryItemRequest request, Long targetBranchId) {
+    public InventoryItemDTO addInventoryItem(CreateInventoryItemRequest request, Long targetBranchId, Long userId) {
+        // 1. Resolve the actual branch ID (staff lookup if targetBranchId is null)
+        Long finalBranchId = resolveBranchId(targetBranchId, userId);
+
         // 1. Verify the branch exists
-        Branch branch = branchRepository.findById(targetBranchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + targetBranchId));
+        Branch branch = branchRepository.findById(finalBranchId)
+                .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + finalBranchId));
 
         // 2. Build the entity from the request data
         InventoryItem item = InventoryItem.builder()
