@@ -6,4 +6,5 @@ import lombok.Data;
 public class CustomerOtpVerifyRequest {
     private String phone;
     private String code;
+    private Long sessionId;
 }

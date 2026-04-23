@@ -50,7 +50,7 @@ public class CustomerAuthController {
 
     @PostMapping("/verify-otp")
     public ResponseEntity<ApiResponse<CustomerLoginResponseData>> verifyOtp(@RequestBody CustomerOtpVerifyRequest request) {
-        CustomerLoginResponseData responseData = customerAuthService.verifyOtp(request.getPhone(), request.getCode());
+        CustomerLoginResponseData responseData = customerAuthService.verifyOtp(request.getPhone(), request.getCode(), request.getSessionId());
         return ResponseEntity.ok(ApiResponse.success("Phone verified successfully.", responseData));
     }
 }
