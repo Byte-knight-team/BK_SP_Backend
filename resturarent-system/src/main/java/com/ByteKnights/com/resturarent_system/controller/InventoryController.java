@@ -86,7 +86,7 @@ public class InventoryController {
      * @return 200 OK with the populated InventorySummaryDTO.
      */
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'CHEF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
     public ResponseEntity<InventorySummaryDTO> getInventorySummary(
             @RequestParam(required = false) Long branchId,
             @AuthenticationPrincipal JwtUserPrincipal principal) {
