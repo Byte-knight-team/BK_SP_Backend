@@ -9,5 +9,7 @@ public interface QrCodeRepository extends JpaRepository<QrCode, Long> {
 
     Optional<QrCode> findFirstByBranchIdAndTableIdAndActiveTrue(Long branchId, Long tableId);
 
+    Optional<QrCode> findByIdAndActiveTrue(Long id);
+
     boolean existsByBranchIdAndTableIdAndActiveTrue(Long branchId, Long tableId);
 }
