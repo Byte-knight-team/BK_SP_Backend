@@ -30,7 +30,6 @@ public class ChefRequestDTO {
 
     private Long id;
     private String chefName;
-    private String role;
     private String time;
     private String item;
     private String quantity;

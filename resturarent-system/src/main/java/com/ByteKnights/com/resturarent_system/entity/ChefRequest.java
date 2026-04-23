@@ -38,10 +38,6 @@ public class ChefRequest {
     @Column(name = "chef_name", nullable = false, length = 150)
     private String chefName;
 
-    // Role/title of the chef (e.g., "EXECUTIVE CHEF", "SOUS CHEF")
-    @Column(name = "chef_role", length = 50)
-    private String chefRole;
-
     // Name of the inventory item being requested
     @Column(name = "item_name", nullable = false, length = 150)
     private String itemName;
