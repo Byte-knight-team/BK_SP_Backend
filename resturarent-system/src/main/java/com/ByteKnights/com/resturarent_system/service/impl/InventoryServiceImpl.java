@@ -234,7 +234,6 @@ public class InventoryServiceImpl implements InventoryService {
         return ChefRequestDTO.builder()
                 .id(req.getId())
                 .chefName(req.getChefName())
-                .role(req.getChefRole())
                 .time(formattedTime)
                 .item(req.getItemName())
                 .quantity(formattedQuantity)
