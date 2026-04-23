@@ -10,7 +10,7 @@ public interface CustomerAuthService {
 
     CustomerLoginResponseData login(CustomerLoginRequest request);
 
-    CustomerLoginResponseData verifyOtp(String phone, String code);
+    CustomerLoginResponseData verifyOtp(String phone, String code, Long sessionId);
 
     public void requestOtp(String phone);
 }

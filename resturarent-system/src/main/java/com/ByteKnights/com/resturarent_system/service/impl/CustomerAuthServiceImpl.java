@@ -13,7 +13,8 @@ import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.CustomerJwtService;
 import com.ByteKnights.com.resturarent_system.service.CustomerAuthService;
-import com.ByteKnights.com.resturarent_system.service.impl.SmsService;
+import com.ByteKnights.com.resturarent_system.entity.QrSession;
+import com.ByteKnights.com.resturarent_system.repository.QrSessionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -38,6 +39,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final CustomerRepository customerRepository;
+    private final QrSessionRepository qrSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final CustomerJwtService customerJwtService;
     private final SmsService smsService;
@@ -46,12 +48,14 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     public CustomerAuthServiceImpl(UserRepository userRepository,
                                    RoleRepository roleRepository,
                                    CustomerRepository customerRepository,
+                                   QrSessionRepository qrSessionRepository,
                                    PasswordEncoder passwordEncoder,
                                    CustomerJwtService customerJwtService,
                                 SmsService smsService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.customerRepository = customerRepository;
+        this.qrSessionRepository = qrSessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.customerJwtService = customerJwtService;
         this.smsService = smsService;
@@ -203,7 +207,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
     @Override
     @Transactional
-    public CustomerLoginResponseData verifyOtp(String phone, String code) {
+    public CustomerLoginResponseData verifyOtp(String phone, String code, Long sessionId) {
         if (phone == null || code == null) {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone and code are required");
         }
@@ -227,6 +231,14 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customer.setOtpCode(null);
         customer.setOtpExpiry(null);
         customerRepository.save(customer);
+
+        if (sessionId != null) {
+        QrSession qrSession = qrSessionRepository.findById(sessionId).orElse(null);
+        if (qrSession != null && qrSession.getCustomer() == null) {
+            qrSession.setCustomer(customer);
+            qrSessionRepository.save(qrSession);
+        }
+    }
 
         // 3. Issue JWT Token so they can place the order!
         String normalizedRole = normalizeRole(user.getRole().getName());
