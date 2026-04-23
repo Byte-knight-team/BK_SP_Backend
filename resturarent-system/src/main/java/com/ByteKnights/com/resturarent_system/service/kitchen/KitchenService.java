@@ -1,7 +1,9 @@
 package com.ByteKnights.com.resturarent_system.service.kitchen;
 
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -18,4 +20,6 @@ public interface KitchenService {
     List<KitchenOrderDTO> getOrdersByStatus(OrderStatus status);
 
     List<InventoryDetailsDTO> getAllInventoryItems();
+
+    void createRequest(@Valid CreateChefRequestDTO requestDTO, String userEmail);
 }
