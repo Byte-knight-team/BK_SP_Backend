@@ -1,12 +1,40 @@
 package com.ByteKnights.com.resturarent_system.config;
 
-import com.ByteKnights.com.resturarent_system.entity.*;
-import com.ByteKnights.com.resturarent_system.repository.*;
+import com.ByteKnights.com.resturarent_system.entity.Branch;
+import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
+import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
+import com.ByteKnights.com.resturarent_system.entity.Customer;
+import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
+import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
+import com.ByteKnights.com.resturarent_system.entity.MenuItem;
+import com.ByteKnights.com.resturarent_system.entity.MenuItemStatus;
+import com.ByteKnights.com.resturarent_system.entity.Order;
+import com.ByteKnights.com.resturarent_system.entity.OrderItem;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.entity.OrderType;
+import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
+import com.ByteKnights.com.resturarent_system.entity.Privilege;
+import com.ByteKnights.com.resturarent_system.entity.Role;
+import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
+import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
+import com.ByteKnights.com.resturarent_system.repository.CustomerRepository;
+import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
+import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
+import com.ByteKnights.com.resturarent_system.repository.PrivilegeRepository;
+import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Set;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
@@ -21,6 +49,7 @@ public class DataSeeder implements CommandLineRunner {
         private final OrderItemRepository orderItemRepository;
         private final InventoryItemRepository inventoryItemRepository;
         private final ChefRequestRepository chefRequestRepository;
+        private final PrivilegeRepository privilegeRepository;
 
         public DataSeeder(BranchRepository branchRepository,
                         CustomerRepository customerRepository,
@@ -31,7 +60,8 @@ public class DataSeeder implements CommandLineRunner {
                         MenuItemRepository menuItemRepository,
                         OrderItemRepository orderItemRepository,
                         InventoryItemRepository inventoryItemRepository,
-                        ChefRequestRepository chefRequestRepository) {
+                        ChefRequestRepository chefRequestRepository,
+                        PrivilegeRepository privilegeRepository) {
                 this.branchRepository = branchRepository;
                 this.customerRepository = customerRepository;
                 this.orderRepository = orderRepository;
@@ -42,6 +72,7 @@ public class DataSeeder implements CommandLineRunner {
                 this.orderItemRepository = orderItemRepository;
                 this.inventoryItemRepository = inventoryItemRepository;
                 this.chefRequestRepository = chefRequestRepository;
+                this.privilegeRepository = privilegeRepository;
         }
 
         @Override
@@ -52,14 +83,68 @@ public class DataSeeder implements CommandLineRunner {
 
                 System.out.println("Seeding data...");
 
-                // Create Role
-                Role customerRole = roleRepository.findByName("ROLE_CUSTOMER").orElseGet(() -> {
-                        Role role = Role.builder()
-                                        .name("ROLE_CUSTOMER")
-                                        .description("Customer Role")
-                                        .build();
-                        return roleRepository.save(role);
-                });
+                // Creating the privileges
+                Privilege createStaff = createPrivilege("CREATE_STAFF");
+                Privilege assignPrivileges = createPrivilege("ASSIGN_PRIVILEGES");
+                Privilege updateConfig = createPrivilege("UPDATE_CONFIG");
+                Privilege viewAudit = createPrivilege("VIEW_AUDIT_LOG");
+                Privilege manageBranch = createPrivilege("MANAGE_BRANCH");
+                Privilege manageSystemConfig = createPrivilege("MANAGE_SYSTEM_CONFIG");
+                Privilege manageOrders = createPrivilege("MANAGE_ORDERS");
+                Privilege manageMenu = createPrivilege("MANAGE_MENU");
+                Privilege manageReservations = createPrivilege("MANAGE_RESERVATIONS");
+                Privilege updateOrderStatus = createPrivilege("UPDATE_ORDER_STATUS");
+                Privilege updateDeliveryStatus = createPrivilege("UPDATE_DELIVERY_STATUS");
+                Privilege createOrders = createPrivilege("CREATE_ORDERS");
+                Privilege viewBranch = createPrivilege("VIEW_BRANCH");
+                Privilege viewCustomer = createPrivilege("VIEW_CUSTOMER");
+                Privilege viewOwnOrders = createPrivilege("VIEW_OWN_ORDERS");
+                Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
+                Privilege viewReports = createPrivilege("VIEW_REPORTS");
+                Privilege viewOrders = createPrivilege("VIEW_ORDERS");
+                Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
+
+                // Creating the roles
+                Role superAdminRole = createRole("SUPER_ADMIN");
+                // Adding the privileges to the super admin role
+                superAdminRole.setPermissions(new HashSet<>(Set.of(
+                                createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch,
+                                manageSystemConfig, manageOrders, manageMenu, manageReservations,
+                                updateOrderStatus, updateDeliveryStatus, createOrders, viewBranch,
+                                viewCustomer, viewOwnOrders, viewOwnProfile, viewReports, viewOrders,
+                                viewDelivery)));
+                roleRepository.save(superAdminRole);
+
+                Role adminRole = createRole("ADMIN");
+                adminRole.setPermissions(new HashSet<>(Set.of(
+                                createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch)));
+                roleRepository.save(adminRole);
+
+                Role managerRole = createRole("MANAGER");
+                managerRole.setPermissions(new HashSet<>(Set.of(
+                                viewBranch, manageOrders, viewReports, viewCustomer)));
+                roleRepository.save(managerRole);
+
+                Role chefRole = createRole("CHEF");
+                // Adding the privileges to the chef role
+                chefRole.setPermissions(new HashSet<>(Set.of(
+                                manageMenu, updateOrderStatus, viewOrders)));
+                roleRepository.save(chefRole);
+
+                Role receptionistRole = createRole("RECEPTIONIST");
+                receptionistRole.setPermissions(new HashSet<>(Set.of(
+                                createOrders, manageReservations, viewCustomer)));
+                roleRepository.save(receptionistRole);
+
+                Role deliveryRole = createRole("DELIVERY");
+                deliveryRole.setPermissions(new HashSet<>(Set.of(
+                                updateDeliveryStatus, viewDelivery)));
+                roleRepository.save(deliveryRole);
+
+                Role customerRole = createRole("CUSTOMER");
+                customerRole.setPermissions(new HashSet<>(Set.of(
+                                viewOwnOrders, viewOwnProfile)));
+                roleRepository.save(customerRole);
 
                 // Fetch or Create Branch
                 Branch branch;
@@ -80,7 +165,7 @@ public class DataSeeder implements CommandLineRunner {
                 if (shouldSeedOrders) {
                         // Create User for Customer
                         User user = User.builder()
-                                        .username("john_doe_2") // Avoid duplicate key from legacy DB
+                                        .username("john_doe_2")// Avoid duplicate key from legacy DB
                                         .email("john2@example.com")
                                         .password("password123")
                                         .phone("0771234568")
@@ -328,6 +413,20 @@ public class DataSeeder implements CommandLineRunner {
                 } else {
                         System.out.println("Inventory items and Chef Requests already exist, skipping...");
                 }
-
         }
+
+        private Privilege createPrivilege(String name) {
+                return privilegeRepository.findByName(name).orElseGet(() -> {
+                        Privilege privilege = Privilege.builder().name(name).build();
+                        return privilegeRepository.save(privilege);
+                });
+        }
+
+        private Role createRole(String name) {
+                return roleRepository.findByName(name).orElseGet(() -> {
+                        Role role = Role.builder().name(name).build();
+                        return roleRepository.save(role);
+                });
+        }
+
 }
