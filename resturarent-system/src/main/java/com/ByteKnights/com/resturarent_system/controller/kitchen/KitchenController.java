@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,7 @@ public class KitchenController {
 
     //get kitchen dashboard stat data
     @GetMapping("/stats")
+    @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getKitchenDashboardStats() {
         KitchenDashboardStatsDTO stats = kitchenService.getKitchenDashboardStats();
 
@@ -33,6 +35,7 @@ public class KitchenController {
 
     //get most popular meals data
     @GetMapping("/popular-meals")
+    @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getMostPopularMeals() {
         List<PopularMealDTO> popularMeals = kitchenService.getMostPopularMealsInLast7Days();
         return new ResponseEntity<>(
@@ -43,6 +46,7 @@ public class KitchenController {
 
     //get peak hours data
     @GetMapping("/peak-hours")
+    @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getPeakHours() {
         List<PeakHourDTO> peakHours = kitchenService.getPeakHoursInLast7Days();
         return new ResponseEntity<>(
@@ -53,6 +57,7 @@ public class KitchenController {
 
     //get inventory alerts data
     @GetMapping("/inventory-alerts")
+    @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getInventoryAlerts() {
         List<InventoryAlertDTO> alerts = kitchenService.getInventoryAlerts();
         return new ResponseEntity<>(
@@ -63,6 +68,7 @@ public class KitchenController {
 
     //get orders by status
     @GetMapping("/orders")
+    @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getOrdersByStatus(@RequestParam OrderStatus status) {
         List<KitchenOrderDTO> orders = kitchenService.getOrdersByStatus(status);
         return new ResponseEntity<>(
@@ -71,7 +77,16 @@ public class KitchenController {
         );
     }
 
-
+    //get all inventory details
+    @GetMapping("/inventory/all")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> getAllInventory() {
+        List<InventoryAlertDTO> items = kitchenService.getAllInventoryItems();
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", items),
+                HttpStatus.OK
+        );
+    }
 }
 
 

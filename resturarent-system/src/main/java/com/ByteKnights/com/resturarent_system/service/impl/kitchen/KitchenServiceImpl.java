@@ -10,6 +10,7 @@ import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
@@ -26,8 +27,9 @@ public class KitchenServiceImpl implements KitchenService {
     final OrderRepository orderRepository;
     final OrderItemRepository orderItemRepository;
     final InventoryItemRepository inventoryItemRepository;
+    private final ModelMapper modelMapper;
 
-    //kitchen dashboard stat
+    // kitchen dashboard stat
     @Override
     public KitchenDashboardStatsDTO getKitchenDashboardStats() {
 
@@ -44,14 +46,14 @@ public class KitchenServiceImpl implements KitchenService {
         );
     }
 
-    //most popular meals
+    // most popular meals
     @Override
     public List<PopularMealDTO> getMostPopularMealsInLast7Days() {
         List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7Days();
         Long totalSold = orderItemRepository.getTotalItemsSoldInLast7Days();
 
-        //Avoid Division by Zero
-        //Return Empty List if no meals sold in last 7 days
+        // avoid division by zero
+        // return empty list if no meals sold in last 7 days
         if (totalSold == null || totalSold == 0) {
             return new ArrayList<>();
         }
@@ -59,7 +61,7 @@ public class KitchenServiceImpl implements KitchenService {
         List<PopularMealDTO> popularMealDtoList = new ArrayList<>();
 
         for (Object[] row : topMeals) {
-            // Data Extraction
+            // data extraction
             // row[0] = item_name (String)
             // row[1] = mealCount (Number)
             String mealName = (String) row[0];
@@ -82,10 +84,10 @@ public class KitchenServiceImpl implements KitchenService {
         return popularMealDtoList;
     }
 
-    //Peak hours
+    // peak hours
     @Override
     public List<PeakHourDTO> getPeakHoursInLast7Days() {
-        // 1. Initialize the map with zero counts for all time slots
+        // initialize the map with zero counts for all time slots
         Map<String, Integer> peakHourMap = new LinkedHashMap<>();
         peakHourMap.put("8AM-10AM", 0);
         peakHourMap.put("10AM-12PM", 0);
@@ -95,10 +97,10 @@ public class KitchenServiceImpl implements KitchenService {
         peakHourMap.put("6PM-8PM", 0);
         peakHourMap.put("8PM-10PM", 0);
 
-        // 2. Fetch raw data from the database (Hour, Count)
+        // fetch raw data from the database (Hour, Count)
         List<Object[]> rawData = orderRepository.findOrderCountByHour();
 
-        // 3. Map the count from the database to the corresponding time bucket (slot)
+        // map the count from the database to the corresponding time bucket (slot)
         for (Object[] row : rawData) {
             int hour = ((Number) row[0]).intValue();
             int count = ((Number) row[1]).intValue();
@@ -117,14 +119,14 @@ public class KitchenServiceImpl implements KitchenService {
             }
         }
 
-        // 4. Convert the Map to a DTO list for the response
+        // convert the Map to a DTO list for the response
         List<PeakHourDTO> dtos = new ArrayList<>();
         peakHourMap.forEach((time, mealsCount) -> dtos.add(new PeakHourDTO(time, mealsCount)));
 
         return dtos;
     }
 
-    //inventory alerts
+    // inventory alerts
     @Override
     public List<InventoryAlertDTO> getInventoryAlerts() {
         List<InventoryItem> items = inventoryItemRepository.findAll(); //no need to write native query
@@ -182,4 +184,17 @@ public class KitchenServiceImpl implements KitchenService {
         return kitchenOrderDTOS;
     }
 
+    //get all inventory details
+    @Override
+    public List<InventoryAlertDTO> getAllInventoryItems() {
+        List<InventoryItem> items = inventoryItemRepository.findAll();
+        // can be used same InventoryAlertDTO for this
+        List<InventoryAlertDTO> dtoList = new ArrayList<>();
+
+        for (InventoryItem item : items) {
+            InventoryAlertDTO InventoryDetailsDTO = modelMapper.map(item, InventoryAlertDTO.class);
+            dtoList.add(InventoryDetailsDTO);
+        }
+        return dtoList;
+    }
 }

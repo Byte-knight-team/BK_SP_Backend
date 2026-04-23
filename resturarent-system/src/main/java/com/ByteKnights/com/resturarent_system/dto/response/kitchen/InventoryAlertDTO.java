@@ -10,8 +10,8 @@ import lombok.NoArgsConstructor;
 public class InventoryAlertDTO {
     private String itemName;
     private double percentage;
-    private double maxStock;   // Frontend එකේ නමටම ගැලපෙන්න මම මේක initialCount කියලා දැම්මා
+    private double maxStock; //initial count
     private double availableCount;
     private String unit;
-    private String warningLevel;   // LOW or CRITICAL
+    private String warningLevel; // LOW or CRITICAL
 }
