@@ -53,7 +53,6 @@ public class DataSeeder implements CommandLineRunner {
         Privilege  createTable= createPrivilege("createTable");
         Privilege  deleteTable= createPrivilege("deleteTable");
         Privilege  updateTable= createPrivilege("updateTable");
-        //Privilege  createQRCode= createPrivilege("createQRCode");
 
 
 
