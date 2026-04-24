@@ -121,6 +121,18 @@ public class QrCodeServiceImpl implements QrCodeService {
         return mapToResponseWithSecureQr(saved);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] downloadQrCodeImage(Long qrCodeId) {
+        QrCode qrCode = findQrCodeOrThrow(qrCodeId);
+        if (!Boolean.TRUE.equals(qrCode.getActive())) {
+            throw new InvalidOperationException("Cannot download image for a revoked QR code: " + qrCodeId);
+        }
+
+        SecureQrPayload payload = buildSecureQrPayload(qrCode);
+        return payload.imageBytes();
+    }
+
     private RestaurantTable findTableForUpdateOrThrow(Long tableId) {
         return tableRepository.findByIdForUpdate(tableId)
                 .orElseThrow(() -> new ResourceNotFoundException("Table not found with id: " + tableId));
@@ -150,17 +162,24 @@ public class QrCodeServiceImpl implements QrCodeService {
     }
 
     private QrCodeResponse mapToResponseWithSecureQr(QrCode qrCode) {
+        SecureQrPayload payload = buildSecureQrPayload(qrCode);
+        String qrImageBase64 = Base64.getEncoder().encodeToString(payload.imageBytes());
+
+        return mapToResponse(qrCode).toBuilder()
+                .qrToken(payload.token())
+                .qrUrl(payload.url())
+                .qrImageBase64(qrImageBase64)
+                .qrTokenExpiresAt(payload.expiresAt())
+                .build();
+    }
+
+    private SecureQrPayload buildSecureQrPayload(QrCode qrCode) {
         Instant expiresAt = Instant.now().plusMillis(qrTokenExpirationMs);
         String qrToken = generateQrToken(qrCode, expiresAt);
         String qrUrl = buildQrUrl(qrToken);
-        String qrImageBase64 = Base64.getEncoder().encodeToString(QrCodeGenerator.generateQRCodeImage(qrUrl));
-
-        return mapToResponse(qrCode).toBuilder()
-                .qrToken(qrToken)
-                .qrUrl(qrUrl)
-                .qrImageBase64(qrImageBase64)
-                .qrTokenExpiresAt(DateTimeFormatter.ISO_INSTANT.format(expiresAt.atOffset(ZoneOffset.UTC)))
-                .build();
+        byte[] qrImageBytes = QrCodeGenerator.generateQRCodeImage(qrUrl);
+        String expiresAtIso = DateTimeFormatter.ISO_INSTANT.format(expiresAt.atOffset(ZoneOffset.UTC));
+        return new SecureQrPayload(qrToken, qrUrl, qrImageBytes, expiresAtIso);
     }
 
     private String generateQrToken(QrCode qrCode, Instant expiresAt) {
@@ -197,5 +216,8 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .createdAt(qrCode.getCreatedAt())
                 .updatedAt(qrCode.getUpdatedAt())
                 .build();
+    }
+
+    private record SecureQrPayload(String token, String url, byte[] imageBytes, String expiresAt) {
     }
 }

@@ -9,4 +9,6 @@ public interface QrCodeService {
     QrCodeResponse revokeQrCode(Long qrCodeId, String revokedReason);
 
     QrCodeResponse regenerateQrCode(Long qrCodeId, Long actorUserId, String revokeReason);
+
+    byte[] downloadQrCodeImage(Long qrCodeId);
 }
