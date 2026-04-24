@@ -52,7 +52,7 @@ public class Order {
 
     @Column(name = "contact_phone", length = 20)
     private String contactPhone;
-    
+
     @Column(name = "contact_email", length = 150)
     private String contactEmail;
 
@@ -121,6 +121,12 @@ public class Order {
     @Column(name = "kitchen_notes")
     private String kitchenNotes;
 
+    @Column(name = "hold_reason")
+    private String holdReason;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_chef_id")
     private Staff assignedChef;
@@ -141,6 +147,9 @@ public class Order {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    // Tracks the exact timestamp when the order's status was last changed.
+    // This is primarily used for accurate sorting in the kitchen dashboard
+    // (FIFO/LIFO queues)
     @Column(name = "status_updated_at")
     private LocalDateTime statusUpdatedAt;
 
@@ -157,8 +166,9 @@ public class Order {
     protected void onCreate() {
         if (createdAt == null) createdAt = LocalDateTime.now();
         if (updatedAt == null) updatedAt = LocalDateTime.now();
+        // Automatically set the timestamp when the order is first saved to the database
         if (statusUpdatedAt == null) statusUpdatedAt = LocalDateTime.now();
-        
+
         // Safety checks for older code that might not set these
         if (totalAmount == null) totalAmount = BigDecimal.ZERO;
         if (discountAmount == null) discountAmount = BigDecimal.ZERO;
@@ -167,8 +177,8 @@ public class Order {
         if (serviceCharge == null) serviceCharge = BigDecimal.ZERO;
         if (rewardPointsEarned == null) rewardPointsEarned = 0;
         if (rewardPointsRedeemed == null) rewardPointsRedeemed = 0;
-        
-        recalculateTotal(); 
+
+        recalculateTotal();
     }
 
     @PreUpdate
@@ -176,6 +186,7 @@ public class Order {
         updatedAt = LocalDateTime.now();
     }
 
+    // Method to update timestamps automatically when a status change occurs
     public void updateStatus(OrderStatus newStatus) {
         this.status = newStatus;
         this.statusUpdatedAt = LocalDateTime.now();
