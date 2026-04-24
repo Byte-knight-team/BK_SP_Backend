@@ -28,12 +28,11 @@ public class QrCodeController {
     @PostMapping("/tables/{tableId}/qr-codes")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<QrCodeResponse> createQrCode(
-            @PathVariable Long branchId,
             @PathVariable Long tableId,
             Authentication authentication
     ) {
         Long actorUserId = extractActorUserId(authentication);
-        QrCodeResponse response = qrCodeService.createQrCode(branchId, tableId, actorUserId);
+        QrCodeResponse response = qrCodeService.createQrCode(tableId, actorUserId);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
