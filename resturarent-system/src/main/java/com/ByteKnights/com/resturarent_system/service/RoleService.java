@@ -104,7 +104,7 @@ public class RoleService {
         return savedRole;
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
     public Set<String> getPermissionsOfRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
@@ -145,7 +145,7 @@ public class RoleService {
         return savedRole;
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public List<RoleSummaryResponse> getAllRoleSummaries() {
         List<Role> roles = roleRepository.findAll();
 
@@ -154,7 +154,7 @@ public class RoleService {
                 .toList();
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public RoleSummaryResponse getRoleSummaryById(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
