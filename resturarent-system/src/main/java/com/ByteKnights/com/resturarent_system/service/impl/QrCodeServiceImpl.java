@@ -1,14 +1,12 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.admin.QrCodeResponse;
-import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.QrCode;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
 import com.ByteKnights.com.resturarent_system.exception.InvalidOperationException;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
-import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
@@ -24,25 +22,23 @@ import java.time.LocalDateTime;
 public class QrCodeServiceImpl implements QrCodeService {
 
     private final QrCodeRepository qrCodeRepository;
-    private final BranchRepository branchRepository;
     private final RestaurantTableRepository tableRepository;
     private final StaffRepository staffRepository;
 
     @Override
     @Transactional
-    public QrCodeResponse createQrCode(Long branchId, Long tableId, Long actorUserId) {
-        Branch branch = findBranchOrThrow(branchId);
+    public QrCodeResponse createQrCode(Long tableId, Long actorUserId) {
         RestaurantTable table = findTableForUpdateOrThrow(tableId);
-        validateTableBelongsToBranch(table, branchId);
+        validateTableHasBranch(table);
         Staff actorStaff = findStaffByUserIdOrThrow(actorUserId);
 
-        if (qrCodeRepository.existsByBranchIdAndTableIdAndActiveTrue(branchId, tableId)) {
+        if (qrCodeRepository.existsByTableIdAndActiveTrue(tableId)) {
             throw new DuplicateResourceException(
-                    "Active QR code already exists for branch " + branchId + " table " + tableId);
+                    "Active QR code already exists for table " + tableId);
         }
 
         QrCode qrCode = QrCode.builder()
-                .branch(branch)
+                .branch(table.getBranch())
                 .table(table)
                 .active(true)
                 .lastGeneratedAt(LocalDateTime.now())
@@ -76,18 +72,17 @@ public class QrCodeServiceImpl implements QrCodeService {
         QrCode existing = findQrCodeOrThrow(qrCodeId);
         Staff actorStaff = findStaffByUserIdOrThrow(actorUserId);
         RestaurantTable lockedTable = findTableForUpdateOrThrow(existing.getTable().getId());
+        validateTableHasBranch(lockedTable);
 
         if (!Boolean.TRUE.equals(existing.getActive())) {
             throw new InvalidOperationException("Cannot regenerate a revoked QR code: " + qrCodeId);
         }
 
-        qrCodeRepository.findFirstByBranchIdAndTableIdAndActiveTrue(
-                        existing.getBranch().getId(), existing.getTable().getId())
+        qrCodeRepository.findFirstByTableIdAndActiveTrue(existing.getTable().getId())
                 .ifPresent(activeQr -> {
                     if (!activeQr.getId().equals(existing.getId())) {
                         throw new DuplicateResourceException(
-                                "Another active QR code exists for branch " + existing.getBranch().getId()
-                                        + " table " + existing.getTable().getId());
+                                "Another active QR code exists for table " + existing.getTable().getId());
                     }
                 });
 
@@ -108,16 +103,6 @@ public class QrCodeServiceImpl implements QrCodeService {
         return mapToResponse(saved);
     }
 
-    private Branch findBranchOrThrow(Long branchId) {
-        return branchRepository.findById(branchId)
-                .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + branchId));
-    }
-
-    private RestaurantTable findTableOrThrow(Long tableId) {
-        return tableRepository.findById(tableId)
-                .orElseThrow(() -> new ResourceNotFoundException("Table not found with id: " + tableId));
-    }
-
     private RestaurantTable findTableForUpdateOrThrow(Long tableId) {
         return tableRepository.findByIdForUpdate(tableId)
                 .orElseThrow(() -> new ResourceNotFoundException("Table not found with id: " + tableId));
@@ -133,11 +118,9 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .orElseThrow(() -> new ResourceNotFoundException("QR code not found with id: " + qrCodeId));
     }
 
-    private void validateTableBelongsToBranch(RestaurantTable table, Long branchId) {
-        if (table.getBranch() == null || table.getBranch().getId() == null
-                || !table.getBranch().getId().equals(branchId)) {
-            throw new InvalidOperationException(
-                    "Table " + table.getId() + " does not belong to branch " + branchId);
+    private void validateTableHasBranch(RestaurantTable table) {
+        if (table.getBranch() == null || table.getBranch().getId() == null) {
+            throw new InvalidOperationException("Table " + table.getId() + " is not assigned to a branch");
         }
     }
 

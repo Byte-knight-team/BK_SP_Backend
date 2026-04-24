@@ -4,7 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.admin.QrCodeResponse;
 
 public interface QrCodeService {
 
-    QrCodeResponse createQrCode(Long branchId, Long tableId, Long actorUserId);
+    QrCodeResponse createQrCode(Long tableId, Long actorUserId);
 
     QrCodeResponse revokeQrCode(Long qrCodeId, String revokedReason);
 
