@@ -12,6 +12,7 @@ import com.ByteKnights.com.resturarent_system.service.MenuService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,6 +31,7 @@ public class MenuController {
     }
 
     @GetMapping("/pending-chef-items")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ResponseEntity<List<MenuItemResponse>> getPendingChefMenuItems() {
         List<MenuItemResponse> menuItems = menuService.getPendingChefMenuItems();
         return ResponseEntity.ok(menuItems);
@@ -42,6 +44,7 @@ public class MenuController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('CHEF','ADMIN','SUPER_ADMIN')")
     public ResponseEntity<MenuItemResponse> createMenuItem(@Valid @RequestBody CreateMenuItemRequest request) {
         MenuItemResponse created = menuService.createMenuItem(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
@@ -56,12 +59,14 @@ public class MenuController {
     }
 
     @PatchMapping("/{id}/approve")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ResponseEntity<MenuItemActionResponse> approveMenuItem(@PathVariable Long id, @Valid @RequestBody ApproveMenuItemRequest request) {
         MenuItemActionResponse response = menuService.approveMenuItem(id, request);
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{id}/reject")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ResponseEntity<MenuItemActionResponse> rejectMenuItem(@PathVariable Long id, @Valid @RequestBody RejectMenuItemRequest request) {
         MenuItemActionResponse response = menuService.rejectMenuItem(id, request);
         return ResponseEntity.ok(response);
