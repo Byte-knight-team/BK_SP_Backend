@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
@@ -109,6 +110,21 @@ public class KitchenController {
                 HttpStatus.CREATED
         );
     }
+
+    //update current item count in the inventory
+    @PutMapping("/inventory/update")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> updateInventoryStock(
+            @Valid @RequestBody UpdateStockDTO updateDTO) {
+
+        kitchenService.updateInventoryStock(updateDTO);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Stock updated successfully!", null),
+                HttpStatus.OK
+        );
+    }
+
 
 }
 

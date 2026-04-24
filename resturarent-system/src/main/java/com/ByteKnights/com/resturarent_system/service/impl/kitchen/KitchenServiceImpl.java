@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
@@ -8,6 +9,7 @@ import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -241,6 +243,20 @@ public class KitchenServiceImpl implements KitchenService {
                 .build();
 
         chefRequestRepository.save(chefRequest);
+    }
+
+    //update item count in the inventory
+    @Override
+    @Transactional // Important when updating the database!
+    public void updateInventoryStock(UpdateStockDTO updateDTO) {
+
+        // find the inventory item by its name
+        InventoryItem item = inventoryItemRepository.findByName(updateDTO.getItemName())
+                .orElseThrow(() -> new RuntimeException("Inventory item not found: " + updateDTO.getItemName()));
+        // update the quantity
+        item.setQuantity(updateDTO.getNewQuantity());
+        // 3. save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
+        inventoryItemRepository.save(item);
     }
 
 
