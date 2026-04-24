@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 public class QrCodeResponse {
 
     private Long id;
@@ -22,6 +22,10 @@ public class QrCodeResponse {
     private LocalDateTime lastGeneratedAt;
     private LocalDateTime revokedAt;
     private String revokedReason;
+    private String qrToken;
+    private String qrUrl;
+    private String qrImageBase64;
+    private String qrTokenExpiresAt;
     private Long createdByUserId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
