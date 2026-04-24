@@ -7,17 +7,38 @@ import com.ByteKnights.com.resturarent_system.dto.response.admin.TableResponse;
 
 import java.util.List;
 
+/**
+ * Contract for table management operations.
+ */
 public interface RestaurantTableService {
 
+    /**
+     * Creates a table under a branch.
+     */
     TableResponse createTable(CreateTableRequest request);
 
+    /**
+     * Returns table details by id.
+     */
     TableResponse getTableById(Long id);
 
+    /**
+     * Returns all tables.
+     */
     List<TableResponse> getAllTables();
 
+    /**
+     * Updates table fields.
+     */
     TableResponse updateTable(Long id, UpdateTableRequest request);
 
+    /**
+     * Updates only table status.
+     */
     TableResponse updateTableStatus(Long id, UpdateTableStatusRequest request);
 
+    /**
+     * Deletes a table.
+     */
     void deleteTable(Long id);
 }

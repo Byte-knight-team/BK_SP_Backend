@@ -17,29 +17,48 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/tables")
 @RequiredArgsConstructor
+/**
+ * Exposes REST endpoints for managing restaurant tables.
+ */
 public class RestaurantTableController {
 
     private final RestaurantTableService tableService;
 
+    /**
+     * Creates a new table in a branch.
+     */
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<?> createTable(@Valid @RequestBody CreateTableRequest request) {
         TableResponse response = tableService.createTable(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    /**
+     * Returns all configured tables.
+     */
     @GetMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<List<TableResponse>> getAllTables() {
         List<TableResponse> tables = tableService.getAllTables();
         return ResponseEntity.ok(tables);
     }
 
+    /**
+     * Returns one table by id.
+     */
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<?> getTableById(@PathVariable Long id) {
         TableResponse response = tableService.getTableById(id);
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Updates editable table fields like number, capacity, and status.
+     */
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<?> updateTable(
             @PathVariable Long id,
             @Valid @RequestBody UpdateTableRequest request) {
@@ -47,7 +66,11 @@ public class RestaurantTableController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Updates only the table status.
+     */
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<?> updateTableStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateTableStatusRequest request) {
@@ -55,7 +78,11 @@ public class RestaurantTableController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Deletes a table when business rules allow it.
+     */
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ResponseEntity<?> deleteTable(@PathVariable Long id) {
         tableService.deleteTable(id);
         return ResponseEntity.ok(Map.of("message", "Table deleted successfully"));

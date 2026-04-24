@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+/**
+ * API response model for table details.
+ */
 public class TableResponse {
 
     private Long id;

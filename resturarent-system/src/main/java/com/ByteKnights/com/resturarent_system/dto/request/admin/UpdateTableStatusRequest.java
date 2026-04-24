@@ -8,8 +8,12 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+/**
+ * Payload for status-only updates.
+ */
 public class UpdateTableStatusRequest {
 
     @NotBlank(message = "Status is required")
-    private String status; // AVAILABLE, OCCUPIED, RESERVED
+    // Allowed values: AVAILABLE, OCCUPIED, RESERVED.
+    private String status;
 }
