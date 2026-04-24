@@ -65,7 +65,7 @@ public class DataSeeder implements CommandLineRunner {
                 createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, manageSystemConfig,
                 manageOrders, manageMenu, manageReservations, updateOrderStatus, updateDeliveryStatus,
                 createOrders, viewBranch, viewCustomer, viewOwnOrders, viewOwnProfile, viewReports,
-                viewOrders, viewDelivery
+                viewOrders, viewDelivery, createQRCode, revokeQRCode, regenerateQRCode
         )));
         roleRepository.save(superAdminRole);
 
