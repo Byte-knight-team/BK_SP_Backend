@@ -18,12 +18,17 @@ import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -59,6 +64,9 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Menu item name already exists in this branch and category");
         }
 
+        Long creatorUserId = resolveCreatedByUserId();
+        boolean creatorIsAdmin = isCurrentUserAdminOrSuperAdmin();
+
         MenuItem menuItem = MenuItem.builder()
                 .branch(branch)
                 .category(category)
@@ -67,11 +75,39 @@ public class MenuServiceImpl implements MenuService {
                 .description(request.getDescription())
                 .price(request.getPrice())
                 .imageUrl(validateAndNormalizeImageUrl(request.getImageUrl()))
-                .isAvailable(request.getIsAvailable() != null ? request.getIsAvailable() : true)
-                .status(parseStatus(request.getStatus(), MenuItemStatus.PENDING))
+                .isAvailable(request.getIsAvailable() != null ? request.getIsAvailable() : false)
+                .status(MenuItemStatus.PENDING)
                 .preparationTime(request.getPreparationTime())
-                .createdBy(resolveCreatedByUserId())
+                .createdBy(creatorUserId)
                 .build();
+
+        boolean hasAllRequiredApprovalFields = isMenuItemValidForApproval(menuItem);
+
+        if (creatorIsAdmin) {
+            // Admin-created items are immediately ACTIVE only when complete.
+            // If required fields are missing, keep them as DRAFT for later completion.
+            if (hasAllRequiredApprovalFields) {
+                menuItem.setStatus(MenuItemStatus.ACTIVE);
+                menuItem.setIsAvailable(true);
+                menuItem.setApprovedAt(LocalDateTime.now());
+                menuItem.setRejectedAt(null);
+                menuItem.setRejectionReason(null);
+            } else {
+                menuItem.setStatus(MenuItemStatus.DRAFT);
+                menuItem.setIsAvailable(false);
+                menuItem.setApprovedAt(null);
+                menuItem.setRejectedAt(null);
+                menuItem.setRejectionReason(null);
+            }
+        } else if (!hasAllRequiredApprovalFields) {
+            // Chef-created incomplete items stay in DRAFT until completed and submitted.
+            menuItem.setStatus(MenuItemStatus.DRAFT);
+            menuItem.setIsAvailable(false);
+        } else {
+            // Chef-created valid items enter approval queue.
+            menuItem.setStatus(MenuItemStatus.PENDING);
+            menuItem.setIsAvailable(false);
+        }
 
         MenuItem saved = menuItemRepository.save(menuItem);
         return mapToResponse(saved);
@@ -80,7 +116,7 @@ public class MenuServiceImpl implements MenuService {
     @Override
     @Transactional(readOnly = true)
     public List<MenuItemResponse> getAllMenuItems() {
-        return menuItemRepository.findByStatusAndIsAvailableTrue(MenuItemStatus.APPROVED)
+        return menuItemRepository.findByStatusAndIsAvailableTrue(MenuItemStatus.ACTIVE)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -115,10 +151,10 @@ public class MenuServiceImpl implements MenuService {
         // only branch 1 is doing online services
         Long targetBranchId = (branchId != null) ? branchId : 1;
 
-        // Fetch only APPROVED and AVAILABLE items for this specific branch
+        // Fetch only ACTIVE and AVAILABLE items for this specific branch
         List<MenuItem> items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(
                 targetBranchId, 
-                MenuItemStatus.APPROVED
+            MenuItemStatus.ACTIVE
         );
 
         // Convert the database Entities into clean DTOs for React
@@ -199,6 +235,7 @@ public class MenuServiceImpl implements MenuService {
     @Override
     @Transactional
     public MenuItemActionResponse approveMenuItem(Long id, ApproveMenuItemRequest request) {
+        ensureCurrentUserIsAdminForWorkflow();
         MenuItem menuItem = findMenuItemOrThrow(id);
 
         if (menuItem.getStatus() != MenuItemStatus.PENDING) {
@@ -209,18 +246,21 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Cannot approve invalid menu item");
         }
 
-        menuItem.setStatus(MenuItemStatus.APPROVED);
+        // Approved items become ACTIVE and immediately available to customers.
+        menuItem.setStatus(MenuItemStatus.ACTIVE);
+        menuItem.setIsAvailable(true);
         menuItem.setApprovedAt(LocalDateTime.now());
         menuItem.setRejectedAt(null);
         menuItem.setRejectionReason(null);
         menuItemRepository.save(menuItem);
 
-        return buildActionResponse("APPROVED", menuItem, "Item approved");
+        return buildActionResponse("ACTIVE", menuItem, "Item approved and activated");
     }
 
     @Override
     @Transactional
     public MenuItemActionResponse rejectMenuItem(Long id, RejectMenuItemRequest request) {
+        ensureCurrentUserIsAdminForWorkflow();
         MenuItem menuItem = findMenuItemOrThrow(id);
 
         if (menuItem.getStatus() != MenuItemStatus.PENDING) {
@@ -233,6 +273,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         menuItem.setStatus(MenuItemStatus.REJECTED);
+        menuItem.setIsAvailable(false);
         menuItem.setRejectedAt(LocalDateTime.now());
         menuItem.setRejectionReason(rejectionReason.trim());
         menuItem.setApprovedAt(null);
@@ -246,8 +287,8 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemActionResponse toggleMenuItemAvailability(Long id, boolean isAvailable) {
         MenuItem menuItem = findMenuItemOrThrow(id);
 
-        if (menuItem.getStatus() != MenuItemStatus.APPROVED) {
-            throw new InvalidOperationException("Cannot toggle availability if not APPROVED");
+        if (menuItem.getStatus() != MenuItemStatus.ACTIVE) {
+            throw new InvalidOperationException("Cannot toggle availability if item is not ACTIVE");
         }
 
         menuItem.setIsAvailable(isAvailable);
@@ -263,8 +304,8 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemActionResponse deleteMenuItem(Long id, DeleteMenuItemRequest request) {
         MenuItem menuItem = findMenuItemOrThrow(id);
 
-        if (menuItem.getStatus() == MenuItemStatus.APPROVED) {
-            throw new InvalidOperationException("Cannot delete approved item");
+        if (menuItem.getStatus() == MenuItemStatus.ACTIVE) {
+            throw new InvalidOperationException("Cannot delete active item");
         }
 
         MenuItemActionResponse response = buildActionResponse("DELETED", menuItem, "Menu item deleted successfully");
@@ -292,11 +333,16 @@ public class MenuServiceImpl implements MenuService {
             return defaultStatus;
         }
 
+        // Backward compatibility for old API clients that still send APPROVED.
+        if ("APPROVED".equalsIgnoreCase(status)) {
+            return MenuItemStatus.ACTIVE;
+        }
+
         try {
             return MenuItemStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new InvalidOperationException(
-                    "Invalid menu item status: " + status + ". Valid values: PENDING, APPROVED, REJECTED");
+                    "Invalid menu item status: " + status + ". Valid values: DRAFT, PENDING, ACTIVE, REJECTED");
         }
     }
 
@@ -389,11 +435,40 @@ public class MenuServiceImpl implements MenuService {
     }
 
     private Long resolveCreatedByUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.getPrincipal() instanceof JwtUserPrincipal principal) {
+            if (principal.getUser() != null && principal.getUser().getId() != null) {
+                return principal.getUser().getId();
+            }
+        }
+
         List<Long> chefUserIds = userRepository.findUserIdsByRoleKeyword("CHEF");
         if (!chefUserIds.isEmpty()) {
             return chefUserIds.get(0);
         }
         return 1L;
+    }
+
+    private boolean isCurrentUserAdminOrSuperAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return false;
+        }
+
+        Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
+        if (authorities == null) {
+            return false;
+        }
+
+        return authorities.stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority) || "ROLE_SUPER_ADMIN".equals(authority));
+    }
+
+    private void ensureCurrentUserIsAdminForWorkflow() {
+        if (!isCurrentUserAdminOrSuperAdmin()) {
+            throw new InvalidOperationException("Only ADMIN or SUPER_ADMIN can approve/reject pending menu items");
+        }
     }
 
     private MenuItemResponse mapToResponse(MenuItem item) {
