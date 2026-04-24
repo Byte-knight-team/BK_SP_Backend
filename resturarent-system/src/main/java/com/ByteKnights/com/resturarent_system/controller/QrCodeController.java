@@ -25,7 +25,7 @@ public class QrCodeController {
 
     private final QrCodeService qrCodeService;
 
-    @PostMapping("/branches/{branchId}/tables/{tableId}/qr-codes")
+    @PostMapping("/tables/{tableId}/qr-codes")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<QrCodeResponse> createQrCode(
             @PathVariable Long branchId,
