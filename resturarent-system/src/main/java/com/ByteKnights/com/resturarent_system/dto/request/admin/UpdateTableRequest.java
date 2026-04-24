@@ -8,6 +8,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+/**
+ * Payload for partial table updates.
+ */
 public class UpdateTableRequest {
 
     @Min(value = 1, message = "Table number must be at least 1")
@@ -16,5 +19,6 @@ public class UpdateTableRequest {
     @Min(value = 1, message = "Capacity must be at least 1")
     private Integer capacity;
 
-    private String status; // AVAILABLE, OCCUPIED, RESERVED
+    // Allowed values: AVAILABLE, OCCUPIED, RESERVED.
+    private String status;
 }

@@ -47,13 +47,14 @@ public class DataSeeder implements CommandLineRunner {
         Privilege viewOrders = createPrivilege("VIEW_ORDERS");
         Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
 
-        Privilege  createQRCode= createPrivilege("createQRCode");
-        Privilege  revokeQRCode= createPrivilege("revokeQRCode");
-        Privilege  regenerateQRCode= createPrivilege("regenerateQRCode");
-        Privilege  createTable= createPrivilege("createTable");
-        Privilege  deleteTable= createPrivilege("deleteTable");
-        Privilege  updateTable= createPrivilege("updateTable");
-
+        Privilege  createQRCode= createPrivilege("CREATE_QRCODE");
+        Privilege  revokeQRCode= createPrivilege("REVOKE_QRCODE");
+        Privilege  regenerateQRCode= createPrivilege("REGENERATE_QRCODE");
+        Privilege  createRestaurantTable= createPrivilege("CREATE_RESTAURANT_TABLE");
+        Privilege  deleteRestaurantTable= createPrivilege("DELETE_RESTAURANT_TABLE");
+        Privilege  updateRestaurantTable= createPrivilege("UPDATE_RESTAURANT_TABLE");
+        Privilege  viewRestaurantTables= createPrivilege("VIEW_RESTAURANT_TABLE");
+        Privilege  viewRestaurantTableById= createPrivilege("VIEW_RESTAURANT_TABLE_BY_ID");
 
 
 
@@ -65,14 +66,16 @@ public class DataSeeder implements CommandLineRunner {
                 createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, manageSystemConfig,
                 manageOrders, manageMenu, manageReservations, updateOrderStatus, updateDeliveryStatus,
                 createOrders, viewBranch, viewCustomer, viewOwnOrders, viewOwnProfile, viewReports,
-                viewOrders, viewDelivery, createQRCode, revokeQRCode, regenerateQRCode
+                viewOrders, viewDelivery, createQRCode, revokeQRCode, regenerateQRCode,createRestaurantTable, deleteRestaurantTable,
+                updateRestaurantTable, viewRestaurantTables, viewRestaurantTableById
         )));
         roleRepository.save(superAdminRole);
 
         Role adminRole = createRole("ADMIN");
         adminRole.setPermissions(new HashSet<>(Set.of(
                 createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, createQRCode, revokeQRCode, 
-                regenerateQRCode, createTable, deleteTable, updateTable
+                regenerateQRCode, createRestaurantTable, deleteRestaurantTable, updateRestaurantTable, viewRestaurantTables,
+                viewRestaurantTableById
         )));
         roleRepository.save(adminRole);
 

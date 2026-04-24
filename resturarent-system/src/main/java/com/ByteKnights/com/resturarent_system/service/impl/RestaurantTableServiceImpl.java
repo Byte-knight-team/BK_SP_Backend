@@ -22,11 +22,17 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * Implements table management business rules.
+ */
 public class RestaurantTableServiceImpl implements RestaurantTableService {
 
     private final RestaurantTableRepository tableRepository;
     private final BranchRepository branchRepository;
 
+    /**
+     * Creates a table after validating branch state and uniqueness.
+     */
     @Override
     @Transactional
     public TableResponse createTable(CreateTableRequest request) {
@@ -62,6 +68,9 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         return mapToResponse(saved);
     }
 
+    /**
+     * Fetches one table by id.
+     */
     @Override
     @Transactional(readOnly = true)
     public TableResponse getTableById(Long id) {
@@ -69,6 +78,9 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         return mapToResponse(table);
     }
 
+    /**
+     * Returns all tables.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<TableResponse> getAllTables() {
@@ -78,6 +90,9 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Updates table number, capacity, and status when provided.
+     */
     @Override
     @Transactional
     public TableResponse updateTable(Long id, UpdateTableRequest request) {
@@ -110,6 +125,9 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         return mapToResponse(updated);
     }
 
+    /**
+     * Updates only the state of a table.
+     */
     @Override
     @Transactional
     public TableResponse updateTableStatus(Long id, UpdateTableStatusRequest request) {
@@ -120,6 +138,9 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         return mapToResponse(updated);
     }
 
+    /**
+     * Deletes a table only when it is safe to remove.
+     */
     @Override
     @Transactional
     public void deleteTable(Long id) {
@@ -142,12 +163,18 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
     // ─────────────────────────── Helper Methods ───────────────────────────
 
+    /**
+     * Finds a table or throws if not present.
+     */
     private RestaurantTable findTableOrThrow(Long id) {
         return tableRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Table not found with id: " + id));
     }
 
+    /**
+     * Parses status text to enum and applies default when empty.
+     */
     private TableStatus parseStatus(String status) {
         if (status == null || status.isBlank()) {
             return TableStatus.AVAILABLE;
@@ -161,6 +188,9 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         }
     }
 
+    /**
+     * Maps entity data to API response DTO.
+     */
     private TableResponse mapToResponse(RestaurantTable table) {
         return TableResponse.builder()
                 .id(table.getId())

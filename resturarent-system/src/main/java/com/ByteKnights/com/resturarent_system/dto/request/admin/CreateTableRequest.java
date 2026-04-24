@@ -9,6 +9,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+/**
+ * Payload for creating a new table.
+ */
 public class CreateTableRequest {
 
     @NotNull(message = "Branch ID is required")
@@ -22,5 +25,6 @@ public class CreateTableRequest {
     @Min(value = 1, message = "Capacity must be at least 1")
     private Integer capacity;
 
-    private String status; // Optional — defaults to AVAILABLE
+    // Optional; defaults to AVAILABLE when omitted.
+    private String status;
 }
