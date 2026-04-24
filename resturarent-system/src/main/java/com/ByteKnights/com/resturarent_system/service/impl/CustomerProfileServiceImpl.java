@@ -75,15 +75,6 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
             user.setUsername(newUsername);
         }
 
-        //Check and Update Email
-        String newEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
-        if (!user.getEmail().equalsIgnoreCase(newEmail)) {
-            if (userRepository.findByEmail(newEmail).isPresent()) {
-                throw new CustomerAuthException(HttpStatus.CONFLICT, "Email is already in use");
-            }
-            user.setEmail(newEmail);
-        }
-
         //Check and Update Phone
         String newPhone = request.getPhone().trim();
         if (!user.getPhone().equals(newPhone)) {
