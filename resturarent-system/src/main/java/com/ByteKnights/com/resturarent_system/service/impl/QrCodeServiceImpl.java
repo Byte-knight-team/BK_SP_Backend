@@ -3,13 +3,13 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.QrCodeResponse;
 import com.ByteKnights.com.resturarent_system.entity.QrCode;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
-import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
 import com.ByteKnights.com.resturarent_system.exception.InvalidOperationException;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
-import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.QrCodeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,14 +23,14 @@ public class QrCodeServiceImpl implements QrCodeService {
 
     private final QrCodeRepository qrCodeRepository;
     private final RestaurantTableRepository tableRepository;
-    private final StaffRepository staffRepository;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
     public QrCodeResponse createQrCode(Long tableId, Long actorUserId) {
         RestaurantTable table = findTableForUpdateOrThrow(tableId);
         validateTableHasBranch(table);
-        Staff actorStaff = findStaffByUserIdOrThrow(actorUserId);
+        User actorUser = findUserByIdOrThrow(actorUserId);
 
         if (qrCodeRepository.existsByTableIdAndActiveTrue(tableId)) {
             throw new DuplicateResourceException(
@@ -42,7 +42,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .table(table)
                 .active(true)
                 .lastGeneratedAt(LocalDateTime.now())
-                .createdByStaff(actorStaff)
+            .createdByUser(actorUser)
                 .build();
 
         QrCode saved = qrCodeRepository.save(qrCode);
@@ -70,7 +70,7 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Transactional
     public QrCodeResponse regenerateQrCode(Long qrCodeId, Long actorUserId, String revokeReason) {
         QrCode existing = findQrCodeOrThrow(qrCodeId);
-        Staff actorStaff = findStaffByUserIdOrThrow(actorUserId);
+        User actorUser = findUserByIdOrThrow(actorUserId);
         RestaurantTable lockedTable = findTableForUpdateOrThrow(existing.getTable().getId());
         validateTableHasBranch(lockedTable);
 
@@ -96,7 +96,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .table(lockedTable)
                 .active(true)
                 .lastGeneratedAt(LocalDateTime.now())
-                .createdByStaff(actorStaff)
+            .createdByUser(actorUser)
                 .build();
 
         QrCode saved = qrCodeRepository.save(replacement);
@@ -108,9 +108,9 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Table not found with id: " + tableId));
     }
 
-    private Staff findStaffByUserIdOrThrow(Long userId) {
-        return staffRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Staff not found for user id: " + userId));
+    private User findUserByIdOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
     }
 
     private QrCode findQrCodeOrThrow(Long qrCodeId) {
@@ -140,7 +140,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .lastGeneratedAt(qrCode.getLastGeneratedAt())
                 .revokedAt(qrCode.getRevokedAt())
                 .revokedReason(qrCode.getRevokedReason())
-                .createdByStaffId(qrCode.getCreatedByStaff().getId())
+                .createdByUserId(qrCode.getCreatedByUser().getId())
                 .createdAt(qrCode.getCreatedAt())
                 .updatedAt(qrCode.getUpdatedAt())
                 .build();

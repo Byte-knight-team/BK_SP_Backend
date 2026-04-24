@@ -22,7 +22,7 @@ public class QrCodeResponse {
     private LocalDateTime lastGeneratedAt;
     private LocalDateTime revokedAt;
     private String revokedReason;
-    private Long createdByStaffId;
+    private Long createdByUserId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
