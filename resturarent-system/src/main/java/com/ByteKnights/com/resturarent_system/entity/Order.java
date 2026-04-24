@@ -76,6 +76,9 @@ public class Order {
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
+    @Column(name = "kitchen_notes")
+    private String kitchenNotes;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_chef_id")
     private Staff assignedChef;
