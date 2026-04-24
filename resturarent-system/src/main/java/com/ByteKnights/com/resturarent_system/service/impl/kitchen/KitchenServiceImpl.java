@@ -157,30 +157,30 @@ public class KitchenServiceImpl implements KitchenService {
         return alerts;
     }
 
-    //get orders
+    //get orderCard details
     @Override
-    public List<KitchenOrderDTO> getOrdersByStatus(OrderStatus status) {
+    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status) {
         // Sorting logic (Pending/Preparing = ASC, Completed = DESC)
         Sort sort = (status == OrderStatus.COMPLETED)
                 ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
                 : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
         List<Order> orders = orderRepository.findByStatus(status, sort);
-        List<KitchenOrderDTO> kitchenOrderDTOS = new ArrayList<>();
+        List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
 
         for (Order order : orders) {
             // Sum of quantities for all items in the order
             int totalQty = order.getItems().stream().mapToInt(OrderItem::getQuantity).sum();
 
-            kitchenOrderDTOS.add(new KitchenOrderDTO(
+            orderCardDetailsDTOS.add(new OrderCardDetailsDTO(
                     order.getId(),
                     order.getStatus().toString(), // Enum -> String
                     order.getStatusUpdatedAt().format(formatter),
                     totalQty
             ));
         }
-        return kitchenOrderDTOS;
+        return orderCardDetailsDTOS;
     }
 
     //get all inventory details
@@ -258,6 +258,33 @@ public class KitchenServiceImpl implements KitchenService {
         // 3. save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
         inventoryItemRepository.save(item);
     }
+
+    //get order details
+    @Override
+    public OrderDetailsDTO getOrderDetails(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+
+        List<OrderItemDetailsDTO> itemDTOs = order.getItems().stream()
+                .map(item -> new OrderItemDetailsDTO(
+                        item.getId(),
+                        item.getItemName(),
+                        item.getQuantity(),
+                        item.getStatus().toString(),
+                        item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
+                )).toList();
+
+        return new OrderDetailsDTO(
+                order.getId(),
+                order.getCreatedAt(),
+                order.getStatusUpdatedAt(),
+                order.getStatus().toString(),
+                order.getHoldReason(),
+                order.getKitchenNotes(),
+                itemDTOs
+        );
+    }
+
 
 
 }

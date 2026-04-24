@@ -18,11 +18,13 @@ public interface KitchenService {
 
     List<InventoryDetailsDTO> getInventoryAlerts();
 
-    List<KitchenOrderDTO> getOrdersByStatus(OrderStatus status);
+    List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status);
 
     List<InventoryDetailsDTO> getAllInventoryItems();
 
     void createRequest(@Valid CreateChefRequestDTO requestDTO, String userEmail);
 
     void updateInventoryStock(@Valid UpdateStockDTO updateDTO);
+
+    OrderDetailsDTO getOrderDetails(Long id);
 }
