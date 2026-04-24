@@ -10,12 +10,23 @@ import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundExceptio
 import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.security.JwtService;
 import com.ByteKnights.com.resturarent_system.service.QrCodeService;
+import com.ByteKnights.com.resturarent_system.util.QrCodeGenerator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +35,13 @@ public class QrCodeServiceImpl implements QrCodeService {
     private final QrCodeRepository qrCodeRepository;
     private final RestaurantTableRepository tableRepository;
     private final UserRepository userRepository;
+    private final JwtService jwtService;
+
+    @Value("${app.jwt.qr-token-expiration-ms:2400000}")
+    private long qrTokenExpirationMs;
+
+    @Value("${app.qr.scan-base-url:http://localhost:3000/scan}")
+    private String qrScanBaseUrl;
 
     @Override
     @Transactional
@@ -46,7 +64,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .build();
 
         QrCode saved = qrCodeRepository.save(qrCode);
-        return mapToResponse(saved);
+        return mapToResponseWithSecureQr(saved);
     }
 
     @Override
@@ -100,7 +118,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .build();
 
         QrCode saved = qrCodeRepository.save(replacement);
-        return mapToResponse(saved);
+        return mapToResponseWithSecureQr(saved);
     }
 
     private RestaurantTable findTableForUpdateOrThrow(Long tableId) {
@@ -131,6 +149,37 @@ public class QrCodeServiceImpl implements QrCodeService {
         return reason;
     }
 
+    private QrCodeResponse mapToResponseWithSecureQr(QrCode qrCode) {
+        Instant expiresAt = Instant.now().plusMillis(qrTokenExpirationMs);
+        String qrToken = generateQrToken(qrCode, expiresAt);
+        String qrUrl = buildQrUrl(qrToken);
+        String qrImageBase64 = Base64.getEncoder().encodeToString(QrCodeGenerator.generateQRCodeImage(qrUrl));
+
+        return mapToResponse(qrCode).toBuilder()
+                .qrToken(qrToken)
+                .qrUrl(qrUrl)
+                .qrImageBase64(qrImageBase64)
+                .qrTokenExpiresAt(DateTimeFormatter.ISO_INSTANT.format(expiresAt.atOffset(ZoneOffset.UTC)))
+                .build();
+    }
+
+    private String generateQrToken(QrCode qrCode, Instant expiresAt) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("qr_id", qrCode.getId());
+        claims.put("branch_id", qrCode.getBranch().getId());
+        claims.put("table_id", qrCode.getTable().getId());
+        claims.put("token_type", "table_qr");
+
+        long remainingMs = Math.max(1, expiresAt.toEpochMilli() - Instant.now().toEpochMilli());
+        return jwtService.generateQrToken(claims, "table-qr-" + qrCode.getId(), remainingMs);
+    }
+
+    private String buildQrUrl(String qrToken) {
+        String separator = qrScanBaseUrl.contains("?") ? "&" : "?";
+        String encodedToken = URLEncoder.encode(qrToken, StandardCharsets.UTF_8);
+        return qrScanBaseUrl + separator + "qr_token=" + encodedToken;
+    }
+
     private QrCodeResponse mapToResponse(QrCode qrCode) {
         return QrCodeResponse.builder()
                 .id(qrCode.getId())
@@ -140,6 +189,10 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .lastGeneratedAt(qrCode.getLastGeneratedAt())
                 .revokedAt(qrCode.getRevokedAt())
                 .revokedReason(qrCode.getRevokedReason())
+                .qrToken(null)
+                .qrUrl(null)
+                .qrImageBase64(null)
+                .qrTokenExpiresAt(null)
                 .createdByUserId(qrCode.getCreatedByUser().getId())
                 .createdAt(qrCode.getCreatedAt())
                 .updatedAt(qrCode.getUpdatedAt())
