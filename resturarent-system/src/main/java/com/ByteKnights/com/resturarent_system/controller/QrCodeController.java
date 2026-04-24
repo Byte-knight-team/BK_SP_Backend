@@ -8,10 +8,13 @@ import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.QrCodeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -58,6 +61,18 @@ public class QrCodeController {
         String revokeReason = request != null ? request.getRevokeReason() : null;
         QrCodeResponse response = qrCodeService.regenerateQrCode(qrCodeId, actorUserId, revokeReason);
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/qr-codes/{qrCodeId}/download")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    public ResponseEntity<byte[]> downloadQrCode(@PathVariable Long qrCodeId) {
+        byte[] image = qrCodeService.downloadQrCodeImage(qrCodeId);
+        String filename = "qr-code-" + qrCodeId + ".png";
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .body(image);
     }
 
     private Long extractActorUserId(Authentication authentication) {
