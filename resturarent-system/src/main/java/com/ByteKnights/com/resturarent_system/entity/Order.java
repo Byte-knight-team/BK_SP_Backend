@@ -44,19 +44,61 @@ public class Order {
     @Column(name = "order_type")
     private OrderType orderType;
 
+    // ==========================================
+    // ORDER-SPECIFIC CONTACT DETAILS
+    // ==========================================
+    @Column(name = "contact_name", length = 150)
+    private String contactName;
+
+    @Column(name = "contact_phone", length = 20)
+    private String contactPhone;
+
+    @Column(name = "contact_email", length = 150)
+    private String contactEmail;
+
+    @Column(name = "delivery_address", columnDefinition = "TEXT")
+    private String deliveryAddress;
+
+    // ==========================================
+    // MONEY, FEES, AND DISCOUNTS
+    // ==========================================
     @Column(name = "total_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal totalAmount = BigDecimal.ZERO;
 
     @Column(name = "discount_amount", precision = 10, scale = 2)
-    private BigDecimal discountAmount;
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(name = "tax_amount", precision = 10, scale = 2)
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+
+    @Column(name = "delivery_fee", precision = 10, scale = 2)
+    private BigDecimal deliveryFee = BigDecimal.ZERO;
+
+    @Column(name = "service_charge", precision = 10, scale = 2)
+    private BigDecimal serviceCharge = BigDecimal.ZERO;
 
     @Column(name = "final_amount", precision = 12, scale = 2)
-    private BigDecimal finalAmount;
+    private BigDecimal finalAmount = BigDecimal.ZERO;
+
+    // ==========================================
+    // COUPON & LOYALTY TRACKING (For Refunds)
+    // ==========================================
+    @Column(name = "applied_coupon_code", length = 50)
+    private String appliedCouponCode;
+
+    @Column(name = "reward_points_earned")
+    private Integer rewardPointsEarned = 0;
+
+    @Column(name = "reward_points_redeemed")
+    private Integer rewardPointsRedeemed = 0;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status")
     private PaymentStatus paymentStatus = PaymentStatus.PENDING;
 
+    // ==========================================
+    // RELATIONS
+    // ==========================================
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "branch_id", nullable = false)
     private Branch branch;
@@ -76,6 +118,15 @@ public class Order {
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
+    @Column(name = "kitchen_notes")
+    private String kitchenNotes;
+
+    @Column(name = "hold_reason")
+    private String holdReason;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_chef_id")
     private Staff assignedChef;
@@ -87,6 +138,9 @@ public class Order {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<OrderItem> items = new ArrayList<>();
 
+    // ==========================================
+    // TIMESTAMPS & KITCHEN METRICS
+    // ==========================================
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -94,7 +148,8 @@ public class Order {
     private LocalDateTime updatedAt;
 
     // Tracks the exact timestamp when the order's status was last changed.
-    // This is primarily used for accurate sorting in the kitchen dashboard (FIFO/LIFO queues)
+    // This is primarily used for accurate sorting in the kitchen dashboard
+    // (FIFO/LIFO queues)
     @Column(name = "status_updated_at")
     private LocalDateTime statusUpdatedAt;
 
@@ -104,28 +159,26 @@ public class Order {
     @Column(name = "cooking_completed_at")
     private LocalDateTime cookingCompletedAt;
 
+    public Order() {
+    }
 
     @PrePersist
     protected void onCreate() {
-        if (createdAt == null) {
-            createdAt = LocalDateTime.now();
-        }
-        if (updatedAt == null) {
-            updatedAt = LocalDateTime.now();
-        }
+        if (createdAt == null) createdAt = LocalDateTime.now();
+        if (updatedAt == null) updatedAt = LocalDateTime.now();
         // Automatically set the timestamp when the order is first saved to the database
-        if (statusUpdatedAt == null) {
-            statusUpdatedAt = LocalDateTime.now();
-        }
-        if (totalAmount == null) {
-            totalAmount = BigDecimal.ZERO;
-        }
-        if (discountAmount == null) {
-            discountAmount = BigDecimal.ZERO;
-        }
-        if (finalAmount == null) {
-            finalAmount = totalAmount.subtract(discountAmount);
-        }
+        if (statusUpdatedAt == null) statusUpdatedAt = LocalDateTime.now();
+
+        // Safety checks for older code that might not set these
+        if (totalAmount == null) totalAmount = BigDecimal.ZERO;
+        if (discountAmount == null) discountAmount = BigDecimal.ZERO;
+        if (taxAmount == null) taxAmount = BigDecimal.ZERO;
+        if (deliveryFee == null) deliveryFee = BigDecimal.ZERO;
+        if (serviceCharge == null) serviceCharge = BigDecimal.ZERO;
+        if (rewardPointsEarned == null) rewardPointsEarned = 0;
+        if (rewardPointsRedeemed == null) rewardPointsRedeemed = 0;
+
+        recalculateTotal();
     }
 
     @PreUpdate
@@ -138,7 +191,6 @@ public class Order {
         this.status = newStatus;
         this.statusUpdatedAt = LocalDateTime.now();
 
-        // Update milestone timestamps based on the specific status entered
         if (newStatus == OrderStatus.PENDING) {
             this.approvedAt = LocalDateTime.now();
         } else if (newStatus == OrderStatus.PREPARING) {
@@ -149,15 +201,28 @@ public class Order {
     }
 
     public void recalculateTotal() {
+        // 1. Calculate base items total
         if (items != null) {
             this.totalAmount = items.stream()
                     .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            if (this.discountAmount == null) {
-                this.discountAmount = BigDecimal.ZERO;
-            }
-            this.finalAmount = this.totalAmount.subtract(this.discountAmount);
+        } else {
+            this.totalAmount = BigDecimal.ZERO;
         }
+
+        // 2. Ensure no null fees
+        if (this.discountAmount == null) this.discountAmount = BigDecimal.ZERO;
+        if (this.taxAmount == null) this.taxAmount = BigDecimal.ZERO;
+        if (this.deliveryFee == null) this.deliveryFee = BigDecimal.ZERO;
+        if (this.serviceCharge == null) this.serviceCharge = BigDecimal.ZERO;
+
+        // 3. Final Math: Items - Discount + Tax + Delivery + Service
+        this.finalAmount = this.totalAmount
+                .subtract(this.discountAmount)
+                .add(this.taxAmount)
+                .add(this.deliveryFee)
+                .add(this.serviceCharge);
+
         this.updatedAt = LocalDateTime.now();
     }
 
@@ -168,6 +233,4 @@ public class Order {
         items.add(item);
         item.setOrder(this);
     }
-
-
 }

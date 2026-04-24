@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class KitchenOrderDTO {
+public class OrderCardDetailsDTO {
     private Long id;
     private String status;
     private String time;    // ex: "10:30 AM"

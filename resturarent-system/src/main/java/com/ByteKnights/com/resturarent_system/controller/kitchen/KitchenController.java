@@ -70,11 +70,11 @@ public class KitchenController {
         );
     }
 
-    //get orders by status
-    @GetMapping("/orders")
+    //get orderCard details(display all order cards - PENDING,PREPARING,COMPLETED,ON_HOLD)
+    @GetMapping("/order-cards")
     @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getOrdersByStatus(@RequestParam OrderStatus status) {
-        List<KitchenOrderDTO> orders = kitchenService.getOrdersByStatus(status);
+        List<OrderCardDetailsDTO> orders = kitchenService.getOrdersByStatus(status);
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", orders),
                 HttpStatus.OK
@@ -125,6 +125,18 @@ public class KitchenController {
         );
     }
 
+    //get all details of a specific order by order id (display in the orders page)
+    @GetMapping("/order-details/{id}")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> getOrderDetails(@PathVariable Long id) {
+        // call the service to get the specific order details
+        OrderDetailsDTO orderDetails = kitchenService.getOrderDetails(id);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", orderDetails),
+                HttpStatus.OK
+        );
+    }
 
 }
 
