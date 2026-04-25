@@ -37,6 +37,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 @RequiredArgsConstructor
@@ -50,15 +52,13 @@ public class StaffService {
             "MANAGER",
             "CHEF",
             "RECEPTIONIST",
-            "DELIVERY"
-    );
+            "DELIVERY");
 
     private static final Set<String> ADMIN_CREATABLE_ROLES = Set.of(
             "MANAGER",
             "CHEF",
             "RECEPTIONIST",
-            "DELIVERY"
-    );
+            "DELIVERY");
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -101,6 +101,16 @@ public class StaffService {
             validationErrors.append("Branch is required for non-super-admin staff. ");
         }
 
+        /*
+         * Salary is optional during staff creation.
+         * 
+         * If provided, it must not be negative.
+         * If not provided, backend will use the role default salary.
+         */
+        if (request.getSalary() != null && request.getSalary().compareTo(BigDecimal.ZERO) < 0) {
+            validationErrors.append("Salary cannot be negative. ");
+        }
+
         if (validationErrors.length() > 0) {
             return CreateStaffResponse.builder()
                     .message(validationErrors.toString().trim())
@@ -135,6 +145,13 @@ public class StaffService {
         Role role = roleRepository.findByName(normalizedRoleName)
                 .orElseThrow(() -> new RuntimeException("Role not found: " + normalizedRoleName));
 
+        /*
+         * Salary selection rule:
+         * 1. If request.salary is provided, use it.
+         * 2. Otherwise, copy role.baseSalary.
+         */
+        BigDecimal resolvedSalary = resolveStaffSalary(request.getSalary(), role);
+
         User creator = getCurrentAuthenticatedUser();
         String creatorRole = normalize(creator.getRole().getName());
 
@@ -161,6 +178,13 @@ public class StaffService {
             Staff staff = Staff.builder()
                     .user(savedUser)
                     .branch(targetBranch)
+
+                    /*
+                     * Store actual salary for this individual staff member.
+                     * This starts from role default salary unless request.salary overrides it.
+                     */
+                    .salary(resolvedSalary)
+
                     .employmentStatus(EmploymentStatus.ACTIVE)
                     .build();
 
@@ -180,8 +204,7 @@ public class StaffService {
                     "Email sending failed while creating staff. username={}, email={}",
                     savedUser.getUsername(),
                     savedUser.getEmail(),
-                    e
-            );
+                    e);
         }
 
         User finalSavedUser = userRepository.save(savedUser);
@@ -197,8 +220,7 @@ public class StaffService {
                 getBranchId(finalStaff),
                 "Staff created successfully",
                 null,
-                buildStaffAuditSnapshot(finalSavedUser, finalStaff)
-        );
+                buildStaffAuditSnapshot(finalSavedUser, finalStaff));
 
         return CreateStaffResponse.builder()
                 .id(finalSavedUser.getId())
@@ -214,7 +236,8 @@ public class StaffService {
                 .temporaryPassword(Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? null : tempPassword)
                 .branchId(targetBranch != null ? targetBranch.getId() : null)
                 .branchName(targetBranch != null ? targetBranch.getName() : null)
-                .message(Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? "Email sent successfully" : "Email failed")
+                .message(
+                        Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? "Email sent successfully" : "Email failed")
                 .build();
     }
 
@@ -276,8 +299,7 @@ public class StaffService {
                     targetUser.getId(),
                     targetUser.getUsername(),
                     targetUser.getEmail(),
-                    e
-            );
+                    e);
         }
 
         User savedUser = userRepository.save(targetUser);
@@ -293,8 +315,7 @@ public class StaffService {
                 getBranchId(savedStaff),
                 "Staff invite resent successfully",
                 oldValues,
-                buildStaffAuditSnapshot(savedUser, savedStaff)
-        );
+                buildStaffAuditSnapshot(savedUser, savedStaff));
 
         return CreateStaffResponse.builder()
                 .id(savedUser.getId())
@@ -309,7 +330,8 @@ public class StaffService {
                 .emailSent(savedUser.getEmailSent())
                 .temporaryPassword(Boolean.TRUE.equals(savedUser.getEmailSent()) ? null : tempPassword)
                 .branchId(savedStaff != null && savedStaff.getBranch() != null ? savedStaff.getBranch().getId() : null)
-                .branchName(savedStaff != null && savedStaff.getBranch() != null ? savedStaff.getBranch().getName() : null)
+                .branchName(
+                        savedStaff != null && savedStaff.getBranch() != null ? savedStaff.getBranch().getName() : null)
                 .message(Boolean.TRUE.equals(savedUser.getEmailSent()) ? "Email resent successfully" : "Email failed")
                 .build();
     }
@@ -374,6 +396,12 @@ public class StaffService {
         ensureCanManageTarget(creator, targetUser);
 
         String currentTargetRole = normalize(targetUser.getRole().getName());
+        /*
+         * These values help us decide whether to update salary from the new role
+         * default.
+         */
+        boolean roleChanged = false;
+        Role selectedRoleForSalary = targetUser.getRole();
         Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
         Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
 
@@ -433,6 +461,32 @@ public class StaffService {
                         .orElseThrow(() -> new RuntimeException("Role not found: " + newRoleName));
 
                 targetUser.setRole(newRole);
+
+                /*
+                 * Mark that role changed.
+                 * 
+                 * If request.salary is not provided,
+                 * we will copy the new role's base salary to this staff member.
+                 */
+                roleChanged = true;
+                selectedRoleForSalary = newRole;
+            }
+        }
+
+        /*
+         * Update individual staff salary.
+         * 
+         * Rules:
+         * 1. If request.salary is provided, use that value.
+         * 2. If role changed and request.salary is not provided,
+         * copy the new role base salary.
+         * 3. If neither happened, keep existing salary unchanged.
+         */
+        if (targetStaff != null) {
+            if (request.getSalary() != null) {
+                targetStaff.setSalary(normalizeSalary(request.getSalary()));
+            } else if (roleChanged) {
+                targetStaff.setSalary(getBaseSalaryOrZero(selectedRoleForSalary));
             }
         }
 
@@ -473,8 +527,7 @@ public class StaffService {
                 getBranchId(savedStaff),
                 "Staff updated successfully",
                 oldValues,
-                buildStaffAuditSnapshot(savedUser, savedStaff)
-        );
+                buildStaffAuditSnapshot(savedUser, savedStaff));
 
         return mapToStaffResponse(savedUser);
     }
@@ -509,8 +562,7 @@ public class StaffService {
                 getBranchId(savedStaff),
                 "Staff activated successfully",
                 oldValues,
-                buildStaffAuditSnapshot(savedUser, savedStaff)
-        );
+                buildStaffAuditSnapshot(savedUser, savedStaff));
 
         return mapToStaffResponse(savedUser);
     }
@@ -545,8 +597,7 @@ public class StaffService {
                 getBranchId(savedStaff),
                 "Staff deactivated successfully",
                 oldValues,
-                buildStaffAuditSnapshot(savedUser, savedStaff)
-        );
+                buildStaffAuditSnapshot(savedUser, savedStaff));
 
         return mapToStaffResponse(savedUser);
     }
@@ -670,7 +721,8 @@ public class StaffService {
                     .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
 
             Staff targetStaff = staffRepository.findByUserId(targetUser.getId())
-                    .orElseThrow(() -> new RuntimeException("ADMIN can view only branch-linked staff in their own branch"));
+                    .orElseThrow(
+                            () -> new RuntimeException("ADMIN can view only branch-linked staff in their own branch"));
 
             Long adminBranchId = creatorStaff.getBranch().getId();
             Long targetBranchId = targetStaff.getBranch().getId();
@@ -735,11 +787,12 @@ public class StaffService {
                 .branchId(staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null)
                 .branchName(staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null)
                 .employmentStatus(staff != null && staff.getEmploymentStatus() != null
-                        ? staff.getEmploymentStatus().name()
-                        : null)
+                ? staff.getEmploymentStatus().name()
+                : null)         
+                .salary(staff != null ? staff.getSalary() : null) /*Return actual staff salary to frontend.*/      
                 .build();
     }
-
+    
     private Map<String, Object> buildStaffAuditSnapshot(User user, Staff staff) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
 
@@ -758,6 +811,10 @@ public class StaffService {
         snapshot.put("employmentStatus", staff != null && staff.getEmploymentStatus() != null
                 ? staff.getEmploymentStatus().name()
                 : null);
+        snapshot.put("salary", staff != null ? staff.getSalary() : null); /*
+                                                                           * Store salary in audit old/new values so
+                                                                           * salary changes are traceable.
+                                                                           */
 
         return snapshot;
     }
@@ -841,5 +898,54 @@ public class StaffService {
         }
 
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff by role");
+    }
+
+    /*
+     * Decide staff salary during creation.
+     * 
+     * If request salary exists:
+     * - use request salary.
+     * 
+     * If request salary does not exist:
+     * - use role base salary.
+     */
+    private BigDecimal resolveStaffSalary(BigDecimal requestedSalary, Role role) {
+        if (requestedSalary != null) {
+            return normalizeSalary(requestedSalary);
+        }
+
+        return getBaseSalaryOrZero(role);
+    }
+
+    /*
+     * Safely read role base salary.
+     * 
+     * If role salary is missing, use 0.00 instead of null.
+     */
+    private BigDecimal getBaseSalaryOrZero(Role role) {
+        if (role == null || role.getBaseSalary() == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return normalizeSalary(role.getBaseSalary());
+    }
+
+    /*
+     * Salary validation helper.
+     * 
+     * Rules:
+     * - Salary cannot be negative.
+     * - Salary is stored with 2 decimal places.
+     */
+    private BigDecimal normalizeSalary(BigDecimal salary) {
+        if (salary == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (salary.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Salary cannot be negative");
+        }
+
+        return salary.setScale(2, RoundingMode.HALF_UP);
     }
 }

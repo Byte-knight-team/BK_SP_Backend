@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 public class RoleService {
@@ -41,14 +43,13 @@ public class RoleService {
             "CHEF",
             "RECEPTIONIST",
             "DELIVERY",
-            "CUSTOMER"
-    );
+            "CUSTOMER");
 
     @Autowired
     public RoleService(RoleRepository roleRepository,
-                       PrivilegeRepository privilegeRepository,
-                       UserRepository userRepository,
-                       AuditLogService auditLogService) {
+            PrivilegeRepository privilegeRepository,
+            UserRepository userRepository,
+            AuditLogService auditLogService) {
         this.roleRepository = roleRepository;
         this.privilegeRepository = privilegeRepository;
         this.userRepository = userRepository;
@@ -98,8 +99,7 @@ public class RoleService {
                 null,
                 "Role permissions updated successfully",
                 oldValues,
-                newValues
-        );
+                newValues);
 
         return savedRole;
     }
@@ -115,7 +115,7 @@ public class RoleService {
     }
 
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public Role createRole(String name, String description) {
+    public Role createRole(String name, String description, BigDecimal baseSalary) {
         String normalizedName = normalizeRoleName(name);
 
         if (roleRepository.findByName(normalizedName).isPresent()) {
@@ -125,6 +125,12 @@ public class RoleService {
         Role role = Role.builder()
                 .name(normalizedName)
                 .description(description == null ? null : description.trim())
+
+                /*
+                 * New roles can have a default salary.
+                 * If no salary is provided, it becomes 0.00.
+                 */
+                .baseSalary(normalizeSalary(baseSalary))
                 .build();
 
         Role savedRole = roleRepository.save(role);
@@ -139,8 +145,7 @@ public class RoleService {
                 null,
                 "Role created successfully",
                 null,
-                buildRoleAuditSnapshot(savedRole)
-        );
+                buildRoleAuditSnapshot(savedRole));
 
         return savedRole;
     }
@@ -192,6 +197,17 @@ public class RoleService {
             role.setDescription(request.getDescription().trim());
         }
 
+        /*
+         * Update the default salary for this role.
+         * 
+         * Important:
+         * This does not automatically update existing staff salaries.
+         * Existing staff keep their current Staff.salary unless edited manually.
+         */
+        if (request.getBaseSalary() != null) {
+            role.setBaseSalary(normalizeSalary(request.getBaseSalary()));
+        }
+
         Role savedRole = roleRepository.save(role);
 
         auditLogService.logCurrentUserAction(
@@ -204,8 +220,7 @@ public class RoleService {
                 null,
                 "Role updated successfully",
                 oldValues,
-                buildRoleAuditSnapshot(savedRole)
-        );
+                buildRoleAuditSnapshot(savedRole));
 
         return savedRole;
     }
@@ -237,8 +252,7 @@ public class RoleService {
                 null,
                 "Role deleted successfully",
                 oldValues,
-                null
-        );
+                null);
     }
 
     private RoleSummaryResponse mapToRoleSummary(Role role) {
@@ -251,6 +265,11 @@ public class RoleService {
                 .description(role.getDescription())
                 .permissionCount(permissionCount)
                 .activeUserCount(activeUserCount)
+
+                /*
+                 * Return salary to frontend so Roles page can show/edit it.
+                 */
+                .baseSalary(role.getBaseSalary())
                 .build();
     }
 
@@ -266,6 +285,7 @@ public class RoleService {
         snapshot.put("roleId", role.getId());
         snapshot.put("roleName", role.getName());
         snapshot.put("description", role.getDescription());
+        snapshot.put("baseSalary", role.getBaseSalary());
         snapshot.put("permissionNames", extractPermissionNames(role.getPermissions()));
         snapshot.put("activeUserCount", userRepository.countByRoleAndIsActiveTrue(role));
         return snapshot;
@@ -283,5 +303,25 @@ public class RoleService {
         }
 
         return permissionNames;
+    }
+
+    /*
+     * Salary validation helper.
+     * 
+     * Rules:
+     * - Null salary becomes 0.00.
+     * - Negative salary is not allowed.
+     * - Salary is stored with 2 decimal places.
+     */
+    private BigDecimal normalizeSalary(BigDecimal salary) {
+        if (salary == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (salary.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Base salary cannot be negative");
+        }
+
+        return salary.setScale(2, RoundingMode.HALF_UP);
     }
 }
