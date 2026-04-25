@@ -1,10 +1,12 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
-import com.ByteKnights.com.resturarent_system.dto.request.CustomerLoginRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.CustomerRegisterRequest;
-import com.ByteKnights.com.resturarent_system.dto.response.CustomerLoginResponseData;
-import com.ByteKnights.com.resturarent_system.dto.response.CustomerRegisterResponseData;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerLoginRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerOtpRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerOtpVerifyRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerRegisterRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerLoginResponseData;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerRegisterResponseData;
 import com.ByteKnights.com.resturarent_system.service.CustomerAuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -38,5 +40,17 @@ public class CustomerAuthController {
             @RequestBody CustomerLoginRequest request) {
         CustomerLoginResponseData responseData = customerAuthService.login(request);
         return ResponseEntity.ok(ApiResponse.success("Login successful.", responseData));
+    }
+
+    @PostMapping("/send-otp")
+    public ResponseEntity<ApiResponse<Object>> requestOtp(@RequestBody CustomerOtpRequest request) {
+        customerAuthService.requestOtp(request.getPhone());
+        return ResponseEntity.ok(ApiResponse.success("OTP sent successfully.", null));
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<ApiResponse<CustomerLoginResponseData>> verifyOtp(@RequestBody CustomerOtpVerifyRequest request) {
+        CustomerLoginResponseData responseData = customerAuthService.verifyOtp(request.getPhone(), request.getCode(), request.getSessionId());
+        return ResponseEntity.ok(ApiResponse.success("Phone verified successfully.", responseData));
     }
 }

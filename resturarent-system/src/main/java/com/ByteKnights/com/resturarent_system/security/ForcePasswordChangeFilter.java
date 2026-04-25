@@ -59,8 +59,7 @@ public class ForcePasswordChangeFilter extends OncePerRequestFilter {
 
             if (freshUser != null) {
                 String role = freshUser.getRole().getName();
-
-                if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role)) {
+                if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role) || "CUSTOMER".equalsIgnoreCase(role)) {
                     filterChain.doFilter(request, response);
                     return;
                 }
