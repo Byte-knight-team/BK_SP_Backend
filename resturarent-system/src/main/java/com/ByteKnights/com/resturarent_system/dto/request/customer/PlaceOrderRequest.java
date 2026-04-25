@@ -9,6 +9,7 @@ public class PlaceOrderRequest {
     private String orderType; 
     private Long branchId;
     private Long tableId; // Only required for DINE_IN
+    private Long qrSessionId; // Required for QR orders — validates active session
     
     // Identical cart data for the Zero-Trust calculation
     private String couponCode;
