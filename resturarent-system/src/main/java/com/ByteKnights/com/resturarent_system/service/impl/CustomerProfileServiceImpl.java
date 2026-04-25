@@ -35,10 +35,11 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
 
     @Override
     @Transactional(readOnly = true)
-    public CustomerProfileResponse getCustomerProfile(String email) {
+    public CustomerProfileResponse getCustomerProfile(String identifier) {
         //Fetch the User
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
+        User user = userRepository.findByEmail(identifier)
+                .orElseGet(() -> userRepository.findByPhone(identifier)
+                        .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found")));
 
         //Fetch the connected Customer details
         Customer customer = customerRepository.findByUser(user)
@@ -61,10 +62,11 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
 
     @Override
     @Transactional
-    public CustomerProfileResponse updateCustomerProfile(String currentEmail, CustomerProfileUpdateRequest request) {
+    public CustomerProfileResponse updateCustomerProfile(String currentIdentifier, CustomerProfileUpdateRequest request) {
         //Find the current user
-        User user = userRepository.findByEmail(currentEmail)
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
+        User user = userRepository.findByEmail(currentIdentifier)
+                .orElseGet(() -> userRepository.findByPhone(currentIdentifier)
+                        .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found")));
 
         //Check and Update Username
         String newUsername = request.getUsername().trim();
@@ -91,15 +93,16 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         userRepository.save(user);
 
         //Return the updated profile (reusing your existing GET logic!)
-        return getCustomerProfile(user.getEmail()); 
+        return getCustomerProfile(user.getEmail() != null ? user.getEmail() : user.getPhone()); 
     }
 
     @Override
     @Transactional
-    public void updatePassword(String email, CustomerPasswordUpdateRequest request) {
+    public void updatePassword(String identifier, CustomerPasswordUpdateRequest request) {
         //Find the user
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
+        User user = userRepository.findByEmail(identifier)
+                .orElseGet(() -> userRepository.findByPhone(identifier)
+                        .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found")));
 
         //Verify the current password
         if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {

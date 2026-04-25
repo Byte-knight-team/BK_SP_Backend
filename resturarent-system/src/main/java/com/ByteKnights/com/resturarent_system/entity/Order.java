@@ -148,8 +148,7 @@ public class Order {
     private LocalDateTime updatedAt;
 
     // Tracks the exact timestamp when the order's status was last changed.
-    // This is primarily used for accurate sorting in the kitchen dashboard
-    // (FIFO/LIFO queues)
+    // This is primarily used for accurate sorting in the kitchen dashboard (FIFO/LIFO queues)
     @Column(name = "status_updated_at")
     private LocalDateTime statusUpdatedAt;
 
@@ -191,6 +190,7 @@ public class Order {
         this.status = newStatus;
         this.statusUpdatedAt = LocalDateTime.now();
 
+        // Update milestone timestamps based on the specific status entered
         if (newStatus == OrderStatus.PENDING) {
             this.approvedAt = LocalDateTime.now();
         } else if (newStatus == OrderStatus.PREPARING) {
@@ -233,4 +233,6 @@ public class Order {
         items.add(item);
         item.setOrder(this);
     }
+
+
 }

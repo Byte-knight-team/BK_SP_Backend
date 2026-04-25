@@ -5,4 +5,6 @@ import com.ByteKnights.com.resturarent_system.dto.response.customer.QrSessionSta
 
 public interface QrSessionService {
     QrSessionStartResponseData startSession(QrSessionStartRequest request);
+    void endSession(Long sessionId);
+    void validateActiveSession(Long sessionId);
 }
