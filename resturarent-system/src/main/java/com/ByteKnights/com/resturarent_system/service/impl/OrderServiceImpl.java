@@ -81,7 +81,8 @@ public class OrderServiceImpl implements OrderService {
 
                         // QR Session Guard: Validate the session is still ACTIVE in the database
                         if (request.getQrSessionId() == null) {
-                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "QR session ID is required for table orders.");
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST,
+                                                "QR session ID is required for table orders.");
                         }
                         qrSessionService.validateActiveSession(request.getQrSessionId());
                 }
