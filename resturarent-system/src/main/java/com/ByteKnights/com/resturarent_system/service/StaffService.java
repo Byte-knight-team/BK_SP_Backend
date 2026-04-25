@@ -46,19 +46,29 @@ public class StaffService {
 
     private static final Logger log = LoggerFactory.getLogger(StaffService.class);
 
-    private static final Set<String> STAFF_ROLES = Set.of(
-            "SUPER_ADMIN",
-            "ADMIN",
-            "MANAGER",
-            "CHEF",
-            "RECEPTIONIST",
-            "DELIVERY");
+    /*
+     * Roles are now database-driven.
+     * 
+     * Any role in the roles table can be used as a staff role,
+     * except roles listed in NON_STAFF_ROLES.
+     * 
+     * Example:
+     * If we create LINE_CHEF in the roles table, the staff creation flow can use it
+     * without adding LINE_CHEF here manually.
+     */
+    private static final Set<String> NON_STAFF_ROLES = Set.of(
+            "CUSTOMER");
 
-    private static final Set<String> ADMIN_CREATABLE_ROLES = Set.of(
-            "MANAGER",
-            "CHEF",
-            "RECEPTIONIST",
-            "DELIVERY");
+    /*
+     * ADMIN should not be able to create high-level/global roles.
+     * 
+     * ADMIN can create branch-level operational staff roles such as:
+     * MANAGER, CHEF, LINE_CHEF, RECEPTIONIST, DELIVERY, CASHIER, WAITER, etc.
+     */
+    private static final Set<String> ADMIN_BLOCKED_CREATION_ROLES = Set.of(
+            "CUSTOMER",
+            "SUPER_ADMIN",
+            "ADMIN");
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -93,7 +103,7 @@ public class StaffService {
 
         if (isBlank(normalizedRoleName)) {
             validationErrors.append("Role is required. ");
-        } else if (!STAFF_ROLES.contains(normalizedRoleName)) {
+        } else if (!isStaffRoleName(normalizedRoleName)) {
             validationErrors.append("Only staff roles can be used in staff creation. ");
         }
 
@@ -271,7 +281,7 @@ public class StaffService {
                 throw new RuntimeException("ADMIN can resend invite only for staff in their own branch");
             }
 
-            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+            if (!isAdminCreatableRoleName(targetRole)) {
                 throw new RuntimeException("ADMIN can resend invite only for MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
             }
         } else {
@@ -443,28 +453,50 @@ public class StaffService {
 
         if (request.getRoleName() != null) {
             String newRoleName = normalize(request.getRoleName());
-
-            if (!STAFF_ROLES.contains(newRoleName)) {
+        
+            /*
+             * Validate the new role using database-driven staff-role rules.
+             *
+             * CUSTOMER is blocked.
+             * Other roles from the roles table can be staff roles.
+             */
+            if (!isStaffRoleName(newRoleName)) {
                 throw new RuntimeException("Only staff roles can be assigned here");
             }
-
+        
             if (!newRoleName.equals(currentTargetRole)) {
                 if ("SUPER_ADMIN".equals(currentTargetRole) || "SUPER_ADMIN".equals(newRoleName)) {
                     throw new RuntimeException("Changing to or from SUPER_ADMIN through update is not supported yet");
                 }
-
-                if ("ADMIN".equals(creatorRole) && !ADMIN_CREATABLE_ROLES.contains(newRoleName)) {
-                    throw new RuntimeException("ADMIN can assign only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
+        
+                /*
+                 * ADMIN can assign only branch-level staff roles.
+                 *
+                 * This blocks:
+                 * CUSTOMER
+                 * SUPER_ADMIN
+                 * ADMIN
+                 *
+                 * This allows:
+                 * MANAGER
+                 * CHEF
+                 * LINE_CHEF
+                 * RECEPTIONIST
+                 * DELIVERY
+                 * future branch-level roles
+                 */
+                if ("ADMIN".equals(creatorRole) && !isAdminCreatableRoleName(newRoleName)) {
+                    throw new RuntimeException("ADMIN can assign only branch-level staff roles");
                 }
-
+        
                 Role newRole = roleRepository.findByName(newRoleName)
                         .orElseThrow(() -> new RuntimeException("Role not found: " + newRoleName));
-
+        
                 targetUser.setRole(newRole);
-
+        
                 /*
                  * Mark that role changed.
-                 * 
+                 *
                  * If request.salary is not provided,
                  * we will copy the new role's base salary to this staff member.
                  */
@@ -614,7 +646,7 @@ public class StaffService {
         }
 
         if ("ADMIN".equals(creatorRole)) {
-            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+            if (!isAdminCreatableRoleName(targetRole)) {
                 throw new RuntimeException("ADMIN can create only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
             }
 
@@ -699,8 +731,48 @@ public class StaffService {
         return value.trim().toUpperCase();
     }
 
+    /*
+     * Checks whether a user belongs to the staff-side system.
+     * 
+     * This is now database-driven:
+     * - CUSTOMER is excluded.
+     * - Any other role is treated as a staff-side role.
+     */
     private boolean isStaffUser(User user) {
-        return user.getRole() != null && STAFF_ROLES.contains(normalize(user.getRole().getName()));
+        return user.getRole() != null
+                && isStaffRoleName(user.getRole().getName());
+    }
+
+    /*
+     * Checks whether a role name is allowed to be used as a staff role.
+     * 
+     * Rule:
+     * - CUSTOMER is not a staff role.
+     * - Any other role existing in the roles table can be treated as staff-side
+     * role.
+     */
+    private boolean isStaffRoleName(String roleName) {
+        String normalizedRoleName = normalize(roleName);
+
+        return normalizedRoleName != null
+                && !NON_STAFF_ROLES.contains(normalizedRoleName);
+    }
+
+    /*
+     * Checks whether ADMIN can create/manage this role.
+     * 
+     * Rule:
+     * - ADMIN cannot create CUSTOMER.
+     * - ADMIN cannot create SUPER_ADMIN.
+     * - ADMIN cannot create another ADMIN.
+     * - ADMIN can create lower branch-level roles, including future roles like
+     * LINE_CHEF.
+     */
+    private boolean isAdminCreatableRoleName(String roleName) {
+        String normalizedRoleName = normalize(roleName);
+
+        return normalizedRoleName != null
+                && !ADMIN_BLOCKED_CREATION_ROLES.contains(normalizedRoleName);
     }
 
     private boolean belongsToBranch(User user, Long branchId) {
@@ -746,7 +818,7 @@ public class StaffService {
         }
 
         if ("ADMIN".equals(creatorRole)) {
-            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+            if (!isAdminCreatableRoleName(targetRole)) {
                 throw new RuntimeException("ADMIN can manage only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
             }
 
@@ -787,12 +859,12 @@ public class StaffService {
                 .branchId(staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null)
                 .branchName(staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null)
                 .employmentStatus(staff != null && staff.getEmploymentStatus() != null
-                ? staff.getEmploymentStatus().name()
-                : null)         
-                .salary(staff != null ? staff.getSalary() : null) /*Return actual staff salary to frontend.*/      
+                        ? staff.getEmploymentStatus().name()
+                        : null)
+                .salary(staff != null ? staff.getSalary() : null) /* Return actual staff salary to frontend. */
                 .build();
     }
-    
+
     private Map<String, Object> buildStaffAuditSnapshot(User user, Staff staff) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
 
@@ -867,7 +939,7 @@ public class StaffService {
         String creatorRole = normalize(creator.getRole().getName());
         String normalizedRoleName = normalize(roleName);
 
-        if (!STAFF_ROLES.contains(normalizedRoleName)) {
+        if (!isStaffRoleName(normalizedRoleName)) {
             throw new RuntimeException("Invalid staff role");
         }
 
