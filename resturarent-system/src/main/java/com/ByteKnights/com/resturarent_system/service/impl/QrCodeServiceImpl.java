@@ -40,7 +40,7 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Value("${app.jwt.qr-token-expiration-ms:2400000}")
     private long qrTokenExpirationMs;
 
-    @Value("${app.qr.scan-base-url:http://localhost:3000/scan}")
+    @Value("${app.qr.scan-base-url:http://localhost:5173/scan}")
     private String qrScanBaseUrl;
 
     @Override
