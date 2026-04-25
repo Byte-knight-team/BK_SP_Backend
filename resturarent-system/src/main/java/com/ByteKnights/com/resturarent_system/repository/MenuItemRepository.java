@@ -3,6 +3,8 @@ package com.ByteKnights.com.resturarent_system.repository;
 import com.ByteKnights.com.resturarent_system.entity.MenuItem;
 import com.ByteKnights.com.resturarent_system.entity.MenuItemStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -26,4 +28,16 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
     Optional<MenuItem> findByBranchIdAndName(Long branchId, String name);
 
     void deleteByBranchIdAndNameIn(Long branchId, List<String> names);
+
+        @Query("""
+            SELECT DISTINCT mi.subCategory
+            FROM MenuItem mi
+            WHERE mi.branch.id = :branchId
+              AND mi.category.id = :categoryId
+              AND mi.subCategory IS NOT NULL
+            ORDER BY mi.subCategory
+            """)
+        List<String> findDistinctSubCategoriesByBranchIdAndCategoryId(
+            @Param("branchId") Long branchId,
+            @Param("categoryId") Long categoryId);
 }

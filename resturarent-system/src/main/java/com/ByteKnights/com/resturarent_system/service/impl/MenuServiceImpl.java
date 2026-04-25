@@ -70,7 +70,7 @@ public class MenuServiceImpl implements MenuService {
         MenuItem menuItem = MenuItem.builder()
                 .branch(branch)
                 .category(category)
-                .subCategory(request.getSubCategory())
+            .subCategory(validateAndNormalizeOptionalSubCategory(request.getSubCategory()))
                 .name(validatedName)
                 .description(request.getDescription())
                 .price(request.getPrice())
@@ -174,6 +174,12 @@ public class MenuServiceImpl implements MenuService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<String> getDistinctSubCategories(Long branchId, Long categoryId) {
+        return menuItemRepository.findDistinctSubCategoriesByBranchIdAndCategoryId(branchId, categoryId);
+    }
+
+    @Override
     @Transactional
     public MenuItemResponse updateMenuItem(Long id, UpdateMenuItemRequest request) {
         MenuItem menuItem = findMenuItemOrThrow(id);
@@ -187,7 +193,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         if (request.getSubCategory() != null) {
-            menuItem.setSubCategory(request.getSubCategory());
+            menuItem.setSubCategory(validateAndNormalizeOptionalSubCategory(request.getSubCategory()));
         }
 
         if (request.getName() != null && !request.getName().isBlank()) {
@@ -414,6 +420,23 @@ public class MenuServiceImpl implements MenuService {
         }
 
         return normalizedImageUrl;
+    }
+
+    private String validateAndNormalizeOptionalSubCategory(String subCategory) {
+        if (subCategory == null) {
+            return null;
+        }
+
+        String normalizedSubCategory = subCategory.trim();
+        if (normalizedSubCategory.isEmpty()) {
+            throw new InvalidOperationException("Sub category must not be blank");
+        }
+
+        if (normalizedSubCategory.length() >= 50) {
+            throw new InvalidOperationException("Sub category must be less than 50 characters");
+        }
+
+        return normalizedSubCategory;
     }
 
     private boolean isMenuItemValidForApproval(MenuItem menuItem) {
