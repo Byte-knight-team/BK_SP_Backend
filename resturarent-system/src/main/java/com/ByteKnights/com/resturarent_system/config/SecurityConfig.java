@@ -64,19 +64,19 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/staff", "/api/admin/staff/**")
                 .hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // Role management
+                // Role management - SUPER_ADMIN only
                 .requestMatchers(HttpMethod.POST, "/api/admin/roles").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*/permissions").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles").hasAnyRole("SUPER_ADMIN", "ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*").hasAnyRole("SUPER_ADMIN", "ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions").hasRole("SUPER_ADMIN")
 
-                // Privileges
-                .requestMatchers(HttpMethod.GET, "/api/admin/privileges").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                // Privileges - SUPER_ADMIN only
+                .requestMatchers(HttpMethod.GET, "/api/admin/privileges").hasRole("SUPER_ADMIN")
 
-                // Email testing
+                // Email testing - SUPER_ADMIN only
                 .requestMatchers("/api/email-testing/**").hasRole("SUPER_ADMIN")
 
                 // Fallback for other admin endpoints

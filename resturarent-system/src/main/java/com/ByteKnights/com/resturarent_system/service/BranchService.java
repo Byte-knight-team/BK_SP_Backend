@@ -3,6 +3,11 @@ package com.ByteKnights.com.resturarent_system.service;
 import com.ByteKnights.com.resturarent_system.dto.BranchResponse;
 import com.ByteKnights.com.resturarent_system.dto.CreateBranchRequest;
 import com.ByteKnights.com.resturarent_system.dto.UpdateBranchRequest;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
@@ -10,7 +15,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -18,6 +25,7 @@ import java.util.stream.Collectors;
 public class BranchService {
 
     private final BranchRepository branchRepository;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public BranchResponse createBranch(CreateBranchRequest request) {
@@ -65,6 +73,19 @@ public class BranchService {
 
         Branch savedBranch = branchRepository.save(branch);
 
+        auditLogService.logCurrentUserAction(
+                AuditModule.BRANCH,
+                AuditEventType.BRANCH_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.BRANCH,
+                savedBranch.getId(),
+                savedBranch.getId(),
+                "Branch created successfully",
+                null,
+                buildBranchAuditSnapshot(savedBranch)
+        );
+
         return mapToResponse(savedBranch, "Branch created successfully");
     }
 
@@ -88,6 +109,8 @@ public class BranchService {
     public BranchResponse updateBranch(Long id, UpdateBranchRequest request) {
         Branch branch = branchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
+
+        Map<String, Object> oldValues = buildBranchAuditSnapshot(branch);
 
         if (request.getName() != null) {
             String newName = request.getName().trim();
@@ -140,6 +163,19 @@ public class BranchService {
 
         Branch updatedBranch = branchRepository.save(branch);
 
+        auditLogService.logCurrentUserAction(
+                AuditModule.BRANCH,
+                AuditEventType.BRANCH_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.BRANCH,
+                updatedBranch.getId(),
+                updatedBranch.getId(),
+                "Branch updated successfully",
+                oldValues,
+                buildBranchAuditSnapshot(updatedBranch)
+        );
+
         return mapToResponse(updatedBranch, "Branch updated successfully");
     }
 
@@ -148,9 +184,24 @@ public class BranchService {
         Branch branch = branchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
 
+        Map<String, Object> oldValues = buildBranchAuditSnapshot(branch);
+
         branch.setStatus(BranchStatus.ACTIVE);
 
         Branch updatedBranch = branchRepository.save(branch);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.BRANCH,
+                AuditEventType.BRANCH_ACTIVATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.BRANCH,
+                updatedBranch.getId(),
+                updatedBranch.getId(),
+                "Branch activated successfully",
+                oldValues,
+                buildBranchAuditSnapshot(updatedBranch)
+        );
 
         return mapToResponse(updatedBranch, "Branch activated successfully");
     }
@@ -160,9 +211,24 @@ public class BranchService {
         Branch branch = branchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
 
+        Map<String, Object> oldValues = buildBranchAuditSnapshot(branch);
+
         branch.setStatus(BranchStatus.INACTIVE);
 
         Branch updatedBranch = branchRepository.save(branch);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.BRANCH,
+                AuditEventType.BRANCH_DEACTIVATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.BRANCH,
+                updatedBranch.getId(),
+                updatedBranch.getId(),
+                "Branch deactivated successfully",
+                oldValues,
+                buildBranchAuditSnapshot(updatedBranch)
+        );
 
         return mapToResponse(updatedBranch, "Branch deactivated successfully");
     }
@@ -178,6 +244,18 @@ public class BranchService {
                 .createdAt(branch.getCreatedAt())
                 .message(message)
                 .build();
+    }
+
+    private Map<String, Object> buildBranchAuditSnapshot(Branch branch) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("branchId", branch.getId());
+        snapshot.put("name", branch.getName());
+        snapshot.put("address", branch.getAddress());
+        snapshot.put("contactNumber", branch.getContactNumber());
+        snapshot.put("email", branch.getEmail());
+        snapshot.put("status", branch.getStatus() != null ? branch.getStatus().name() : null);
+        snapshot.put("createdAt", branch.getCreatedAt());
+        return snapshot;
     }
 
     private boolean isBlank(String value) {
