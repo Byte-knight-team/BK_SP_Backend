@@ -56,9 +56,9 @@ public class QrCodeServiceImpl implements QrCodeService {
         enforceAdminBranchAccess(table.getBranch().getId());
         User actorUser = findUserByIdOrThrow(actorUserId);
 
-        if (qrCodeRepository.existsByTableIdAndActiveTrue(tableId)) {
-            throw new DuplicateResourceException(
-                    "Active QR code already exists for table " + tableId);
+        QrCode activeQr = qrCodeRepository.findFirstByTableIdAndActiveTrue(tableId).orElse(null);
+        if (activeQr != null) {
+            return mapToResponseWithSecureQr(activeQr);
         }
 
         QrCode qrCode = QrCode.builder()
@@ -220,6 +220,10 @@ public class QrCodeServiceImpl implements QrCodeService {
     }
 
     private QrCodeResponse mapToResponse(QrCode qrCode) {
+        Long createdByUserId = qrCode.getCreatedByUser() != null
+            ? qrCode.getCreatedByUser().getId()
+            : null;
+
         return QrCodeResponse.builder()
                 .id(qrCode.getId())
                 .branchId(qrCode.getBranch().getId())
@@ -232,7 +236,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .qrUrl(null)
                 .qrImageBase64(null)
                 .qrTokenExpiresAt(null)
-                .createdByUserId(qrCode.getCreatedByUser().getId())
+                .createdByUserId(createdByUserId)
                 .createdAt(qrCode.getCreatedAt())
                 .updatedAt(qrCode.getUpdatedAt())
                 .build();

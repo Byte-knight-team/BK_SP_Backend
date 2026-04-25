@@ -34,7 +34,7 @@ public class MenuCategoryController {
         return ResponseEntity.ok(categories);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/{id:\\d+}")
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ResponseEntity<MenuCategoryResponse> getCategoryById(@PathVariable Long id) {
         MenuCategoryResponse category = menuCategoryService.getCategoryById(id);
@@ -50,7 +50,7 @@ public class MenuCategoryController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<MenuCategoryResponse> updateCategory(
             @PathVariable Long id,
@@ -59,7 +59,7 @@ public class MenuCategoryController {
         return ResponseEntity.ok(updated);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id:\\d+}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<MenuCategoryResponse> deleteCategory(@PathVariable Long id) {
         MenuCategoryResponse deleted = menuCategoryService.deleteCategory(id);
