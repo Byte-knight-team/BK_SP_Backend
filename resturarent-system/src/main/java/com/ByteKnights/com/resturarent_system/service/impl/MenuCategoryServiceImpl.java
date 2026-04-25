@@ -13,6 +13,9 @@ import com.ByteKnights.com.resturarent_system.service.MenuCategoryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Service
 public class MenuCategoryServiceImpl implements MenuCategoryService {
 
@@ -25,6 +28,22 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     public MenuCategoryServiceImpl(MenuCategoryRepository menuCategoryRepository, MenuItemRepository menuItemRepository) {
         this.menuCategoryRepository = menuCategoryRepository;
         this.menuItemRepository = menuItemRepository;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MenuCategoryResponse> getAllCategories() {
+        return menuCategoryRepository.findAll()
+                .stream()
+                .map(category -> mapToResponse(category, null))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MenuCategoryResponse getCategoryById(Long id) {
+        MenuCategory category = findCategoryOrThrow(id);
+        return mapToResponse(category, null);
     }
 
     @Override
