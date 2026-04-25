@@ -58,6 +58,18 @@ public class MenuServiceImpl implements MenuService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public long getCategoryCount() {
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
+        if (adminBranchId != null) {
+            return menuItemRepository.countDistinctCategoryByBranchId(adminBranchId);
+        } else {
+            return menuCategoryRepository.count();
+        }
+    }
+
+    @Override
     @Transactional
     public MenuItemResponse createMenuItem(CreateMenuItemRequest request) {
         enforceAdminBranchAccess(request.getBranchId());
