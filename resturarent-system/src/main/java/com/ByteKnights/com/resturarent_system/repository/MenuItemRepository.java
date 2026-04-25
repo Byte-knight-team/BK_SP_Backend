@@ -47,4 +47,16 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     @Query("SELECT COUNT(DISTINCT mi.category.id) FROM MenuItem mi WHERE mi.branch.id = :branchId")
     long countDistinctCategoryByBranchId(@Param("branchId") Long branchId);
+
+    long countByBranchId(Long branchId);
+
+    long countByBranchIdAndIsAvailableTrue(Long branchId);
+
+    long countByIsAvailableTrue();
+
+    @Query("SELECT COUNT(DISTINCT mi.subCategory) FROM MenuItem mi WHERE mi.branch.id = :branchId AND mi.subCategory IS NOT NULL")
+    long countDistinctSubCategoryByBranchId(@Param("branchId") Long branchId);
+
+    @Query("SELECT COUNT(DISTINCT mi.subCategory) FROM MenuItem mi WHERE mi.subCategory IS NOT NULL")
+    long countDistinctSubCategory();
 }
