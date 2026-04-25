@@ -34,7 +34,11 @@ public class SecurityConfig {
             .formLogin(form -> form.disable())
             .httpBasic(basic -> basic.disable())
             .authorizeHttpRequests(auth -> auth
-                // Public
+
+                /*
+                 * Public endpoints.
+                 * These endpoints do not require JWT authentication.
+                 */
                 .requestMatchers(
                     "/api/v1/auth/**",
                     "/api/v1/qr-sessions/**",
@@ -49,40 +53,100 @@ public class SecurityConfig {
                     "/v3/api-docs/**"
                 ).permitAll()
 
-                
+                /*
+                 * Staff password change requires authenticated staff user.
+                 */
+                .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password")
+                .authenticated()
 
-                // Authenticated auth flow
-                .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password").authenticated()
+                /*
+                 * Customer operations.
+                 */
+                .requestMatchers("/api/v1/customer/**")
+                .hasRole("CUSTOMER")
 
-                // customer opereations customer only
-                .requestMatchers("/api/v1/customer/**").hasRole("CUSTOMER")
+                /*
+                 * Branch management.
+                 * Only SUPER_ADMIN can create/update/deactivate branches.
+                 */
+                .requestMatchers("/api/admin/branches", "/api/admin/branches/**")
+                .hasRole("SUPER_ADMIN")
 
-                // Branch management - SUPER_ADMIN only
-                .requestMatchers("/api/admin/branches", "/api/admin/branches/**").hasRole("SUPER_ADMIN")
-
-                // Staff management - SUPER_ADMIN and ADMIN
+                /*
+                 * Staff management.
+                 * SUPER_ADMIN and ADMIN can access staff endpoints.
+                 *
+                 * Actual branch-level restrictions are handled inside StaffService.
+                 * Example:
+                 * - ADMIN can manage only own-branch staff.
+                 * - ADMIN cannot manage SUPER_ADMIN or ADMIN-level accounts.
+                 */
                 .requestMatchers("/api/admin/staff", "/api/admin/staff/**")
                 .hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // Role management - SUPER_ADMIN only
-                .requestMatchers(HttpMethod.POST, "/api/admin/roles").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*/permissions").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions").hasRole("SUPER_ADMIN")
+                /*
+                 * Role READ access.
+                 *
+                 * SUPER_ADMIN needs this for Roles & Permissions.
+                 * ADMIN needs this only for Create Staff / Edit Staff role dropdown.
+                 *
+                 * This does NOT allow ADMIN to create, update, delete,
+                 * or change role permissions.
+                 */
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles")
+                .hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // Privileges - SUPER_ADMIN only
-                .requestMatchers(HttpMethod.GET, "/api/admin/privileges").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*")
+                .hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // Email testing - SUPER_ADMIN only
-                .requestMatchers("/api/email-testing/**").hasRole("SUPER_ADMIN")
+                /*
+                 * Role permission READ access.
+                 *
+                 * Keep this SUPER_ADMIN only because this is part of RBAC management.
+                 * Create Staff / Edit Staff does not need this endpoint.
+                 */
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions")
+                .hasRole("SUPER_ADMIN")
 
-                // Fallback for other admin endpoints
-                .requestMatchers("/api/admin/**").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                /*
+                 * Role MANAGEMENT access.
+                 * Only SUPER_ADMIN can create roles, update roles,
+                 * update permissions, or delete roles.
+                 */
+                .requestMatchers(HttpMethod.POST, "/api/admin/roles")
+                .hasRole("SUPER_ADMIN")
 
-                // Everything else
+                .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*")
+                .hasRole("SUPER_ADMIN")
+
+                .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*/permissions")
+                .hasRole("SUPER_ADMIN")
+
+                .requestMatchers(HttpMethod.DELETE, "/api/admin/roles/*")
+                .hasRole("SUPER_ADMIN")
+
+                /*
+                 * Privileges list.
+                 * Keep SUPER_ADMIN only because privileges are part of RBAC management.
+                 */
+                .requestMatchers(HttpMethod.GET, "/api/admin/privileges")
+                .hasRole("SUPER_ADMIN")
+
+                /*
+                 * Email testing.
+                 */
+                .requestMatchers("/api/email-testing/**")
+                .hasRole("SUPER_ADMIN")
+
+                /*
+                 * Fallback for other admin endpoints.
+                 */
+                .requestMatchers("/api/admin/**")
+                .hasAnyRole("SUPER_ADMIN", "ADMIN")
+
+                /*
+                 * Everything else needs authentication.
+                 */
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
