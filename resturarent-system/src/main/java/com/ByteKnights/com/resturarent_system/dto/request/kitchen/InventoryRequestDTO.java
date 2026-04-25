@@ -9,7 +9,7 @@ import lombok.Data;
 import java.math.BigDecimal;
 
 @Data
-public class CreateChefRequestDTO {
+public class InventoryRequestDTO {
     @NotBlank(message = "Item name is required")
     private String itemName;
 
@@ -24,4 +24,3 @@ public class CreateChefRequestDTO {
     @NotNull(message = "Request type is required")
     private ChefRequestType requestType;
 }
-

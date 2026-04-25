@@ -1,6 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service;
 
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
@@ -22,11 +22,13 @@ public interface KitchenService {
 
     List<InventoryDetailsDTO> getAllInventoryItems();
 
-    void createRequest(@Valid CreateChefRequestDTO requestDTO, String userEmail);
+    void createRequest(@Valid InventoryRequestDTO requestDTO, String userEmail);
 
     void updateInventoryStock(@Valid UpdateStockDTO updateDTO);
 
     OrderDetailsDTO getOrderDetails(Long id);
 
     List<ChefAssignDTO> getAvailableChefsForAssignment(String userEmail);
+
+    void assignChefToMeal(Long itemId, Long chefId);
 }
