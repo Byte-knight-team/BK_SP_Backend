@@ -11,13 +11,13 @@ public enum OrderStatus {
     OUT_FOR_DELIVERY,
     SERVED,
     COMPLETED,
-    ON_HOLD,
-    CLOSED}
+    ON_HOLD
+}
 
 /*
- * PENDING // waiting for cheff to start preparing.
+ * PENDING // waiting for cheff to start preparing
  * PREPARING // cheff is preparing the order
- * ON-HOLD // order is on hold - chef hold the order because there is an issue in
+ * ON-HOLD // order is on hold - chef hold the order because there is a issue in
  * kitchen side. then receiptionist can take action on it.cancel or update the
  * order or send back to the kitchen
  * COMPLETED // order is completed - cooking done

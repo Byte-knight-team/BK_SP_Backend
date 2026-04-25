@@ -24,11 +24,11 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final UserRepository userRepository;
 
     public CheckoutServiceImpl(MenuItemRepository menuItemRepository,
-                               BranchConfigRepository branchConfigRepository,
-                               SystemConfigRepository systemConfigRepository,
-                               CouponRepository couponRepository,
-                               CustomerRepository customerRepository,
-                               UserRepository userRepository) {
+            BranchConfigRepository branchConfigRepository,
+            SystemConfigRepository systemConfigRepository,
+            CouponRepository couponRepository,
+            CustomerRepository customerRepository,
+            UserRepository userRepository) {
         this.menuItemRepository = menuItemRepository;
         this.branchConfigRepository = branchConfigRepository;
         this.systemConfigRepository = systemConfigRepository;
@@ -46,13 +46,16 @@ public class CheckoutServiceImpl implements CheckoutService {
     // THE CORE MATH ENGINE (THE HELPER)
     // ========================================================================
     private CheckoutCalculateResponse buildReceiptMath(String userIdentifier, CheckoutCalculateRequest request) {
-        
-        // 1. Fetch Configs (500 Internal Server Error if these are missing, as the system is broken)
+
+        // 1. Fetch Configs (500 Internal Server Error if these are missing, as the
+        // system is broken)
         SystemConfig sysConfig = systemConfigRepository.findFirstByOrderByIdAsc()
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "System configuration is missing"));
-        
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "System configuration is missing"));
+
         BranchConfig branchConfig = branchConfigRepository.findByBranchId(request.getBranchId())
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch configuration is missing for Branch ID: " + request.getBranchId()));
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Branch configuration is missing for Branch ID: " + request.getBranchId()));
 
         // 2. Calculate Base Subtotal
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -62,8 +65,9 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         for (CheckoutCalculateRequest.CartItemRequest item : request.getItems()) {
             MenuItem dbItem = menuItemRepository.findById(item.getMenuItemId())
-                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Menu item not found: " + item.getMenuItemId()));
-            
+                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND,
+                            "Menu item not found: " + item.getMenuItemId()));
+
             BigDecimal lineTotal = dbItem.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             subtotal = subtotal.add(lineTotal);
         }
@@ -74,7 +78,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         if (request.getCouponCode() != null && !request.getCouponCode().trim().isEmpty()) {
             Coupon coupon = validateAndGetCoupon(request.getCouponCode(), subtotal);
             appliedCoupon = coupon.getCode();
-            
+
             if (coupon.getDiscountType() == DiscountType.FIXED) {
                 couponDiscount = coupon.getDiscountValue();
             } else { // PERCENT
@@ -89,43 +93,45 @@ public class CheckoutServiceImpl implements CheckoutService {
         BigDecimal loyaltyDiscount = BigDecimal.ZERO;
         Integer pointsUsed = 0;
         Integer availablePoints = 0;
-        
+
         if (userIdentifier != null && sysConfig.isLoyaltyEnabled()) {
             Customer customer = getCustomer(userIdentifier);
             availablePoints = customer.getLoyaltyPoints();
 
             if (request.getRedeemLoyaltyPoints() != null && request.getRedeemLoyaltyPoints() > 0) {
                 pointsUsed = request.getRedeemLoyaltyPoints();
-                
+
                 // Validation 1: Min points required to redeem
                 if (pointsUsed < sysConfig.getMinPointsToRedeem()) {
-                    throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Minimum points required to redeem is " + sysConfig.getMinPointsToRedeem());
+                    throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                            "Minimum points required to redeem is " + sysConfig.getMinPointsToRedeem());
                 }
                 // Validation 2: Does user have enough?
                 if (pointsUsed > availablePoints) {
                     throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Insufficient loyalty points balance");
                 }
-                
+
                 // Convert points to cash
                 loyaltyDiscount = BigDecimal.valueOf(pointsUsed).multiply(sysConfig.getValuePerPoint());
-                
+
                 // Validation 3: 50% Max Rule
                 BigDecimal subtotalAfterCoupon = subtotal.subtract(couponDiscount);
                 BigDecimal maxAllowedLoyaltyDiscount = subtotalAfterCoupon.multiply(BigDecimal.valueOf(0.5));
-                
+
                 if (loyaltyDiscount.compareTo(maxAllowedLoyaltyDiscount) > 0) {
-                    throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Loyalty discount cannot exceed 50% of the order value after coupons");
+                    throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                            "Loyalty discount cannot exceed 50% of the order value after coupons");
                 }
             }
         }
 
         BigDecimal totalDiscount = couponDiscount.add(loyaltyDiscount);
-        
+
         // Ensure discount doesn't exceed subtotal
         if (totalDiscount.compareTo(subtotal) > 0) {
-            totalDiscount = subtotal; 
+            totalDiscount = subtotal;
         }
-        
+
         BigDecimal discountedSubtotal = subtotal.subtract(totalDiscount);
 
         // 5. Delivery Fee
@@ -137,12 +143,13 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 6. Tax & Service Charge (Calculated on discounted subtotal)
         BigDecimal taxAmount = BigDecimal.ZERO;
         BigDecimal serviceCharge = BigDecimal.ZERO;
-        
+
         if (sysConfig.isTaxEnabled()) {
             taxAmount = discountedSubtotal.multiply(sysConfig.getTaxPercentage().divide(BigDecimal.valueOf(100)));
         }
         if (sysConfig.isServiceChargeEnabled()) {
-            serviceCharge = discountedSubtotal.multiply(sysConfig.getServiceChargePercentage().divide(BigDecimal.valueOf(100)));
+            serviceCharge = discountedSubtotal
+                    .multiply(sysConfig.getServiceChargePercentage().divide(BigDecimal.valueOf(100)));
         }
 
         // 7. Final Total
@@ -154,6 +161,19 @@ public class CheckoutServiceImpl implements CheckoutService {
             // e.g., For every $10 (amountPerPoint), earn 1 point (pointsPerAmount)
             BigDecimal multiplier = finalTotal.divide(sysConfig.getAmountPerPoint(), 0, RoundingMode.DOWN);
             pointsEarned = multiplier.multiply(sysConfig.getPointsPerAmount()).intValue();
+        }
+
+        // The max loyalty discount allowed is 50% of (subtotal − couponDiscount).
+        // Convert that back to points using valuePerPoint.
+        Integer maxRedeemable = 0;
+        if (sysConfig.isLoyaltyEnabled()
+                && availablePoints >= sysConfig.getMinPointsToRedeem()
+                && sysConfig.getValuePerPoint().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal subtotalAfterCoupon = subtotal.subtract(couponDiscount);
+            BigDecimal maxLoyaltyDiscount = subtotalAfterCoupon.multiply(BigDecimal.valueOf(0.5));
+            int maxPointsByValue = maxLoyaltyDiscount.divide(sysConfig.getValuePerPoint(), 0, RoundingMode.DOWN)
+                    .intValue();
+            maxRedeemable = Math.max(0, Math.min(availablePoints, maxPointsByValue));
         }
 
         // 9. Return the Receipt DTO
@@ -171,15 +191,16 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .availableLoyaltyPoints(availablePoints)
                 .loyaltyPointsEarnedThisOrder(pointsEarned)
                 .minPointsToRedeem(sysConfig.getMinPointsToRedeem())
+                .maxRedeemablePoints(maxRedeemable)
                 .build();
     }
 
     // --- Private Validators ---
-    
+
     private Coupon validateAndGetCoupon(String code, BigDecimal subtotal) {
         Coupon coupon = couponRepository.findByCode(code)
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Invalid coupon code"));
-        
+
         if (coupon.getStatus() != CouponStatus.ACTIVE) {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "This coupon is currently inactive");
         }
@@ -190,19 +211,20 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "This coupon has reached its maximum usage limit");
         }
         if (coupon.getMinOrderAmount() != null && subtotal.compareTo(coupon.getMinOrderAmount()) < 0) {
-            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Your subtotal must be at least LKR " + coupon.getMinOrderAmount() + " to use this coupon");
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                    "Your subtotal must be at least LKR " + coupon.getMinOrderAmount() + " to use this coupon");
         }
-        
+
         return coupon;
     }
-    
+
     private Customer getCustomer(String identifier) {
         // Dual-lookup by email or phone
         User user = userRepository.findByEmail(identifier)
-            .orElseGet(() -> userRepository.findByPhone(identifier)
-            .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User profile not found")));
-            
+                .orElseGet(() -> userRepository.findByPhone(identifier)
+                        .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User profile not found")));
+
         return customerRepository.findByUser(user)
-            .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Customer details not found"));
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Customer details not found"));
     }
 }
