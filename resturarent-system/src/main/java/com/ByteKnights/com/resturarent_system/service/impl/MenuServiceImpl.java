@@ -436,7 +436,23 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Sub category must be less than 50 characters");
         }
 
+        // Convert to title case: lowercase first, then capitalize first letter of each word
+        normalizedSubCategory = toTitleCase(normalizedSubCategory);
+
         return normalizedSubCategory;
+    }
+
+    private String toTitleCase(String input) {
+        String[] words = input.toLowerCase().split("\\s+");
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            if (i > 0) {
+                result.append(' ');
+            }
+            result.append(Character.toUpperCase(words[i].charAt(0)));
+            result.append(words[i].substring(1));
+        }
+        return result.toString();
     }
 
     private boolean isMenuItemValidForApproval(MenuItem menuItem) {
