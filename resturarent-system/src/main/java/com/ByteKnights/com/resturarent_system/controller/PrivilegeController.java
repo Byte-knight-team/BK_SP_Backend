@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/privileges")
+@RequestMapping("/api/admin/privileges")
 public class PrivilegeController {
 
     private final PrivilegeRepository privilegeRepository;
@@ -18,10 +18,9 @@ public class PrivilegeController {
         this.privilegeRepository = privilegeRepository;
     }
 
-    // SUPER_ADMIN and ADMIN can view all privileges
-    // Frontend can use this to build role permission checkboxes/toggles
+    // Only SUPER_ADMIN can view all privileges
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<Privilege>> getAllPrivileges() {
         return ResponseEntity.ok(privilegeRepository.findAllByOrderByNameAsc());
     }

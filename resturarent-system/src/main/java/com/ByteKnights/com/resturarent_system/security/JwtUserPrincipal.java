@@ -31,7 +31,9 @@ public class JwtUserPrincipal implements UserDetails {
     public String getPassword() { return user.getPassword(); }
 
     @Override
-    public String getUsername() { return user.getEmail(); }
+    public String getUsername() { 
+        return user.getEmail() != null ? user.getEmail() : user.getPhone(); 
+    }
 
     @Override
     public boolean isAccountNonExpired() { return true; }

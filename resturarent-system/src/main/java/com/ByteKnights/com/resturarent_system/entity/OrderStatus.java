@@ -1,10 +1,8 @@
 package com.ByteKnights.com.resturarent_system.entity;
 
 public enum OrderStatus {
-    OPEN,
-    PAID,
-    CLOSED,
     PLACED,
+    CANCELLED,
     APPROVED,
     REJECTED,
     PENDING,
@@ -13,8 +11,7 @@ public enum OrderStatus {
     OUT_FOR_DELIVERY,
     SERVED,
     COMPLETED,
-    ON_HOLD,
-    CANCELLED
+    ON_HOLD
 }
 
 /*
@@ -25,5 +22,10 @@ public enum OrderStatus {
  * order or send back to the kitchen
  * COMPLETED // order is completed - cooking done
  * CLOSED // order is closed - payment done
- * CANCELLED // order is cancelled by receiptionist
+ * CANCELLED // order is cancelled by receiptionist or user
  */
+
+/*
+PLACED // just placed by customer
+CANCELLED // order is cancelled by user or receiptionist or auto cacelld cause error
+*/
