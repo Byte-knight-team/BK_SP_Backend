@@ -94,6 +94,32 @@ public class QrSessionServiceImpl implements QrSessionService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public void endSession(Long sessionId) {
+        QrSession session = qrSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new QrSessionException(HttpStatus.NOT_FOUND, "QR session not found."));
+
+        if (session.getStatus() == QrSessionStatus.ENDED) {
+            return; // Already ended, no-op
+        }
+
+        session.setStatus(QrSessionStatus.ENDED);
+        session.setEndedAt(java.time.LocalDateTime.now());
+        qrSessionRepository.save(session);
+    }
+
+    @Override
+    public void validateActiveSession(Long sessionId) {
+        QrSession session = qrSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new QrSessionException(HttpStatus.NOT_FOUND, "QR session not found."));
+
+        if (session.getStatus() != QrSessionStatus.ACTIVE) {
+            throw new QrSessionException(HttpStatus.GONE,
+                    "Your table session has ended. Please close this tab and rescan the QR code.");
+        }
+    }
+
     private void validateRequest(QrSessionStartRequest request) {
         if (request == null || !StringUtils.hasText(request.getQrToken())) {
             throw new QrSessionException(HttpStatus.BAD_REQUEST, "qr_token is required.");

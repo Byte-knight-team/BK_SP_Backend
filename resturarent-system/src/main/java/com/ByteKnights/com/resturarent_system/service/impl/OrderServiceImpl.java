@@ -11,6 +11,7 @@ import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundExceptio
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.CheckoutService;
 import com.ByteKnights.com.resturarent_system.service.OrderService;
+import com.ByteKnights.com.resturarent_system.service.QrSessionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class OrderServiceImpl implements OrderService {
 
         private final CheckoutService checkoutService;
+        private final QrSessionService qrSessionService;
         private final OrderRepository orderRepository;
         private final PaymentRepository paymentRepository;
         private final CustomerRepository customerRepository;
@@ -34,13 +36,15 @@ public class OrderServiceImpl implements OrderService {
         private final CouponUsageRepository couponUsageRepository;
         private final LoyaltyTransactionRepository loyaltyTransactionRepository;
 
-        public OrderServiceImpl(CheckoutService checkoutService, OrderRepository orderRepository,
+        public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
+                        OrderRepository orderRepository,
                         PaymentRepository paymentRepository, CustomerRepository customerRepository,
                         UserRepository userRepository, BranchRepository branchRepository,
                         RestaurantTableRepository tableRepository, MenuItemRepository menuItemRepository,
                         CouponRepository couponRepository, CouponUsageRepository couponUsageRepository,
                         LoyaltyTransactionRepository loyaltyTransactionRepository) {
                 this.checkoutService = checkoutService;
+                this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
                 this.paymentRepository = paymentRepository;
                 this.customerRepository = customerRepository;
@@ -74,6 +78,12 @@ public class OrderServiceImpl implements OrderService {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, "Table ID required for Dine-In");
                         table = tableRepository.findById(request.getTableId())
                                         .orElseThrow(() -> new ResourceNotFoundException("Table not found"));
+
+                        // QR Session Guard: Validate the session is still ACTIVE in the database
+                        if (request.getQrSessionId() == null) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "QR session ID is required for table orders.");
+                        }
+                        qrSessionService.validateActiveSession(request.getQrSessionId());
                 }
 
                 // 3. ZERO-TRUST MATH: Call the CheckoutService to calculate the exact totals!
