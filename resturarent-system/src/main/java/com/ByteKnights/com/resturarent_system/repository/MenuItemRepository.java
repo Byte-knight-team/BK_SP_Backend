@@ -29,6 +29,10 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     void deleteByBranchIdAndNameIn(Long branchId, List<String> names);
 
+    boolean existsByCategoryIdAndIsAvailableTrue(Long categoryId);
+
+    boolean existsByCategoryId(Long categoryId);
+
         @Query("""
             SELECT DISTINCT mi.subCategory
             FROM MenuItem mi
