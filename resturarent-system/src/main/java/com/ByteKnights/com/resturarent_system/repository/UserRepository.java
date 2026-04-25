@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.repository;
 
+import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.entity.Role;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -29,6 +30,4 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u.id FROM User u JOIN u.role r WHERE UPPER(r.name) LIKE CONCAT('%', UPPER(:roleKeyword), '%')")
     List<Long> findUserIdsByRoleKeyword(@Param("roleKeyword") String roleKeyword);
-
-    // TODO: Add more custom query methods as needed
 }

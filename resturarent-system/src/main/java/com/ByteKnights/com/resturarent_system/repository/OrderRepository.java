@@ -28,11 +28,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = "items")
     Optional<Order> findOrderById(Long id);
 
+    List<Order> findByStatus(OrderStatus status, Sort sort);
+
 
     // --- Kitchen Queries START ---
 
     // 1.kitchen dashboard stats
-    //long countByStatus(OrderStatus status);
 
     @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
             "FROM orders WHERE status = 'COMPLETED' AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL",
@@ -45,10 +46,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "WHERE approved_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY hr", nativeQuery = true)
     List<Object[]> findOrderCountByHour();
-
-    // 3.orders by status for kitchen view
-    List<Order> findByStatus(OrderStatus status, Sort sort);
-
 
     // --- Kitchen Queries END ---
 }

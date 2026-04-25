@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.service.kitchen;
+package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
@@ -27,4 +27,6 @@ public interface KitchenService {
     void updateInventoryStock(@Valid UpdateStockDTO updateDTO);
 
     OrderDetailsDTO getOrderDetails(Long id);
+
+    List<ChefAssignDTO> getAvailableChefsForAssignment(String userEmail);
 }
