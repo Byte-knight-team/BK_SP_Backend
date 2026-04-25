@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CheckoutCalculateRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.PaymentUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.PlaceOrderRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CheckoutCalculateResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderResponse;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -206,5 +208,34 @@ public class OrderServiceImpl implements OrderService {
                 .createdAt(savedOrder.getCreatedAt())
                 .items(itemResponses)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void updatePaymentStatus(Long orderId, PaymentUpdateRequest request) {
+        // 1. Find the Order
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                
+        // 2. Find the Payment attached to this Order
+        Payment payment = paymentRepository.findByOrder(order)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment record not found"));
+                
+        // 3. Update the fields based on the React payload
+        payment.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
+        order.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
+        
+        if (request.getTransactionId() != null) {
+            payment.setTransactionReference(request.getTransactionId());
+        }
+        
+        // 4. If the payment is completed, stamp the exact time
+        if ("PAID".equalsIgnoreCase(request.getPaymentStatus())) {
+            payment.setPaidAt(LocalDateTime.now());
+        }
+        
+        // 5. Save both the payment AND the order back to the database
+        paymentRepository.save(payment);
+        orderRepository.save(order);
     }
 }
