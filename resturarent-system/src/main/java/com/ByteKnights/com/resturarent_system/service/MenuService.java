@@ -32,4 +32,6 @@ public interface MenuService {
 
     List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(Long branchId);
 
+    List<String> getDistinctSubCategories(Long branchId, Long categoryId);
+
 }

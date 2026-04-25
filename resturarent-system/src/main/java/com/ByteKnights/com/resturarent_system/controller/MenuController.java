@@ -104,4 +104,12 @@ public class MenuController {
 
         return ResponseEntity.ok(ApiResponse.success("Menu fetched successfully", menuItems));
     }
+
+    @GetMapping("/subcategories")
+    public ResponseEntity<List<String>> getDistinctSubCategories(
+            @RequestParam Long branchId,
+            @RequestParam Long categoryId) {
+        List<String> subCategories = menuService.getDistinctSubCategories(branchId, categoryId);
+        return ResponseEntity.ok(subCategories);
+    }
 }
