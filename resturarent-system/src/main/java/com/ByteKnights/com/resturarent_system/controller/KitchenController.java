@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.controller.kitchen;
+package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.AssignChefRequestDTO;
