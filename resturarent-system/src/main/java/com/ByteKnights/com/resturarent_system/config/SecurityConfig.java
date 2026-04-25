@@ -49,7 +49,7 @@ public class SecurityConfig {
                     "/v3/api-docs/**"
                 ).permitAll()
 
-                
+
 
                 // Authenticated auth flow
                 .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password").authenticated()
