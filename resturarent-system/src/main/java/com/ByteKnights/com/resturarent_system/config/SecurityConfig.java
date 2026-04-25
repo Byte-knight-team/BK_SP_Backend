@@ -36,6 +36,12 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public
                 .requestMatchers(
+                    "/api/v1/auth/**",
+                    "/api/v1/qr-sessions/**",
+                    "/api/v1/menu/customer",
+                    "/api/v1/auth/customer",
+                    "/api/tables",
+                    "/api/tables/**",
                     "/api/auth/staff/login",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
@@ -43,8 +49,13 @@ public class SecurityConfig {
                     "/v3/api-docs/**"
                 ).permitAll()
 
+                
+
                 // Authenticated auth flow
                 .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password").authenticated()
+
+                // customer opereations customer only
+                .requestMatchers("/api/v1/customer/**").hasRole("CUSTOMER")
 
                 // Branch management - SUPER_ADMIN only
                 .requestMatchers("/api/admin/branches", "/api/admin/branches/**").hasRole("SUPER_ADMIN")

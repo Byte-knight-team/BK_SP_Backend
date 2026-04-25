@@ -1,28 +1,37 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.CreateMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.DeleteMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.ApproveMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.MenuItemActionResponse;
 import com.ByteKnights.com.resturarent_system.dto.MenuItemResponse;
+import com.ByteKnights.com.resturarent_system.dto.RejectMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.UpdateMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/menu")
-@RequiredArgsConstructor
+@RequestMapping("/api/v1/menu")
+@CrossOrigin
 public class MenuController {
 
     private final MenuService menuService;
 
-    @GetMapping
-    public ResponseEntity<List<MenuItemResponse>> getAllMenuItems() {
-        List<MenuItemResponse> menuItems = menuService.getAllMenuItems();
+    public MenuController(MenuService menuService) {
+        this.menuService = menuService;
+    }
+
+    @GetMapping("/pending-chef-items")
+    public ResponseEntity<List<MenuItemResponse>> getPendingChefMenuItems() {
+        List<MenuItemResponse> menuItems = menuService.getPendingChefMenuItems();
         return ResponseEntity.ok(menuItems);
     }
 
@@ -46,9 +55,48 @@ public class MenuController {
         return ResponseEntity.ok(updated);
     }
 
+    @PatchMapping("/{id}/approve")
+    public ResponseEntity<MenuItemActionResponse> approveMenuItem(@PathVariable Long id, @Valid @RequestBody ApproveMenuItemRequest request) {
+        MenuItemActionResponse response = menuService.approveMenuItem(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{id}/reject")
+    public ResponseEntity<MenuItemActionResponse> rejectMenuItem(@PathVariable Long id, @Valid @RequestBody RejectMenuItemRequest request) {
+        MenuItemActionResponse response = menuService.rejectMenuItem(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{id}/availability")
+    public ResponseEntity<MenuItemActionResponse> toggleMenuItemAvailability(@PathVariable Long id, @RequestBody Map<String, Boolean> payload) {
+        Boolean isAvailable = payload != null ? payload.get("isAvailable") : null;
+        if (isAvailable == null) {
+            return ResponseEntity.badRequest().body(MenuItemActionResponse.builder()
+                    .type("BAD_REQUEST")
+                    .menuItemId(id)
+                    .menuItemName(null)
+                    .message("isAvailable is required")
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        }
+
+        MenuItemActionResponse response = menuService.toggleMenuItemAvailability(id, isAvailable);
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteMenuItem(@PathVariable Long id) {
-        menuService.deleteMenuItem(id);
-        return ResponseEntity.ok(Map.of("message", "Menu item deleted successfully"));
+    public ResponseEntity<MenuItemActionResponse> deleteMenuItem(@PathVariable Long id, @Valid @RequestBody DeleteMenuItemRequest request) {
+        MenuItemActionResponse response = menuService.deleteMenuItem(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    //CUSTOMER ENDPOINT (Only active items)
+    @GetMapping("/customer")
+    public ResponseEntity<ApiResponse<List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse>>> getMenu(
+            @RequestParam(required = false) Long branchId) {
+
+        List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> menuItems = menuService.fetchCustomerMenu(branchId);
+
+        return ResponseEntity.ok(ApiResponse.success("Menu fetched successfully", menuItems));
     }
 }

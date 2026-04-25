@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.dto.response;
+package com.ByteKnights.com.resturarent_system.dto.response.customer;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
@@ -12,6 +12,5 @@ public class CustomerLoginResponseData {
     @JsonProperty("user_id")
     private Long userId;
 
-    private String role;
     private String token;
 }
