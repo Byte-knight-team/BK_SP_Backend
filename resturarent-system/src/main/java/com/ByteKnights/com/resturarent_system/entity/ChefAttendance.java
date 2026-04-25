@@ -19,6 +19,8 @@ public class ChefAttendance {
     private Long id;
 
     // Connects to the Staff member
+    // MANY attendance records can belong to ONE staff member.
+    // To find which attendence recode belongs to which Staff member
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "staff_id", nullable = false)
     private Staff staff;

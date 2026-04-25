@@ -5,7 +5,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequ
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
-import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
+import com.ByteKnights.com.resturarent_system.service.KitchenService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -115,6 +115,7 @@ public class KitchenController {
     @PutMapping("/inventory/update")
     @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> updateInventoryStock(
+
             @Valid @RequestBody UpdateStockDTO updateDTO) {
 
         kitchenService.updateInventoryStock(updateDTO);
@@ -129,11 +130,28 @@ public class KitchenController {
     @GetMapping("/order-details/{id}")
     @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getOrderDetails(@PathVariable Long id) {
+
         // call the service to get the specific order details
         OrderDetailsDTO orderDetails = kitchenService.getOrderDetails(id);
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", orderDetails),
+                HttpStatus.OK
+        );
+    }
+
+    // Get Line Chefs for assign them to prepare meals
+    @GetMapping("/available-chefs")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> getAvailableChefsForAssignment(Principal principal) {
+
+        // Extract email from the JWT token
+        String userEmail = principal.getName();
+
+        List<ChefAssignDTO> chefs = kitchenService.getAvailableChefsForAssignment(userEmail);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", chefs),
                 HttpStatus.OK
         );
     }

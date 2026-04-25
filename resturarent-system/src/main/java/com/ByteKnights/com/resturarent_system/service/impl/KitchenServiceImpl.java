@@ -1,16 +1,17 @@
-package com.ByteKnights.com.resturarent_system.service.impl.kitchen;
+package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
-import com.ByteKnights.com.resturarent_system.service.kitchen.KitchenService;
+import com.ByteKnights.com.resturarent_system.service.KitchenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,6 +28,7 @@ public class KitchenServiceImpl implements KitchenService {
     final ChefRequestRepository chefRequestRepository;
     final UserRepository userRepository;
     final StaffRepository staffRepository;
+    final ChefAttendanceRepository chefAttendanceRepository;
 
     // kitchen dashboard stat
     @Override
@@ -285,6 +287,31 @@ public class KitchenServiceImpl implements KitchenService {
         );
     }
 
+    @Override
+    public List<ChefAssignDTO> getAvailableChefsForAssignment(String userEmail) {
+        // Find logged-in user
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        // Find Chief Chef's branch
+        Staff currentStaff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = currentStaff.getBranch().getId();
+        // Define filters
+        LocalDate today = LocalDate.now();
+        List<ChefWorkStatus> allowedStatuses = List.of(ChefWorkStatus.AVAILABLE, ChefWorkStatus.COOKING);
+        // Fetch raw Entities from the database
+        List<ChefAttendance> attendances = chefAttendanceRepository
+                .findAvailableLineChefsForBranch(
+                        today, branchId, ChefAttendanceStatus.ON_DUTY, allowedStatuses
+                );
+        // Map the Entities to your ChefAssignDTO and return
+        return attendances.stream()
+                .map(ca -> new ChefAssignDTO(
+                        ca.getStaff().getId(),
+                        ca.getStaff().getUser().getFullName(),
+                        ca.getWorkStatus().toString()
+                )).toList();
+    }
 
 
 }

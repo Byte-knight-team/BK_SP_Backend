@@ -10,9 +10,8 @@ import java.util.Optional;
 @Repository
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, Long> {
 
-    // TODO: Add custom query methods as needed
-
     Optional<InventoryItem> findByName(String name);
+
 
 
 }
