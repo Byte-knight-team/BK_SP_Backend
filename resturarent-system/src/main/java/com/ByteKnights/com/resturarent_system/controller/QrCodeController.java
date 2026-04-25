@@ -39,6 +39,13 @@ public class QrCodeController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @GetMapping("/tables/{tableId}/qr-codes/active")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    public ResponseEntity<QrCodeResponse> getActiveQrCodeForTable(@PathVariable Long tableId) {
+        QrCodeResponse response = qrCodeService.getActiveQrCodeForTable(tableId);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/qr-codes/{qrCodeId}/revoke")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<QrCodeResponse> revokeQrCode(
