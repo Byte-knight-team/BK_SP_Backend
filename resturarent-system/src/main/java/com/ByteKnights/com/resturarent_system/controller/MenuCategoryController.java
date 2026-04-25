@@ -23,11 +23,8 @@ import java.util.List;
 public class MenuCategoryController {
 
     private final MenuCategoryService menuCategoryService;
-    private final com.ByteKnights.com.resturarent_system.service.MenuService menuService;
-
-    public MenuCategoryController(MenuCategoryService menuCategoryService, com.ByteKnights.com.resturarent_system.service.MenuService menuService) {
+    public MenuCategoryController(MenuCategoryService menuCategoryService) {
         this.menuCategoryService = menuCategoryService;
-        this.menuService = menuService;
     }
 
     @GetMapping
@@ -44,12 +41,7 @@ public class MenuCategoryController {
         return ResponseEntity.ok(category);
     }
 
-    @GetMapping("/count")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
-    public ResponseEntity<Long> getCategoriesCount() {
-        long count = menuService.getCategoryCount();
-        return ResponseEntity.ok(count);
-    }
+
 
     @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")

@@ -37,6 +37,13 @@ public class MenuController {
         return ResponseEntity.ok(menuItems);
     }
 
+    @GetMapping("/categories/count")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<Long> getCategoriesCount() {
+        long count = menuService.getCategoryCount();
+        return ResponseEntity.ok(count);
+    }
+
     @GetMapping("/subcategories/count")
     @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
     public ResponseEntity<Long> getSubCategoriesCount() {
