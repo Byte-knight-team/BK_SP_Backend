@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +19,8 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
     long countByStatus(OrderStatus status);
+
+    long countByBranchIdAndStatus(Long branchId, OrderStatus status);
 
     long countByStatusIn(Collection<OrderStatus> statuses);
 
@@ -32,6 +35,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     BigDecimal sumFinalAmountByBranchIdAndPaymentStatusIn(
             @Param("branchId") Long branchId,
             @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
+
+        List<Order> findByPaymentStatusInAndCreatedAtBetween(
+            Collection<PaymentStatus> paymentStatuses,
+            LocalDateTime start,
+            LocalDateTime end);
+
+        List<Order> findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+            Long branchId,
+            Collection<PaymentStatus> paymentStatuses,
+            LocalDateTime start,
+            LocalDateTime end);
 
     @EntityGraph(attributePaths = "items")
     List<Order> findTop5ByOrderByCreatedAtDesc();
