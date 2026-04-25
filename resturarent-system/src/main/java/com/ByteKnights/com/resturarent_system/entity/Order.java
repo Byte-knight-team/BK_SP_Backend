@@ -128,10 +128,6 @@ public class Order {
     private String cancelReason;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_chef_id")
-    private Staff assignedChef;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_delivery_id")
     private Staff assignedDelivery;
 
@@ -148,7 +144,8 @@ public class Order {
     private LocalDateTime updatedAt;
 
     // Tracks the exact timestamp when the order's status was last changed.
-    // This is primarily used for accurate sorting in the kitchen dashboard (FIFO/LIFO queues)
+    // This is primarily used for accurate sorting in the kitchen dashboard
+    // (FIFO/LIFO queues)
     @Column(name = "status_updated_at")
     private LocalDateTime statusUpdatedAt;
 
@@ -233,6 +230,4 @@ public class Order {
         items.add(item);
         item.setOrder(this);
     }
-
-
 }
