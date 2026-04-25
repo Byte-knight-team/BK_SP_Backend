@@ -12,6 +12,8 @@ import java.util.List;
 
 public interface MenuService {
 
+    long getCategoryCount();
+
     MenuItemResponse createMenuItem(CreateMenuItemRequest request);
 
     List<MenuItemResponse> getAllMenuItems();

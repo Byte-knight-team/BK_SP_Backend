@@ -44,4 +44,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
         List<String> findDistinctSubCategoriesByBranchIdAndCategoryId(
             @Param("branchId") Long branchId,
             @Param("categoryId") Long categoryId);
+
+    @Query("SELECT COUNT(DISTINCT mi.category.id) FROM MenuItem mi WHERE mi.branch.id = :branchId")
+    long countDistinctCategoryByBranchId(@Param("branchId") Long branchId);
 }
