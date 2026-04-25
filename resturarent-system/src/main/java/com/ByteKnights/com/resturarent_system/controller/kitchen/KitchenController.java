@@ -1,7 +1,8 @@
 package com.ByteKnights.com.resturarent_system.controller.kitchen;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.AssignChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
@@ -97,7 +98,7 @@ public class KitchenController {
     @PostMapping("/inventory/request")
     @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> createRequest(
-            @Valid @RequestBody CreateChefRequestDTO requestDTO,
+            @Valid @RequestBody InventoryRequestDTO requestDTO,
             Principal principal) {
 
         // principal.getName() returns the email of the logged-in user from the JWT token - extract user email from the JWT token's Principal
@@ -155,6 +156,22 @@ public class KitchenController {
                 HttpStatus.OK
         );
     }
+
+    // Assign a chef to a specific meal
+    @PutMapping("/order-items/{itemId}/assign")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> assignChefToMeal(
+            @PathVariable Long itemId,
+            @RequestBody AssignChefRequestDTO requestDTO) {
+
+        kitchenService.assignChefToMeal(itemId, requestDTO.getChefId());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef assigned successfully", null),
+                HttpStatus.OK
+        );
+    }
+
 
 }
 

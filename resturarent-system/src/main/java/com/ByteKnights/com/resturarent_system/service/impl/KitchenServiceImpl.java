@@ -1,6 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.*;
@@ -222,7 +222,7 @@ public class KitchenServiceImpl implements KitchenService {
 
     // create stock refill requests and new inventory item requests
     @Override
-    public void createRequest(CreateChefRequestDTO requestDTO, String userEmail) {
+    public void createRequest(InventoryRequestDTO requestDTO, String userEmail) {
 
         // get the logged-in User to get the username
         User user = userRepository.findByEmail(userEmail)
@@ -287,6 +287,7 @@ public class KitchenServiceImpl implements KitchenService {
         );
     }
 
+    //get all available Line chefs from the same branch of the logged-in Chief Chef to assign them to prepare meals
     @Override
     public List<ChefAssignDTO> getAvailableChefsForAssignment(String userEmail) {
         // Find logged-in user
@@ -311,6 +312,22 @@ public class KitchenServiceImpl implements KitchenService {
                         ca.getStaff().getUser().getFullName(),
                         ca.getWorkStatus().toString()
                 )).toList();
+    }
+
+    // Save the assigned chef in the order_items table
+    @Override
+    public void assignChefToMeal(Long orderItemId, Long chefStaffId) {
+        // Find the meal (OrderItem)
+        OrderItem item = orderItemRepository.findById(orderItemId)
+                .orElseThrow(() -> new RuntimeException("Meal not found"));
+
+        // Find the chosen chef (Staff)
+        Staff chef = staffRepository.findById(chefStaffId)
+                .orElseThrow(() -> new RuntimeException("Chef not found"));
+
+        // Link the chef to the meal and save
+        item.setAssignedChef(chef);
+        orderItemRepository.save(item);
     }
 
 
