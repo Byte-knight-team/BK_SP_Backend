@@ -128,10 +128,6 @@ public class Order {
     private String cancelReason;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_chef_id")
-    private Staff assignedChef;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_delivery_id")
     private Staff assignedDelivery;
 
