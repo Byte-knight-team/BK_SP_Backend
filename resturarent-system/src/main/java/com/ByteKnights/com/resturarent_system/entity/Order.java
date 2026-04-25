@@ -187,6 +187,7 @@ public class Order {
         this.status = newStatus;
         this.statusUpdatedAt = LocalDateTime.now();
 
+        // Update milestone timestamps based on the specific status entered
         if (newStatus == OrderStatus.PENDING) {
             this.approvedAt = LocalDateTime.now();
         } else if (newStatus == OrderStatus.PREPARING) {
