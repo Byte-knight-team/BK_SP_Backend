@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -162,19 +164,36 @@ public class KitchenServiceImpl implements KitchenService {
     //get orderCard details
     @Override
     public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status) {
+
+        // Define the time range: Only fetch orders starting from today's midnight
+        LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
+
         // Sorting logic (Pending/Preparing = ASC, Completed = DESC)
         Sort sort = (status == OrderStatus.COMPLETED)
                 ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
                 : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
-        List<Order> orders = orderRepository.findByStatus(status, sort);
+        // Retrieve sorted orders from today
+        List<Order> orders = orderRepository.findByStatusAndStatusUpdatedAtAfter(status, startOfToday, sort);
+
+        // Initialize a list to hold the DTOs for the frontend
         List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
+
+        // Define a 12-hour time format (e.g., 08:30 PM) for better readability
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
 
+        // Nested Looping to calculate total item count for each order and map to DTO
+        // loop through all filtered order
         for (Order order : orders) {
-            // Sum of quantities for all items in the order
-            int totalQty = order.getItems().stream().mapToInt(OrderItem::getQuantity).sum();
+            // Set initial count as Zero
+            int totalQty = 0;
+            // loop through sll items in the selected order
+            for (OrderItem item : order.getItems()) {
+                // calculate total item count in the selected order
+                totalQty = totalQty + item.getQuantity();
+            }
 
+            // add OrderCardDetailsDTO list to the array list using .add() method and call the all args constructor of OrderCardDetailsDTO
             orderCardDetailsDTOS.add(new OrderCardDetailsDTO(
                     order.getId(),
                     order.getStatus().toString(), // Enum -> String
