@@ -10,11 +10,15 @@ import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
+import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.RestaurantTableService;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
 import com.ByteKnights.com.resturarent_system.exception.InvalidOperationException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +35,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     private final RestaurantTableRepository tableRepository;
     private final BranchRepository branchRepository;
     private final QrCodeRepository qrCodeRepository;
+    private final StaffRepository staffRepository;
 
     /**
      * Creates a table after validating branch state and uniqueness.
@@ -38,6 +43,8 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Override
     @Transactional
     public TableResponse createTable(CreateTableRequest request) {
+        enforceAdminBranchAccess(request.getBranchId());
+
         // 1. Validate branch exists
         Branch branch = branchRepository.findById(request.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -77,6 +84,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Transactional(readOnly = true)
     public TableResponse getTableById(Long id) {
         RestaurantTable table = findTableOrThrow(id);
+        enforceAdminBranchAccess(table.getBranch().getId());
         return mapToResponse(table);
     }
 
@@ -86,7 +94,13 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Override
     @Transactional(readOnly = true)
     public List<TableResponse> getAllTables() {
-        return tableRepository.findAll()
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
+        List<RestaurantTable> tables = adminBranchId == null
+            ? tableRepository.findAll()
+            : tableRepository.findByBranchId(adminBranchId);
+
+        return tables
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -99,6 +113,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Transactional
     public TableResponse updateTable(Long id, UpdateTableRequest request) {
         RestaurantTable table = findTableOrThrow(id);
+        enforceAdminBranchAccess(table.getBranch().getId());
 
         // Update table number if provided
         if (request.getTableNumber() != null) {
@@ -134,6 +149,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Transactional
     public TableResponse updateTableStatus(Long id, UpdateTableStatusRequest request) {
         RestaurantTable table = findTableOrThrow(id);
+        enforceAdminBranchAccess(table.getBranch().getId());
 
         // Capture the current persisted active order count before applying manual status input.
         // This lets us enforce a business rule for the common transition from 0 -> 1 active orders.
@@ -163,6 +179,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     @Transactional
     public void deleteTable(Long id) {
         RestaurantTable table = findTableOrThrow(id);
+        enforceAdminBranchAccess(table.getBranch().getId());
 
         // Enforce a hard business rule: once a table has QR references, the row must not be
         // physically deleted. This keeps QR audit/history intact and avoids database FK errors
@@ -230,5 +247,39 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
                 .activeOrderCount(table.getActiveOrderCount())
                 .createdAt(table.getCreatedAt())
                 .build();
+    }
+
+    private void enforceAdminBranchAccess(Long targetBranchId) {
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
+        if (adminBranchId != null && !adminBranchId.equals(targetBranchId)) {
+            throw new InvalidOperationException("ADMIN can access tables only in their own branch");
+        }
+    }
+
+    private Long resolveCurrentAdminBranchIdOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return null;
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+
+        if (!isAdmin) {
+            return null;
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof JwtUserPrincipal jwtUser)
+                || jwtUser.getUser() == null
+                || jwtUser.getUser().getId() == null) {
+            throw new InvalidOperationException("Authenticated ADMIN user not found");
+        }
+
+        return staffRepository.findByUserId(jwtUser.getUser().getId())
+                .map(staff -> staff.getBranch().getId())
+                .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
     }
 }

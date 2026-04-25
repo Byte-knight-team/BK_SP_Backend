@@ -9,12 +9,16 @@ import com.ByteKnights.com.resturarent_system.exception.InvalidOperationExceptio
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
+import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtService;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.QrCodeService;
 import com.ByteKnights.com.resturarent_system.util.QrCodeGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +39,7 @@ public class QrCodeServiceImpl implements QrCodeService {
     private final QrCodeRepository qrCodeRepository;
     private final RestaurantTableRepository tableRepository;
     private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
     private final JwtService jwtService;
 
     @Value("${app.jwt.qr-token-expiration-ms:2400000}")
@@ -48,6 +53,7 @@ public class QrCodeServiceImpl implements QrCodeService {
     public QrCodeResponse createQrCode(Long tableId, Long actorUserId) {
         RestaurantTable table = findTableForUpdateOrThrow(tableId);
         validateTableHasBranch(table);
+        enforceAdminBranchAccess(table.getBranch().getId());
         User actorUser = findUserByIdOrThrow(actorUserId);
 
         if (qrCodeRepository.existsByTableIdAndActiveTrue(tableId)) {
@@ -71,6 +77,7 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Transactional
     public QrCodeResponse revokeQrCode(Long qrCodeId, String revokedReason) {
         QrCode qrCode = findQrCodeOrThrow(qrCodeId);
+        enforceAdminBranchAccess(qrCode.getBranch().getId());
 
         if (!Boolean.TRUE.equals(qrCode.getActive())) {
             throw new InvalidOperationException("QR code is already revoked: " + qrCodeId);
@@ -88,6 +95,7 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Transactional
     public QrCodeResponse regenerateQrCode(Long qrCodeId, Long actorUserId, String revokeReason) {
         QrCode existing = findQrCodeOrThrow(qrCodeId);
+        enforceAdminBranchAccess(existing.getBranch().getId());
         User actorUser = findUserByIdOrThrow(actorUserId);
         RestaurantTable lockedTable = findTableForUpdateOrThrow(existing.getTable().getId());
         validateTableHasBranch(lockedTable);
@@ -125,6 +133,7 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Transactional(readOnly = true)
     public byte[] downloadQrCodeImage(Long qrCodeId) {
         QrCode qrCode = findQrCodeOrThrow(qrCodeId);
+        enforceAdminBranchAccess(qrCode.getBranch().getId());
         if (!Boolean.TRUE.equals(qrCode.getActive())) {
             throw new InvalidOperationException("Cannot download image for a revoked QR code: " + qrCodeId);
         }
@@ -216,6 +225,40 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .createdAt(qrCode.getCreatedAt())
                 .updatedAt(qrCode.getUpdatedAt())
                 .build();
+    }
+
+    private void enforceAdminBranchAccess(Long targetBranchId) {
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
+        if (adminBranchId != null && !adminBranchId.equals(targetBranchId)) {
+            throw new InvalidOperationException("ADMIN can access QR codes only in their own branch");
+        }
+    }
+
+    private Long resolveCurrentAdminBranchIdOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return null;
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+
+        if (!isAdmin) {
+            return null;
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof JwtUserPrincipal jwtUser)
+                || jwtUser.getUser() == null
+                || jwtUser.getUser().getId() == null) {
+            throw new InvalidOperationException("Authenticated ADMIN user not found");
+        }
+
+        return staffRepository.findByUserId(jwtUser.getUser().getId())
+                .map(staff -> staff.getBranch().getId())
+                .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
     }
 
     private record SecureQrPayload(String token, String url, byte[] imageBytes, String expiresAt) {
