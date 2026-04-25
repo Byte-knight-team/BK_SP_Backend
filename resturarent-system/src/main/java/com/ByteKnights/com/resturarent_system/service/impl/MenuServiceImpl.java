@@ -70,6 +70,39 @@ public class MenuServiceImpl implements MenuService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public long getSubCategoryCount() {
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+        if (adminBranchId != null) {
+            return menuItemRepository.countDistinctSubCategoryByBranchId(adminBranchId);
+        } else {
+            return menuItemRepository.countDistinctSubCategory();
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long getMenuItemCount() {
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+        if (adminBranchId != null) {
+            return menuItemRepository.countByBranchId(adminBranchId);
+        } else {
+            return menuItemRepository.count();
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long getAvailableItemCount() {
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+        if (adminBranchId != null) {
+            return menuItemRepository.countByBranchIdAndIsAvailableTrue(adminBranchId);
+        } else {
+            return menuItemRepository.countByIsAvailableTrue();
+        }
+    }
+
+    @Override
     @Transactional
     public MenuItemResponse createMenuItem(CreateMenuItemRequest request) {
         enforceAdminBranchAccess(request.getBranchId());

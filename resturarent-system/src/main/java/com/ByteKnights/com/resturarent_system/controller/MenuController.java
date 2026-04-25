@@ -37,6 +37,27 @@ public class MenuController {
         return ResponseEntity.ok(menuItems);
     }
 
+    @GetMapping("/subcategories/count")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<Long> getSubCategoriesCount() {
+        long count = menuService.getSubCategoryCount();
+        return ResponseEntity.ok(count);
+    }
+
+    @GetMapping("/count")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<Long> getMenuItemsCount() {
+        long count = menuService.getMenuItemCount();
+        return ResponseEntity.ok(count);
+    }
+
+    @GetMapping("/available/count")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<Long> getAvailableItemsCount() {
+        long count = menuService.getAvailableItemCount();
+        return ResponseEntity.ok(count);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<MenuItemResponse> getMenuItemById(@PathVariable Long id) {
         MenuItemResponse menuItem = menuService.getMenuItemById(id);
