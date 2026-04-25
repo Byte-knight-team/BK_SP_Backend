@@ -94,19 +94,6 @@ public class CheckoutServiceImpl implements CheckoutService {
         Integer pointsUsed = 0;
         Integer availablePoints = 0;
 
-        // The max loyalty discount allowed is 50% of (subtotal − couponDiscount).
-        // Convert that back to points using valuePerPoint.
-        Integer maxRedeemable = 0;
-        if (sysConfig.isLoyaltyEnabled()
-                && availablePoints >= sysConfig.getMinPointsToRedeem()
-                && sysConfig.getValuePerPoint().compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal subtotalAfterCoupon = subtotal.subtract(couponDiscount);
-            BigDecimal maxLoyaltyDiscount = subtotalAfterCoupon.multiply(BigDecimal.valueOf(0.5));
-            int maxPointsByValue = maxLoyaltyDiscount.divide(sysConfig.getValuePerPoint(), 0, RoundingMode.DOWN)
-                    .intValue();
-            maxRedeemable = Math.max(0, Math.min(availablePoints, maxPointsByValue));
-        }
-
         if (userIdentifier != null && sysConfig.isLoyaltyEnabled()) {
             Customer customer = getCustomer(userIdentifier);
             availablePoints = customer.getLoyaltyPoints();
@@ -127,7 +114,11 @@ public class CheckoutServiceImpl implements CheckoutService {
                 // Convert points to cash
                 loyaltyDiscount = BigDecimal.valueOf(pointsUsed).multiply(sysConfig.getValuePerPoint());
 
-                if (loyaltyDiscount.compareTo(maxRedeemable) > 0) {
+                // Validation 3: 50% Max Rule
+                BigDecimal subtotalAfterCoupon = subtotal.subtract(couponDiscount);
+                BigDecimal maxAllowedLoyaltyDiscount = subtotalAfterCoupon.multiply(BigDecimal.valueOf(0.5));
+
+                if (loyaltyDiscount.compareTo(maxAllowedLoyaltyDiscount) > 0) {
                     throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
                             "Loyalty discount cannot exceed 50% of the order value after coupons");
                 }
@@ -170,6 +161,19 @@ public class CheckoutServiceImpl implements CheckoutService {
             // e.g., For every $10 (amountPerPoint), earn 1 point (pointsPerAmount)
             BigDecimal multiplier = finalTotal.divide(sysConfig.getAmountPerPoint(), 0, RoundingMode.DOWN);
             pointsEarned = multiplier.multiply(sysConfig.getPointsPerAmount()).intValue();
+        }
+
+        // The max loyalty discount allowed is 50% of (subtotal − couponDiscount).
+        // Convert that back to points using valuePerPoint.
+        Integer maxRedeemable = 0;
+        if (sysConfig.isLoyaltyEnabled()
+                && availablePoints >= sysConfig.getMinPointsToRedeem()
+                && sysConfig.getValuePerPoint().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal subtotalAfterCoupon = subtotal.subtract(couponDiscount);
+            BigDecimal maxLoyaltyDiscount = subtotalAfterCoupon.multiply(BigDecimal.valueOf(0.5));
+            int maxPointsByValue = maxLoyaltyDiscount.divide(sysConfig.getValuePerPoint(), 0, RoundingMode.DOWN)
+                    .intValue();
+            maxRedeemable = Math.max(0, Math.min(availablePoints, maxPointsByValue));
         }
 
         // 9. Return the Receipt DTO
