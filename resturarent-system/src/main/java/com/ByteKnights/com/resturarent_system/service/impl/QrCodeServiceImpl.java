@@ -142,6 +142,17 @@ public class QrCodeServiceImpl implements QrCodeService {
         return payload.imageBytes();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public QrCodeResponse getActiveQrCodeForTable(Long tableId) {
+        QrCode activeQr = qrCodeRepository.findFirstByTableIdAndActiveTrue(tableId)
+                .orElseThrow(() -> new ResourceNotFoundException("No active QR code found for table: " + tableId));
+        
+        enforceAdminBranchAccess(activeQr.getBranch().getId());
+        
+        return mapToResponseWithSecureQr(activeQr);
+    }
+
     private RestaurantTable findTableForUpdateOrThrow(Long tableId) {
         return tableRepository.findByIdForUpdate(tableId)
                 .orElseThrow(() -> new ResourceNotFoundException("Table not found with id: " + tableId));
