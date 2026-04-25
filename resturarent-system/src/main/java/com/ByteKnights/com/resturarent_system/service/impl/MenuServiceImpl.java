@@ -16,6 +16,7 @@ import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundExceptio
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
@@ -41,18 +42,26 @@ public class MenuServiceImpl implements MenuService {
     private final MenuItemRepository menuItemRepository;
     private final BranchRepository branchRepository;
     private final MenuCategoryRepository menuCategoryRepository;
+    private final StaffRepository staffRepository;
     private final UserRepository userRepository;
 
-    public MenuServiceImpl(MenuItemRepository menuItemRepository, BranchRepository branchRepository, MenuCategoryRepository menuCategoryRepository, UserRepository userRepository) {
+    public MenuServiceImpl(MenuItemRepository menuItemRepository,
+                           BranchRepository branchRepository,
+                           MenuCategoryRepository menuCategoryRepository,
+                           StaffRepository staffRepository,
+                           UserRepository userRepository) {
         this.menuItemRepository = menuItemRepository;
         this.branchRepository = branchRepository;
         this.menuCategoryRepository = menuCategoryRepository;
+        this.staffRepository = staffRepository;
         this.userRepository = userRepository;
     }
 
     @Override
     @Transactional
     public MenuItemResponse createMenuItem(CreateMenuItemRequest request) {
+        enforceAdminBranchAccess(request.getBranchId());
+
         Branch branch = findBranchOrThrow(request.getBranchId());
         MenuCategory category = findCategoryOrThrow(request.getCategoryId());
         String validatedName = validateAndNormalizeRequiredName(request.getName());
@@ -116,7 +125,13 @@ public class MenuServiceImpl implements MenuService {
     @Override
     @Transactional(readOnly = true)
     public List<MenuItemResponse> getAllMenuItems() {
-        return menuItemRepository.findByStatusAndIsAvailableTrue(MenuItemStatus.ACTIVE)
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
+        List<MenuItem> items = adminBranchId == null
+            ? menuItemRepository.findByStatusAndIsAvailableTrue(MenuItemStatus.ACTIVE)
+            : menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(adminBranchId, MenuItemStatus.ACTIVE);
+
+        return items
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -130,8 +145,12 @@ public class MenuServiceImpl implements MenuService {
             return List.of();
         }
 
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
         return menuItemRepository.findByStatusAndCreatedByIn(MenuItemStatus.PENDING, chefUserIds)
                 .stream()
+            .filter(item -> adminBranchId == null
+                || (item.getBranch() != null && adminBranchId.equals(item.getBranch().getId())))
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -140,6 +159,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional(readOnly = true)
     public MenuItemResponse getMenuItemById(Long id) {
         MenuItem menuItem = findMenuItemOrThrow(id);
+        enforceAdminBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
         return mapToResponse(menuItem);
     }
 
@@ -183,8 +203,10 @@ public class MenuServiceImpl implements MenuService {
     @Transactional
     public MenuItemResponse updateMenuItem(Long id, UpdateMenuItemRequest request) {
         MenuItem menuItem = findMenuItemOrThrow(id);
+        enforceAdminBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
         if (request.getBranchId() != null) {
+            enforceAdminBranchAccess(request.getBranchId());
             menuItem.setBranch(findBranchOrThrow(request.getBranchId()));
         }
 
@@ -243,6 +265,7 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemActionResponse approveMenuItem(Long id, ApproveMenuItemRequest request) {
         ensureCurrentUserIsAdminForWorkflow();
         MenuItem menuItem = findMenuItemOrThrow(id);
+        enforceAdminBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
         if (menuItem.getStatus() != MenuItemStatus.PENDING) {
             throw new InvalidOperationException("Item is already processed");
@@ -268,6 +291,7 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemActionResponse rejectMenuItem(Long id, RejectMenuItemRequest request) {
         ensureCurrentUserIsAdminForWorkflow();
         MenuItem menuItem = findMenuItemOrThrow(id);
+        enforceAdminBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
         if (menuItem.getStatus() != MenuItemStatus.PENDING) {
             throw new InvalidOperationException("Item is already processed");
@@ -292,6 +316,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional
     public MenuItemActionResponse toggleMenuItemAvailability(Long id, boolean isAvailable) {
         MenuItem menuItem = findMenuItemOrThrow(id);
+        enforceAdminBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
         if (menuItem.getStatus() != MenuItemStatus.ACTIVE) {
             throw new InvalidOperationException("Cannot toggle availability if item is not ACTIVE");
@@ -309,6 +334,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional
     public MenuItemActionResponse deleteMenuItem(Long id, DeleteMenuItemRequest request) {
         MenuItem menuItem = findMenuItemOrThrow(id);
+        enforceAdminBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
         if (menuItem.getStatus() == MenuItemStatus.ACTIVE) {
             throw new InvalidOperationException("Cannot delete active item");
@@ -508,6 +534,40 @@ public class MenuServiceImpl implements MenuService {
         if (!isCurrentUserAdminOrSuperAdmin()) {
             throw new InvalidOperationException("Only ADMIN or SUPER_ADMIN can approve/reject pending menu items");
         }
+    }
+
+    private void enforceAdminBranchAccess(Long targetBranchId) {
+        Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
+        if (adminBranchId != null && (targetBranchId == null || !adminBranchId.equals(targetBranchId))) {
+            throw new InvalidOperationException("ADMIN can access menu items only in their own branch");
+        }
+    }
+
+    private Long resolveCurrentAdminBranchIdOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return null;
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+
+        if (!isAdmin) {
+            return null;
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof JwtUserPrincipal jwtUser)
+                || jwtUser.getUser() == null
+                || jwtUser.getUser().getId() == null) {
+            throw new InvalidOperationException("Authenticated ADMIN user not found");
+        }
+
+        return staffRepository.findByUserId(jwtUser.getUser().getId())
+                .map(staff -> staff.getBranch().getId())
+                .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
     }
 
     private MenuItemResponse mapToResponse(MenuItem item) {
