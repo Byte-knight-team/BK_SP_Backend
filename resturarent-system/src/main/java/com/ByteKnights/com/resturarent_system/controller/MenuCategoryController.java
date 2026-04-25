@@ -8,12 +8,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/categories")
@@ -23,6 +26,20 @@ public class MenuCategoryController {
 
     public MenuCategoryController(MenuCategoryService menuCategoryService) {
         this.menuCategoryService = menuCategoryService;
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<List<MenuCategoryResponse>> getAllCategories() {
+        List<MenuCategoryResponse> categories = menuCategoryService.getAllCategories();
+        return ResponseEntity.ok(categories);
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    public ResponseEntity<MenuCategoryResponse> getCategoryById(@PathVariable Long id) {
+        MenuCategoryResponse category = menuCategoryService.getCategoryById(id);
+        return ResponseEntity.ok(category);
     }
 
     @PostMapping
