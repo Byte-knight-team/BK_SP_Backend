@@ -441,9 +441,27 @@ public class KitchenServiceImpl implements KitchenService {
         chefAttendanceRepository.save(attendance);
     }
 
+    // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
     @Override
+    @Transactional
     public void holdOrder(Long orderId, String holdReason) {
+        // Find the order
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
 
+        // Update Order Status and Reason
+        order.setStatus(OrderStatus.ON_HOLD);
+        order.setHoldReason(holdReason);
+        order.setStatusUpdatedAt(LocalDateTime.now());
+
+        // Update ALL items inside this order to ON_HOLD as well
+        for (OrderItem item : order.getItems()) {
+            item.setStatus(OrderItemStatus.ON_HOLD);
+        }
+
+        // Save the order (This will save the items too because of Cascade)
+        orderRepository.save(order);
     }
+
 
 }
