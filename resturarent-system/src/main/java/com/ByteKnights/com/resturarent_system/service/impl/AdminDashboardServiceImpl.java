@@ -38,14 +38,14 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private static final DateTimeFormatter DAY_LABEL_FORMATTER = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH);
 
     private static final Set<OrderStatus> ACTIVE_ORDER_STATUSES = EnumSet.of(
-            OrderStatus.OPEN,
+            //OrderStatus.OPEN,
             OrderStatus.PLACED,
             OrderStatus.APPROVED,
             OrderStatus.PREPARING,
             OrderStatus.READY,
             OrderStatus.OUT_FOR_DELIVERY,
-            OrderStatus.SERVED,
-            OrderStatus.PAID
+            OrderStatus.SERVED
+            //OrderStatus.PAID
     );
 
     private static final Set<PaymentStatus> REVENUE_PAYMENT_STATUSES = EnumSet.of(
