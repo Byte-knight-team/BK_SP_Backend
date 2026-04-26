@@ -26,7 +26,7 @@ public class SystemConfigController {
     }
 
     @GetMapping("/global")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<GlobalConfigResponse> getGlobalConfig() {
         return ResponseEntity.ok(systemConfigService.getGlobalConfig());
     }
