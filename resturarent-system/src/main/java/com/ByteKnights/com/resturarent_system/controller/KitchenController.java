@@ -172,6 +172,14 @@ public class KitchenController {
         );
     }
 
+    // get all the Line Chefs Who is not checked in yet for the day and display them in the check-in list of the kitchen dashboard
+    // then the chef can check in from there
+    @GetMapping("/chefs/check-in-list")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> getChefsForCheckIn(Principal principal) {
+        return ResponseEntity.ok(new StandardResponse(200, "Success",
+                kitchenService.getLineChefsForCheckIn(principal.getName())));
+    }
 
 }
 
