@@ -177,10 +177,26 @@ public class KitchenController {
     @GetMapping("/chefs/check-in-list")
     @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> getChefsForCheckIn(Principal principal) {
-        return ResponseEntity.ok(new StandardResponse(200, "Success",
-                kitchenService.getLineChefsForCheckIn(principal.getName())));
+
+        List<ChefCheckInDTO> chefList = kitchenService.getLineChefsForCheckIn(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "success", chefList),
+                HttpStatus.OK
+        );
+    }
+
+    // create an attendance record for the chef when they check in for the day from the kitchen dashboard
+    @PostMapping("/chefs/{chefId}/check-in")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> checkInChef(@PathVariable Long chefId) {
+
+        kitchenService.checkInChef(chefId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef checked in successfully", null),
+                HttpStatus.OK
+        );
     }
 
 }
-
-

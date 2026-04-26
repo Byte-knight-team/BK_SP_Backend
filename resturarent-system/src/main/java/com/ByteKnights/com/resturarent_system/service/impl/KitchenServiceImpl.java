@@ -385,4 +385,32 @@ public class KitchenServiceImpl implements KitchenService {
         return checkInList;
     }
 
+    // save check in attendance record
+    @Override
+    @Transactional // This is important because we are saving to the database!
+    public void checkInChef(Long chefId) {
+
+        // Check if already checked in today
+        boolean alreadyCheckedIn = chefAttendanceRepository.existsByStaffIdAndAttendanceDate(chefId, LocalDate.now());
+
+        if (alreadyCheckedIn) {
+            throw new RuntimeException("Chef has already checked in for today!");
+        }
+
+        // Find the chef by the ID sent from the frontend
+        Staff chef = staffRepository.findById(chefId)
+                .orElseThrow(() -> new RuntimeException("Chef not found"));
+
+        // Create a new attendance record
+        ChefAttendance attendance = new ChefAttendance();
+        attendance.setStaff(chef);
+        attendance.setAttendanceDate(LocalDate.now()); // Sets today's date
+        attendance.setClockInTime(LocalDateTime.now()); // Sets the exact time right now
+        attendance.setAttendanceStatus(ChefAttendanceStatus.ON_DUTY); // now the chef is clocked in and ready to work
+        attendance.setWorkStatus(ChefWorkStatus.AVAILABLE); // not started cooking yet
+
+        // Save it to the database
+        chefAttendanceRepository.save(attendance);
+    }
+
 }
