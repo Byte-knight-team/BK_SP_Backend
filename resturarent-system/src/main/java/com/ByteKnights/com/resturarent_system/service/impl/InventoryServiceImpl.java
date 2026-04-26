@@ -1,6 +1,9 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.CreateInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.RemoveInventoryStockRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
@@ -187,6 +190,97 @@ public class InventoryServiceImpl implements InventoryService {
 
         // 4. Return the DTO
         return toItemDTO(savedItem);
+    }
+
+    /**
+     * 4. Restocks an existing inventory item.
+     * 
+     * Logic:
+     * 1. Fetch item and verify branch access.
+     * 2. Increment stock quantity.
+     * 3. Update unit price (if provided).
+     * 4. Save and return updated DTO.
+     */
+    @Override
+    @Transactional
+    public InventoryItemDTO restockItem(Long id, RestockInventoryItemRequest request, Long userId) {
+        InventoryItem item = getAndVerifyItem(id, userId);
+
+        BigDecimal addedQuantity = request.getQuantity() != null ? request.getQuantity() : BigDecimal.ZERO;
+        item.setQuantity(item.getQuantity().add(addedQuantity));
+
+        if (request.getUnitPrice() != null) {
+            item.setUnitPrice(request.getUnitPrice());
+        }
+
+        InventoryItem savedItem = inventoryItemRepository.save(item);
+        return toItemDTO(savedItem);
+    }
+
+    /**
+     * 5. Removes stock from an existing inventory item (wastage/damage).
+     * 
+     * Logic:
+     * 1. Fetch item and verify branch access.
+     * 2. Decrement stock quantity.
+     * 3. Ensure stock doesn't go below zero.
+     * 4. Save and return updated DTO.
+     */
+    @Override
+    @Transactional
+    public InventoryItemDTO removeStock(Long id, RemoveInventoryStockRequest request, Long userId) {
+        InventoryItem item = getAndVerifyItem(id, userId);
+
+        BigDecimal removedQuantity = request.getQuantity() != null ? request.getQuantity() : BigDecimal.ZERO;
+        BigDecimal newQuantity = item.getQuantity().subtract(removedQuantity);
+
+        if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
+            newQuantity = BigDecimal.ZERO;
+        }
+
+        item.setQuantity(newQuantity);
+        InventoryItem savedItem = inventoryItemRepository.save(item);
+        return toItemDTO(savedItem);
+    }
+
+    /**
+     * 6. Corrects or updates an existing inventory item's details.
+     * 
+     * Logic:
+     * 1. Fetch item and verify branch access.
+     * 2. Overwrite all fields with the correction data.
+     * 3. Save and return updated DTO.
+     */
+    @Override
+    @Transactional
+    public InventoryItemDTO correctItem(Long id, UpdateInventoryItemRequest request, Long userId) {
+        InventoryItem item = getAndVerifyItem(id, userId);
+
+        item.setName(request.getName());
+        item.setCategory(request.getCategory());
+        item.setUnit(request.getUnit());
+        item.setQuantity(request.getQuantity());
+        item.setUnitPrice(request.getUnitPrice());
+        item.setReorderLevel(request.getReorderLevel());
+
+        InventoryItem savedItem = inventoryItemRepository.save(item);
+        return toItemDTO(savedItem);
+    }
+
+    /**
+     * Internal helper to fetch an item and ensure the user has permission to update it.
+     */
+    private InventoryItem getAndVerifyItem(Long id, Long userId) {
+        InventoryItem item = inventoryItemRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Inventory item not found with id: " + id));
+
+        Long userBranchId = resolveBranchId(null, userId);
+
+        if (!item.getBranch().getId().equals(userBranchId)) {
+            throw new IllegalArgumentException("Unauthorized: Item does not belong to your branch.");
+        }
+
+        return item;
     }
 
     // ───────────────────────── PRIVATE HELPER MAPPERS ─────────────────────────
