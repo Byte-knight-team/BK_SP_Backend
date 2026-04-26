@@ -24,7 +24,7 @@ public class ChefRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /*
+    /**
      * The branch associated with this entity.
      * Mapped as a many-to-one relationship using lazy loading to optimize
      * performance.
@@ -63,6 +63,10 @@ public class ChefRequest {
     @Builder.Default
     @Column(name = "status", nullable = false)
     private ChefRequestStatus status = ChefRequestStatus.PENDING;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "request_type", nullable = false)
+    private ChefRequestType requestType;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
