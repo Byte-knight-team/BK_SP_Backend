@@ -10,11 +10,14 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ChefAttendanceRepository extends JpaRepository<ChefAttendance, Long> {
 
     boolean existsByStaffIdAndAttendanceDate(Long chefId, LocalDate now);
+
+    Optional<ChefAttendance> findByStaffIdAndAttendanceDate(Long chefId, LocalDate now);
 
     // --- Kitchen Queries START ---
 
@@ -27,7 +30,6 @@ public interface ChefAttendanceRepository extends JpaRepository<ChefAttendance, 
             "AND ca.attendanceStatus = :attendanceStatus " +
             "AND ca.workStatus IN :workStatuses " +
             "AND ca.staff.user.role.name = 'LINE_CHEF' " +
-            "AND ca.staff.employmentStatus = 'ACTIVE' " +
             "AND ca.staff.user.isActive = true")
     List<ChefAttendance> findAvailableLineChefsForBranch(
             @Param("date") LocalDate date,
