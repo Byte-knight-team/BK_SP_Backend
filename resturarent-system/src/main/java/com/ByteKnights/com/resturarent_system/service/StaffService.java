@@ -2,6 +2,13 @@ package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.CreateStaffRequest;
 import com.ByteKnights.com.resturarent_system.dto.CreateStaffResponse;
+import com.ByteKnights.com.resturarent_system.dto.StaffResponse;
+import com.ByteKnights.com.resturarent_system.dto.UpdateStaffRequest;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
 import com.ByteKnights.com.resturarent_system.entity.EmploymentStatus;
@@ -15,9 +22,6 @@ import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.email.EmailService;
-import com.ByteKnights.com.resturarent_system.dto.StaffResponse;
-import com.ByteKnights.com.resturarent_system.dto.UpdateStaffRequest;
-
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,12 +31,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-
-import java.util.Comparator;
-import java.util.List;
-
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 @Service
 @RequiredArgsConstructor
@@ -40,21 +46,29 @@ public class StaffService {
 
     private static final Logger log = LoggerFactory.getLogger(StaffService.class);
 
-    private static final Set<String> STAFF_ROLES = Set.of(
-            "SUPER_ADMIN",
-            "ADMIN",
-            "MANAGER",
-            "CHEF",
-            "RECEPTIONIST",
-            "DELIVERY"
-    );
+    /*
+     * Roles are now database-driven.
+     * 
+     * Any role in the roles table can be used as a staff role,
+     * except roles listed in NON_STAFF_ROLES.
+     * 
+     * Example:
+     * If we create LINE_CHEF in the roles table, the staff creation flow can use it
+     * without adding LINE_CHEF here manually.
+     */
+    private static final Set<String> NON_STAFF_ROLES = Set.of(
+            "CUSTOMER");
 
-    private static final Set<String> ADMIN_CREATABLE_ROLES = Set.of(
-            "MANAGER",
-            "CHEF",
-            "RECEPTIONIST",
-            "DELIVERY"
-    );
+    /*
+     * ADMIN should not be able to create high-level/global roles.
+     * 
+     * ADMIN can create branch-level operational staff roles such as:
+     * MANAGER, CHEF, LINE_CHEF, RECEPTIONIST, DELIVERY, CASHIER, WAITER, etc.
+     */
+    private static final Set<String> ADMIN_BLOCKED_CREATION_ROLES = Set.of(
+            "CUSTOMER",
+            "SUPER_ADMIN",
+            "ADMIN");
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -62,6 +76,7 @@ public class StaffService {
     private final StaffRepository staffRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final AuditLogService auditLogService;
 
     @Transactional
     public CreateStaffResponse createStaff(CreateStaffRequest request) {
@@ -88,12 +103,22 @@ public class StaffService {
 
         if (isBlank(normalizedRoleName)) {
             validationErrors.append("Role is required. ");
-        } else if (!STAFF_ROLES.contains(normalizedRoleName)) {
+        } else if (!isStaffRoleName(normalizedRoleName)) {
             validationErrors.append("Only staff roles can be used in staff creation. ");
         }
 
         if (!"SUPER_ADMIN".equals(normalizedRoleName) && request.getBranchId() == null) {
             validationErrors.append("Branch is required for non-super-admin staff. ");
+        }
+
+        /*
+         * Salary is optional during staff creation.
+         * 
+         * If provided, it must not be negative.
+         * If not provided, backend will use the role default salary.
+         */
+        if (request.getSalary() != null && request.getSalary().compareTo(BigDecimal.ZERO) < 0) {
+            validationErrors.append("Salary cannot be negative. ");
         }
 
         if (validationErrors.length() > 0) {
@@ -130,6 +155,13 @@ public class StaffService {
         Role role = roleRepository.findByName(normalizedRoleName)
                 .orElseThrow(() -> new RuntimeException("Role not found: " + normalizedRoleName));
 
+        /*
+         * Salary selection rule:
+         * 1. If request.salary is provided, use it.
+         * 2. Otherwise, copy role.baseSalary.
+         */
+        BigDecimal resolvedSalary = resolveStaffSalary(request.getSalary(), role);
+
         User creator = getCurrentAuthenticatedUser();
         String creatorRole = normalize(creator.getRole().getName());
 
@@ -156,6 +188,13 @@ public class StaffService {
             Staff staff = Staff.builder()
                     .user(savedUser)
                     .branch(targetBranch)
+
+                    /*
+                     * Store actual salary for this individual staff member.
+                     * This starts from role default salary unless request.salary overrides it.
+                     */
+                    .salary(resolvedSalary)
+
                     .employmentStatus(EmploymentStatus.ACTIVE)
                     .build();
 
@@ -175,11 +214,23 @@ public class StaffService {
                     "Email sending failed while creating staff. username={}, email={}",
                     savedUser.getUsername(),
                     savedUser.getEmail(),
-                    e
-            );
+                    e);
         }
 
         User finalSavedUser = userRepository.save(savedUser);
+        Staff finalStaff = staffRepository.findByUserId(finalSavedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                finalSavedUser.getId(),
+                getBranchId(finalStaff),
+                "Staff created successfully",
+                null,
+                buildStaffAuditSnapshot(finalSavedUser, finalStaff));
 
         return CreateStaffResponse.builder()
                 .id(finalSavedUser.getId())
@@ -195,7 +246,8 @@ public class StaffService {
                 .temporaryPassword(Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? null : tempPassword)
                 .branchId(targetBranch != null ? targetBranch.getId() : null)
                 .branchName(targetBranch != null ? targetBranch.getName() : null)
-                .message(Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? "Email sent successfully" : "Email failed")
+                .message(
+                        Boolean.TRUE.equals(finalSavedUser.getEmailSent()) ? "Email sent successfully" : "Email failed")
                 .build();
     }
 
@@ -209,6 +261,7 @@ public class StaffService {
         String targetRole = normalize(targetUser.getRole().getName());
 
         Staff targetStaff = staffRepository.findByUserId(userId).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
 
         if ("SUPER_ADMIN".equals(creatorRole)) {
             // SUPER_ADMIN can resend for anyone in staff flow
@@ -228,7 +281,7 @@ public class StaffService {
                 throw new RuntimeException("ADMIN can resend invite only for staff in their own branch");
             }
 
-            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+            if (!isAdminCreatableRoleName(targetRole)) {
                 throw new RuntimeException("ADMIN can resend invite only for MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
             }
         } else {
@@ -260,6 +313,19 @@ public class StaffService {
         }
 
         User savedUser = userRepository.save(targetUser);
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.INVITE_RESENT,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff invite resent successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff));
 
         return CreateStaffResponse.builder()
                 .id(savedUser.getId())
@@ -273,13 +339,13 @@ public class StaffService {
                 .inviteStatus(savedUser.getInviteStatus())
                 .emailSent(savedUser.getEmailSent())
                 .temporaryPassword(Boolean.TRUE.equals(savedUser.getEmailSent()) ? null : tempPassword)
-                .branchId(targetStaff != null ? targetStaff.getBranch().getId() : null)
-                .branchName(targetStaff != null ? targetStaff.getBranch().getName() : null)
+                .branchId(savedStaff != null && savedStaff.getBranch() != null ? savedStaff.getBranch().getId() : null)
+                .branchName(
+                        savedStaff != null && savedStaff.getBranch() != null ? savedStaff.getBranch().getName() : null)
                 .message(Boolean.TRUE.equals(savedUser.getEmailSent()) ? "Email resent successfully" : "Email failed")
                 .build();
     }
 
-    //Get all staff
     @Transactional(readOnly = true)
     public List<StaffResponse> getAllStaff() {
         User creator = getCurrentAuthenticatedUser();
@@ -310,7 +376,6 @@ public class StaffService {
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff");
     }
 
-    //Get one staff member
     @Transactional(readOnly = true)
     public StaffResponse getStaffById(Long userId) {
         User creator = getCurrentAuthenticatedUser();
@@ -326,7 +391,6 @@ public class StaffService {
         return mapToStaffResponse(targetUser);
     }
 
-    //Upadte staff
     @Transactional
     public StaffResponse updateStaff(Long userId, UpdateStaffRequest request) {
         User creator = getCurrentAuthenticatedUser();
@@ -342,7 +406,14 @@ public class StaffService {
         ensureCanManageTarget(creator, targetUser);
 
         String currentTargetRole = normalize(targetUser.getRole().getName());
+        /*
+         * These values help us decide whether to update salary from the new role
+         * default.
+         */
+        boolean roleChanged = false;
+        Role selectedRoleForSalary = targetUser.getRole();
         Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
 
         if (request.getFullName() != null) {
             String fullName = request.getFullName().trim();
@@ -382,24 +453,72 @@ public class StaffService {
 
         if (request.getRoleName() != null) {
             String newRoleName = normalize(request.getRoleName());
-
-            if (!STAFF_ROLES.contains(newRoleName)) {
+        
+            /*
+             * Validate the new role using database-driven staff-role rules.
+             *
+             * CUSTOMER is blocked.
+             * Other roles from the roles table can be staff roles.
+             */
+            if (!isStaffRoleName(newRoleName)) {
                 throw new RuntimeException("Only staff roles can be assigned here");
             }
-
+        
             if (!newRoleName.equals(currentTargetRole)) {
                 if ("SUPER_ADMIN".equals(currentTargetRole) || "SUPER_ADMIN".equals(newRoleName)) {
                     throw new RuntimeException("Changing to or from SUPER_ADMIN through update is not supported yet");
                 }
-
-                if ("ADMIN".equals(creatorRole) && !ADMIN_CREATABLE_ROLES.contains(newRoleName)) {
-                    throw new RuntimeException("ADMIN can assign only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
+        
+                /*
+                 * ADMIN can assign only branch-level staff roles.
+                 *
+                 * This blocks:
+                 * CUSTOMER
+                 * SUPER_ADMIN
+                 * ADMIN
+                 *
+                 * This allows:
+                 * MANAGER
+                 * CHEF
+                 * LINE_CHEF
+                 * RECEPTIONIST
+                 * DELIVERY
+                 * future branch-level roles
+                 */
+                if ("ADMIN".equals(creatorRole) && !isAdminCreatableRoleName(newRoleName)) {
+                    throw new RuntimeException("ADMIN can assign only branch-level staff roles");
                 }
-
+        
                 Role newRole = roleRepository.findByName(newRoleName)
                         .orElseThrow(() -> new RuntimeException("Role not found: " + newRoleName));
-
+        
                 targetUser.setRole(newRole);
+        
+                /*
+                 * Mark that role changed.
+                 *
+                 * If request.salary is not provided,
+                 * we will copy the new role's base salary to this staff member.
+                 */
+                roleChanged = true;
+                selectedRoleForSalary = newRole;
+            }
+        }
+
+        /*
+         * Update individual staff salary.
+         * 
+         * Rules:
+         * 1. If request.salary is provided, use that value.
+         * 2. If role changed and request.salary is not provided,
+         * copy the new role base salary.
+         * 3. If neither happened, keep existing salary unchanged.
+         */
+        if (targetStaff != null) {
+            if (request.getSalary() != null) {
+                targetStaff.setSalary(normalizeSalary(request.getSalary()));
+            } else if (roleChanged) {
+                targetStaff.setSalary(getBaseSalaryOrZero(selectedRoleForSalary));
             }
         }
 
@@ -428,10 +547,23 @@ public class StaffService {
             staffRepository.save(targetStaff);
         }
 
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff updated successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff));
+
         return mapToStaffResponse(savedUser);
     }
 
-    //Activate staff
     @Transactional
     public StaffResponse activateStaff(Long userId) {
         User creator = getCurrentAuthenticatedUser();
@@ -445,13 +577,28 @@ public class StaffService {
 
         ensureCanManageTarget(creator, targetUser);
 
+        Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
+
         targetUser.setIsActive(true);
         User savedUser = userRepository.save(targetUser);
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_ACTIVATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff activated successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff));
 
         return mapToStaffResponse(savedUser);
     }
 
-    //Deativate staff
     @Transactional
     public StaffResponse deactivateStaff(Long userId) {
         User creator = getCurrentAuthenticatedUser();
@@ -465,8 +612,24 @@ public class StaffService {
 
         ensureCanManageTarget(creator, targetUser);
 
+        Staff targetStaff = staffRepository.findByUserId(targetUser.getId()).orElse(null);
+        Map<String, Object> oldValues = buildStaffAuditSnapshot(targetUser, targetStaff);
+
         targetUser.setIsActive(false);
         User savedUser = userRepository.save(targetUser);
+        Staff savedStaff = staffRepository.findByUserId(savedUser.getId()).orElse(null);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.STAFF,
+                AuditEventType.STAFF_DEACTIVATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                savedUser.getId(),
+                getBranchId(savedStaff),
+                "Staff deactivated successfully",
+                oldValues,
+                buildStaffAuditSnapshot(savedUser, savedStaff));
 
         return mapToStaffResponse(savedUser);
     }
@@ -483,7 +646,7 @@ public class StaffService {
         }
 
         if ("ADMIN".equals(creatorRole)) {
-            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+            if (!isAdminCreatableRoleName(targetRole)) {
                 throw new RuntimeException("ADMIN can create only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
             }
 
@@ -568,19 +731,56 @@ public class StaffService {
         return value.trim().toUpperCase();
     }
 
-    //Check if a user is part of staff-side roles
+    /*
+     * Checks whether a user belongs to the staff-side system.
+     * 
+     * This is now database-driven:
+     * - CUSTOMER is excluded.
+     * - Any other role is treated as a staff-side role.
+     */
     private boolean isStaffUser(User user) {
-        return user.getRole() != null && STAFF_ROLES.contains(normalize(user.getRole().getName()));
+        return user.getRole() != null
+                && isStaffRoleName(user.getRole().getName());
     }
 
-    //Check branch ownership for admin listing
+    /*
+     * Checks whether a role name is allowed to be used as a staff role.
+     * 
+     * Rule:
+     * - CUSTOMER is not a staff role.
+     * - Any other role existing in the roles table can be treated as staff-side
+     * role.
+     */
+    private boolean isStaffRoleName(String roleName) {
+        String normalizedRoleName = normalize(roleName);
+
+        return normalizedRoleName != null
+                && !NON_STAFF_ROLES.contains(normalizedRoleName);
+    }
+
+    /*
+     * Checks whether ADMIN can create/manage this role.
+     * 
+     * Rule:
+     * - ADMIN cannot create CUSTOMER.
+     * - ADMIN cannot create SUPER_ADMIN.
+     * - ADMIN cannot create another ADMIN.
+     * - ADMIN can create lower branch-level roles, including future roles like
+     * LINE_CHEF.
+     */
+    private boolean isAdminCreatableRoleName(String roleName) {
+        String normalizedRoleName = normalize(roleName);
+
+        return normalizedRoleName != null
+                && !ADMIN_BLOCKED_CREATION_ROLES.contains(normalizedRoleName);
+    }
+
     private boolean belongsToBranch(User user, Long branchId) {
         return staffRepository.findByUserId(user.getId())
                 .map(staff -> staff.getBranch() != null && staff.getBranch().getId().equals(branchId))
                 .orElse(false);
     }
 
-    //View permission helper
     private void ensureCanViewTarget(User creator, User targetUser) {
         String creatorRole = normalize(creator.getRole().getName());
 
@@ -609,43 +809,41 @@ public class StaffService {
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff");
     }
 
-    //Manage permission helper
     private void ensureCanManageTarget(User creator, User targetUser) {
         String creatorRole = normalize(creator.getRole().getName());
         String targetRole = normalize(targetUser.getRole().getName());
-    
+
         if ("SUPER_ADMIN".equals(creatorRole)) {
             return;
         }
-    
+
         if ("ADMIN".equals(creatorRole)) {
-            if (!ADMIN_CREATABLE_ROLES.contains(targetRole)) {
+            if (!isAdminCreatableRoleName(targetRole)) {
                 throw new RuntimeException("ADMIN can manage only MANAGER, CHEF, RECEPTIONIST, or DELIVERY");
             }
-    
+
             Staff creatorStaff = staffRepository.findByUserId(creator.getId())
                     .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
-    
+
             Staff targetStaff = staffRepository.findByUserId(targetUser.getId())
                     .orElseThrow(() -> new RuntimeException("ADMIN can manage only branch-linked staff"));
-    
+
             Long adminBranchId = creatorStaff.getBranch().getId();
             Long targetBranchId = targetStaff.getBranch().getId();
-    
+
             if (!adminBranchId.equals(targetBranchId)) {
                 throw new RuntimeException("ADMIN can manage staff only in their own branch");
             }
-    
+
             return;
         }
-    
+
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can manage staff");
     }
 
-    //Map user to staff response
     private StaffResponse mapToStaffResponse(User user) {
         Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
-    
+
         return StaffResponse.builder()
                 .id(user.getId())
                 .userId(user.getId())
@@ -663,7 +861,38 @@ public class StaffService {
                 .employmentStatus(staff != null && staff.getEmploymentStatus() != null
                         ? staff.getEmploymentStatus().name()
                         : null)
+                .salary(staff != null ? staff.getSalary() : null) /* Return actual staff salary to frontend. */
                 .build();
+    }
+
+    private Map<String, Object> buildStaffAuditSnapshot(User user, Staff staff) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        snapshot.put("userId", user.getId());
+        snapshot.put("fullName", user.getFullName());
+        snapshot.put("username", user.getUsername());
+        snapshot.put("email", user.getEmail());
+        snapshot.put("phone", user.getPhone());
+        snapshot.put("roleName", user.getRole() != null ? user.getRole().getName() : null);
+        snapshot.put("active", user.getIsActive());
+        snapshot.put("passwordChanged", user.getPasswordChanged());
+        snapshot.put("inviteStatus", user.getInviteStatus() != null ? user.getInviteStatus().name() : null);
+        snapshot.put("emailSent", user.getEmailSent());
+        snapshot.put("branchId", staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null);
+        snapshot.put("branchName", staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null);
+        snapshot.put("employmentStatus", staff != null && staff.getEmploymentStatus() != null
+                ? staff.getEmploymentStatus().name()
+                : null);
+        snapshot.put("salary", staff != null ? staff.getSalary() : null); /*
+                                                                           * Store salary in audit old/new values so
+                                                                           * salary changes are traceable.
+                                                                           */
+
+        return snapshot;
+    }
+
+    private Long getBranchId(Staff staff) {
+        return staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null;
     }
 
     @Transactional(readOnly = true)
@@ -710,7 +939,7 @@ public class StaffService {
         String creatorRole = normalize(creator.getRole().getName());
         String normalizedRoleName = normalize(roleName);
 
-        if (!STAFF_ROLES.contains(normalizedRoleName)) {
+        if (!isStaffRoleName(normalizedRoleName)) {
             throw new RuntimeException("Invalid staff role");
         }
 
@@ -741,5 +970,54 @@ public class StaffService {
         }
 
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff by role");
+    }
+
+    /*
+     * Decide staff salary during creation.
+     * 
+     * If request salary exists:
+     * - use request salary.
+     * 
+     * If request salary does not exist:
+     * - use role base salary.
+     */
+    private BigDecimal resolveStaffSalary(BigDecimal requestedSalary, Role role) {
+        if (requestedSalary != null) {
+            return normalizeSalary(requestedSalary);
+        }
+
+        return getBaseSalaryOrZero(role);
+    }
+
+    /*
+     * Safely read role base salary.
+     * 
+     * If role salary is missing, use 0.00 instead of null.
+     */
+    private BigDecimal getBaseSalaryOrZero(Role role) {
+        if (role == null || role.getBaseSalary() == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        return normalizeSalary(role.getBaseSalary());
+    }
+
+    /*
+     * Salary validation helper.
+     * 
+     * Rules:
+     * - Salary cannot be negative.
+     * - Salary is stored with 2 decimal places.
+     */
+    private BigDecimal normalizeSalary(BigDecimal salary) {
+        if (salary == null) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        if (salary.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Salary cannot be negative");
+        }
+
+        return salary.setScale(2, RoundingMode.HALF_UP);
     }
 }

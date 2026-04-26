@@ -2,5 +2,6 @@ package com.ByteKnights.com.resturarent_system.entity;
 
 public enum OrderType {
     QR,
-    ONLINE
+    ONLINE_PICKUP,
+    ONLINE_DELIVERY
 }

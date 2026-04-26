@@ -36,7 +36,7 @@ public class Staff {
     @Column(length = 20)
     private String nic;
 
-    @Column(precision = 10, scale = 2)
+    @Column(name = "salary", precision = 10, scale = 2)
     private BigDecimal salary;
 
     @Column(name = "hire_date")

@@ -39,6 +39,7 @@ public class SecurityConfig {
                     "/api/v1/auth/**",
                     "/api/v1/qr-sessions/**",
                     "/api/v1/menu/customer",
+                    "/api/v1/auth/customer",
                     "/api/tables",
                     "/api/tables/**",
                     "/api/auth/staff/login",
@@ -48,8 +49,13 @@ public class SecurityConfig {
                     "/v3/api-docs/**"
                 ).permitAll()
 
+
+
                 // Authenticated auth flow
                 .requestMatchers(HttpMethod.PUT, "/api/auth/staff/change-password").authenticated()
+
+                // customer opereations customer only
+                .requestMatchers("/api/v1/customer/**").hasRole("CUSTOMER")
 
                 // Branch management - SUPER_ADMIN only
                 .requestMatchers("/api/admin/branches", "/api/admin/branches/**").hasRole("SUPER_ADMIN")
@@ -58,19 +64,19 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/staff", "/api/admin/staff/**")
                 .hasAnyRole("SUPER_ADMIN", "ADMIN")
 
-                // Role management
+                // Role management - SUPER_ADMIN only
                 .requestMatchers(HttpMethod.POST, "/api/admin/roles").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.PUT, "/api/admin/roles/*/permissions").hasRole("SUPER_ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles").hasAnyRole("SUPER_ADMIN", "ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*").hasAnyRole("SUPER_ADMIN", "ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*").hasRole("SUPER_ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions").hasRole("SUPER_ADMIN")
 
-                // Privileges
-                .requestMatchers(HttpMethod.GET, "/api/admin/privileges").hasAnyRole("SUPER_ADMIN", "ADMIN")
+                // Privileges - SUPER_ADMIN only
+                .requestMatchers(HttpMethod.GET, "/api/admin/privileges").hasRole("SUPER_ADMIN")
 
-                // Email testing
+                // Email testing - SUPER_ADMIN only
                 .requestMatchers("/api/email-testing/**").hasRole("SUPER_ADMIN")
 
                 // Fallback for other admin endpoints
