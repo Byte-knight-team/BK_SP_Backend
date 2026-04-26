@@ -441,4 +441,9 @@ public class KitchenServiceImpl implements KitchenService {
         chefAttendanceRepository.save(attendance);
     }
 
+    @Override
+    public void holdOrder(Long orderId, String holdReason) {
+
+    }
+
 }

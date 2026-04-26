@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.AssignChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.HoldOrderRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
@@ -211,5 +212,21 @@ public class KitchenController {
                 HttpStatus.OK
         );
     }
+
+    // hold a pending order.
+    @PutMapping("/orders/{orderId}/hold")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> holdOrder(
+            @PathVariable Long orderId,
+            @RequestBody HoldOrderRequestDTO requestDTO) {
+
+        kitchenService.holdOrder(orderId, requestDTO.getHoldReason());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Order put on hold successfully", null),
+                HttpStatus.OK
+        );
+    }
+
 
 }
