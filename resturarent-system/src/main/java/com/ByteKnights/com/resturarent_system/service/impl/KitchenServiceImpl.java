@@ -316,7 +316,13 @@ public class KitchenServiceImpl implements KitchenService {
         Staff currentStaff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
         Long branchId = currentStaff.getBranch().getId();
+
         // Define filters
+        // Logic to filter Line Chefs:
+        // 1. Same Branch: Only chefs working at the same location as the logged-in Chief Chef.
+        // 2. Today's Attendance: Must have a recorded attendance entry for the current date.
+        // 3. On-Duty Only: The chef must be currently clocked-in (Attendance Status: ON_DUTY).
+        // 4. Working Status: Must be either currently 'AVAILABLE' (idle) or 'COOKING' (already assigned to a meal).
         LocalDate today = LocalDate.now();
         List<ChefWorkStatus> allowedStatuses = List.of(ChefWorkStatus.AVAILABLE, ChefWorkStatus.COOKING);
         // Fetch raw Entities from the database
@@ -349,5 +355,34 @@ public class KitchenServiceImpl implements KitchenService {
         orderItemRepository.save(item);
     }
 
+    //get all the Line Chefs Who is not checked in yet
+    @Override
+    public List<ChefCheckInDTO> getLineChefsForCheckIn(String userEmail) {
+        // Get logged-in Chief Chef
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff currentStaff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Fetch line chefs who haven't checked in today at this branch from database
+        List<Staff> staffList = staffRepository.findLineChefsNotCheckedInToday(currentStaff.getBranch().getId(), LocalDate.now());
+
+        // Create a new empty list for our DTOs
+        List<ChefCheckInDTO> checkInList = new ArrayList<>();
+
+        // Loop through each Staff and convert to ChefCheckInDTO
+        for (Staff s : staffList) {
+            ChefCheckInDTO dto = new ChefCheckInDTO();
+            dto.setId(s.getId());
+            dto.setFullName(s.getUser().getFullName());
+
+            // Add to our list
+            checkInList.add(dto);
+        }
+
+        // Return the final list
+        return checkInList;
+    }
 
 }

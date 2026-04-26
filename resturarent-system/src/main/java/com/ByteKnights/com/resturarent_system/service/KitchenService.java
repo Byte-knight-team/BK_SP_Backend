@@ -31,4 +31,6 @@ public interface KitchenService {
     List<ChefAssignDTO> getAvailableChefsForAssignment(String userEmail);
 
     void assignChefToMeal(Long itemId, Long chefId);
+
+    Object getLineChefsForCheckIn(String name);
 }
