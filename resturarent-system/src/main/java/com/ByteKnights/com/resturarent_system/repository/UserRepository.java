@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.repository;
 
+import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.entity.Role;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;

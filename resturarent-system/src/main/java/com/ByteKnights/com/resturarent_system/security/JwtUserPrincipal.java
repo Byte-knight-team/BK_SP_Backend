@@ -18,7 +18,11 @@ public class JwtUserPrincipal implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().getName()));
+        String roleName = user.getRole().getName();
+        String authority = roleName != null && roleName.startsWith("ROLE_")
+                ? roleName
+                : "ROLE_" + roleName;
+        return List.of(new SimpleGrantedAuthority(authority));
     }
 
     public String getEmail() { return user.getEmail(); }
@@ -27,7 +31,9 @@ public class JwtUserPrincipal implements UserDetails {
     public String getPassword() { return user.getPassword(); }
 
     @Override
-    public String getUsername() { return user.getEmail(); }
+    public String getUsername() { 
+        return user.getEmail() != null ? user.getEmail() : user.getPhone(); 
+    }
 
     @Override
     public boolean isAccountNonExpired() { return true; }

@@ -9,12 +9,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping("/api/admin/roles")
 public class RoleController {
 
     private final RoleService roleService;
@@ -24,22 +25,40 @@ public class RoleController {
         this.roleService = roleService;
     }
 
-    // Get all role summaries for roles page
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<List<RoleSummaryResponse>> getAllRoles() {
         return ResponseEntity.ok(roleService.getAllRoleSummaries());
     }
 
-    // Get one role summary
-    @GetMapping("/{roleId}/summary")
+    @GetMapping("/{roleId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<RoleSummaryResponse> getRoleSummary(@PathVariable Long roleId) {
         return ResponseEntity.ok(roleService.getRoleSummaryById(roleId));
     }
 
-    // Only SUPER_ADMIN can assign privileges to roles
-    @PostMapping("/{roleId}/permissions")
+    @GetMapping("/{roleId}/permissions")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    public ResponseEntity<Set<String>> getPermissions(@PathVariable Long roleId) {
+        return ResponseEntity.ok(roleService.getPermissionsOfRole(roleId));
+    }
+
+    @PostMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<Role> createRole(@RequestBody Map<String, Object> payload) {
+        String name = payload.get("name") != null ? payload.get("name").toString() : null;
+        String desc = payload.get("description") != null ? payload.get("description").toString() : null;
+
+        /*
+            baseSalary is optional.
+            If it is not sent, RoleService will save it as 0.00.
+        */
+        BigDecimal baseSalary = parseBigDecimal(payload.get("baseSalary"));
+
+        return ResponseEntity.ok(roleService.createRole(name, desc, baseSalary));
+    }
+
+    @PutMapping("/{roleId}/permissions")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Role> assignPermissions(
             @PathVariable Long roleId,
@@ -49,23 +68,6 @@ public class RoleController {
         return ResponseEntity.ok(role);
     }
 
-    // SUPER_ADMIN and ADMIN can view role privileges
-    @GetMapping("/{roleId}/permissions")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
-    public ResponseEntity<Set<String>> getPermissions(@PathVariable Long roleId) {
-        return ResponseEntity.ok(roleService.getPermissionsOfRole(roleId));
-    }
-
-    // Only SUPER_ADMIN can create new roles
-    @PostMapping("/create")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<Role> createRole(@RequestBody Map<String, String> payload) {
-        String name = payload.get("name");
-        String desc = payload.get("description");
-        return ResponseEntity.ok(roleService.createRole(name, desc));
-    }
-
-    // Only SUPER_ADMIN can update role name/description
     @PutMapping("/{roleId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Role> updateRole(@PathVariable Long roleId,
@@ -73,11 +75,29 @@ public class RoleController {
         return ResponseEntity.ok(roleService.updateRole(roleId, request));
     }
 
-    // Only SUPER_ADMIN can delete roles
     @DeleteMapping("/{roleId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Map<String, String>> deleteRole(@PathVariable Long roleId) {
         roleService.deleteRole(roleId);
         return ResponseEntity.ok(Map.of("message", "Role deleted successfully"));
+    }
+
+    /*
+        Converts incoming JSON number/string values into BigDecimal safely.
+
+        Accepted:
+        "baseSalary": 60000
+        "baseSalary": "60000"
+    */
+    private BigDecimal parseBigDecimal(Object value) {
+        if (value == null || value.toString().trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            return new BigDecimal(value.toString().trim());
+        } catch (NumberFormatException ex) {
+            throw new RuntimeException("Invalid base salary value");
+        }
     }
 }
