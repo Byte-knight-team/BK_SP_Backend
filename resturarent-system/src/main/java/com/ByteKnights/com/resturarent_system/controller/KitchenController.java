@@ -199,4 +199,17 @@ public class KitchenController {
         );
     }
 
+    // check out a chef
+    @PostMapping("/chefs/{chefId}/check-out")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> checkOutChef(@PathVariable Long chefId) {
+
+        kitchenService.checkOutChef(chefId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef checked out successfully", null),
+                HttpStatus.OK
+        );
+    }
+
 }
