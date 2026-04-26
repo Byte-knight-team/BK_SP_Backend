@@ -1,6 +1,9 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.CreateInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.RemoveInventoryStockRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
@@ -131,6 +134,78 @@ public class InventoryController {
 
         // Return 201 Created along with the new item data
         return new ResponseEntity<>(createdItem, HttpStatus.CREATED);
+    }
+
+    /**
+     * 4. Restocks an existing inventory item.
+     * 
+     * Path: PATCH /api/inventory/items/{id}/restock
+     * 
+     * This endpoint handles stock replenishment for an existing item.
+     * 
+     * @param id        The ID of the inventory item.
+     * @param request   The restock details.
+     * @param principal The authenticated user.
+     * @return 200 OK with the updated InventoryItemDTO.
+     */
+    @PatchMapping("/items/{id}/restock")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    public ResponseEntity<InventoryItemDTO> restockItem(
+            @PathVariable Long id,
+            @RequestBody RestockInventoryItemRequest request,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        Long userId = principal.getUser().getId();
+        InventoryItemDTO updatedItem = inventoryService.restockItem(id, request, userId);
+        return ResponseEntity.ok(updatedItem);
+    }
+
+    /**
+     * 5. Removes stock from an existing inventory item (wastage/damage).
+     * 
+     * Path: PATCH /api/inventory/items/{id}/remove
+     * 
+     * This endpoint handles stock reduction due to wastage or damage.
+     * 
+     * @param id        The ID of the inventory item.
+     * @param request   The removal details.
+     * @param principal The authenticated user.
+     * @return 200 OK with the updated InventoryItemDTO.
+     */
+    @PatchMapping("/items/{id}/remove")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    public ResponseEntity<InventoryItemDTO> removeStock(
+            @PathVariable Long id,
+            @RequestBody RemoveInventoryStockRequest request,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        Long userId = principal.getUser().getId();
+        InventoryItemDTO updatedItem = inventoryService.removeStock(id, request, userId);
+        return ResponseEntity.ok(updatedItem);
+    }
+
+    /**
+     * 6. Corrects or updates an existing inventory item's details.
+     * 
+     * Path: PUT /api/inventory/items/{id}/correct
+     * 
+     * This endpoint allows managers to fix errors in item metadata or stock levels.
+     * 
+     * @param id        The ID of the inventory item.
+     * @param request   The corrected details.
+     * @param principal The authenticated user.
+     * @return 200 OK with the updated InventoryItemDTO.
+     */
+    @PutMapping("/items/{id}/correct")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    public ResponseEntity<InventoryItemDTO> correctItem(
+            @PathVariable Long id,
+            @RequestBody UpdateInventoryItemRequest request,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        Long userId = principal.getUser().getId();
+        InventoryItemDTO updatedItem = inventoryService.correctItem(id, request, userId);
+        return ResponseEntity.ok(updatedItem);
     }
 
     /**
