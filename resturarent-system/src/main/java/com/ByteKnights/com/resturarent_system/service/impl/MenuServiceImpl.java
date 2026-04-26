@@ -241,7 +241,10 @@ public class MenuServiceImpl implements MenuService {
     @Override
     @Transactional(readOnly = true)
     public List<String> getDistinctSubCategories(Long branchId, Long categoryId) {
-        return menuItemRepository.findDistinctSubCategoriesByBranchIdAndCategoryId(branchId, categoryId);
+        if (branchId == null) {
+            branchId = resolveCurrentAdminBranchIdOrNull();
+        }
+        return menuItemRepository.findDistinctSubCategories(branchId, categoryId);
     }
 
     @Override

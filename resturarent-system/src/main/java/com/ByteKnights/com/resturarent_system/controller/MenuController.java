@@ -76,6 +76,13 @@ public class MenuController {
         return ResponseEntity.ok(categories);
     }
 
+    @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','CHEF')")
+    public ResponseEntity<List<MenuItemResponse>> getAllMenuItems() {
+        List<MenuItemResponse> menuItems = menuService.getAllMenuItems();
+        return ResponseEntity.ok(menuItems);
+    }
+
     @GetMapping("/{id:\\d+}")
     public ResponseEntity<MenuItemResponse> getMenuItemById(@PathVariable Long id) {
         MenuItemResponse menuItem = menuService.getMenuItemById(id);
@@ -146,8 +153,8 @@ public class MenuController {
 
     @GetMapping("/subcategories")
     public ResponseEntity<List<String>> getDistinctSubCategories(
-            @RequestParam Long branchId,
-            @RequestParam Long categoryId) {
+            @RequestParam(required = false) Long branchId,
+            @RequestParam(required = false) Long categoryId) {
         List<String> subCategories = menuService.getDistinctSubCategories(branchId, categoryId);
         return ResponseEntity.ok(subCategories);
     }

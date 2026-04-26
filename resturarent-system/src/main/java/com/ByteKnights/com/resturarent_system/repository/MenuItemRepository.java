@@ -36,12 +36,12 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
         @Query("""
             SELECT DISTINCT mi.subCategory
             FROM MenuItem mi
-            WHERE mi.branch.id = :branchId
-              AND mi.category.id = :categoryId
+            WHERE (:branchId IS NULL OR mi.branch.id = :branchId)
+              AND (:categoryId IS NULL OR mi.category.id = :categoryId)
               AND mi.subCategory IS NOT NULL
             ORDER BY mi.subCategory
             """)
-        List<String> findDistinctSubCategoriesByBranchIdAndCategoryId(
+        List<String> findDistinctSubCategories(
             @Param("branchId") Long branchId,
             @Param("categoryId") Long categoryId);
 
