@@ -32,5 +32,7 @@ public interface KitchenService {
 
     void assignChefToMeal(Long itemId, Long chefId);
 
-    Object getLineChefsForCheckIn(String name);
+    List<ChefCheckInDTO> getLineChefsForCheckIn(String name);
+
+    void checkInChef(Long chefId);
 }

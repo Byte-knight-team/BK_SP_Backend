@@ -14,6 +14,8 @@ import java.util.List;
 @Repository
 public interface ChefAttendanceRepository extends JpaRepository<ChefAttendance, Long> {
 
+    boolean existsByStaffIdAndAttendanceDate(Long chefId, LocalDate now);
+
     // --- Kitchen Queries START ---
 
     // 1. find all available line chefs in a branch to assign for meals
