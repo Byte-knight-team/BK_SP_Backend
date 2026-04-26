@@ -15,10 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -390,14 +387,23 @@ public class KitchenServiceImpl implements KitchenService {
     @Transactional // This is important because we are saving to the database
     public void checkInChef(Long chefId) {
 
-        // Check if already checked in today
-        boolean alreadyCheckedIn = chefAttendanceRepository.existsByStaffIdAndAttendanceDate(chefId, LocalDate.now());
+        // 1. Try to find if there is ALREADY an attendance record for today
+        Optional<ChefAttendance> existingRecord = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now());
 
-        if (alreadyCheckedIn) {
-            throw new RuntimeException("Chef has already checked in for today!");
+        if (existingRecord.isPresent()) {
+            ChefAttendance record = existingRecord.get();
+
+            // If they are currently ON_DUTY, don't let them check in again
+            if (record.getAttendanceStatus() == ChefAttendanceStatus.ON_DUTY) {
+                throw new RuntimeException("Chef is already currently clocked in!");
+            }
+
+            // If they are OFF_DUTY, it means they already finished their shift for today
+            if (record.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+                throw new RuntimeException("Cannot chek-in for today. Chef has already completed their shift for today!");
+            }
         }
-
-        // Find the chef by the ID sent from the frontend
+        // 2. If no record exists at all, proceed with the normal check-in
         Staff chef = staffRepository.findById(chefId)
                 .orElseThrow(() -> new RuntimeException("Chef not found"));
 
@@ -417,9 +423,14 @@ public class KitchenServiceImpl implements KitchenService {
     @Override
     @Transactional
     public void checkOutChef(Long chefId) {
-        // Find the attendance record for this chef for TODAY
+        // Find the attendance record for today
         ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now())
-                .orElseThrow(() -> new RuntimeException("Attendance record not found for today"));
+                .orElseThrow(() -> new RuntimeException("No check-in record found for this chef today!"));
+
+        // Safety Check: If they are already OFF_DUTY, don't update again
+        if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+            throw new RuntimeException("Chef has already checked out for today!");
+        }
 
         // Update the fields
         attendance.setClockOutTime(LocalDateTime.now()); // Record date and time when they left

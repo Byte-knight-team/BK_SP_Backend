@@ -164,7 +164,7 @@ public class KitchenController {
             @PathVariable Long itemId,
             @RequestBody AssignChefRequestDTO requestDTO) {
 
-        kitchenService.assignChefToMeal(itemId, requestDTO.getChefId());
+        kitchenService.assignChefToMeal(itemId, requestDTO.getChefStaffId());
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Chef assigned successfully", null),
