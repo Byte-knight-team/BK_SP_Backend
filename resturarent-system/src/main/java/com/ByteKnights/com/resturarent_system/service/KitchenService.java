@@ -35,4 +35,6 @@ public interface KitchenService {
     List<ChefCheckInDTO> getLineChefsForCheckIn(String name);
 
     void checkInChef(Long chefId);
+
+    void checkOutChef(Long chefId);
 }
