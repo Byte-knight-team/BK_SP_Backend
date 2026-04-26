@@ -299,7 +299,7 @@ public class KitchenServiceImpl implements KitchenService {
                 order.getStatus().toString(),
                 order.getHoldReason(),
                 order.getKitchenNotes(),
-                itemDTOs
+                itemDTOs //list of items
         );
     }
 
