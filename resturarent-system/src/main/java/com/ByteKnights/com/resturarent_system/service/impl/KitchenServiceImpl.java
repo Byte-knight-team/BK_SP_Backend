@@ -387,7 +387,7 @@ public class KitchenServiceImpl implements KitchenService {
 
     // save check in attendance record
     @Override
-    @Transactional // This is important because we are saving to the database!
+    @Transactional // This is important because we are saving to the database
     public void checkInChef(Long chefId) {
 
         // Check if already checked in today
@@ -403,13 +403,30 @@ public class KitchenServiceImpl implements KitchenService {
 
         // Create a new attendance record
         ChefAttendance attendance = new ChefAttendance();
-        attendance.setStaff(chef);
+        attendance.setStaff(chef); // Sets staff id
         attendance.setAttendanceDate(LocalDate.now()); // Sets today's date
         attendance.setClockInTime(LocalDateTime.now()); // Sets the exact time right now
         attendance.setAttendanceStatus(ChefAttendanceStatus.ON_DUTY); // now the chef is clocked in and ready to work
         attendance.setWorkStatus(ChefWorkStatus.AVAILABLE); // not started cooking yet
 
         // Save it to the database
+        chefAttendanceRepository.save(attendance);
+    }
+
+    // check out a chef and update the attendance record with clock-out time, attendance status, and work status
+    @Override
+    @Transactional
+    public void checkOutChef(Long chefId) {
+        // Find the attendance record for this chef for TODAY
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Attendance record not found for today"));
+
+        // Update the fields
+        attendance.setClockOutTime(LocalDateTime.now()); // Record date and time when they left
+        attendance.setAttendanceStatus(ChefAttendanceStatus.OFF_DUTY); // They are no longer on duty
+        attendance.setWorkStatus(ChefWorkStatus.UNAVAILABLE); // They are no longer available to cook
+
+        // Save the changes
         chefAttendanceRepository.save(attendance);
     }
 
