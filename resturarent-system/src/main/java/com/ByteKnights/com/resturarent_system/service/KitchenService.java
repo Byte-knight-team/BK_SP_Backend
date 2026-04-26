@@ -37,4 +37,6 @@ public interface KitchenService {
     void checkInChef(Long chefId);
 
     void checkOutChef(Long chefId);
+
+    void holdOrder(Long orderId, String holdReason);
 }
