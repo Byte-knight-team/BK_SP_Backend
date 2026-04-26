@@ -20,8 +20,18 @@ public class StaffController {
         this.staffService = staffService;
     }
 
+    /*
+     * Dynamic RBAC test endpoint.
+     *
+     * SUPER_ADMIN can always create staff.
+     * Other allowed admin-side users must have CREATE_STAFF privilege.
+     *
+     * This makes the Roles & Permissions page meaningful:
+     * - If ADMIN has CREATE_STAFF, ADMIN can create staff.
+     * - If CREATE_STAFF is removed from ADMIN, ADMIN gets 403 Forbidden.
+     */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('CREATE_STAFF')")
     public CreateStaffResponse createStaff(@RequestBody CreateStaffRequest request) {
         return staffService.createStaff(request);
     }
