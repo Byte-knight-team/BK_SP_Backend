@@ -3,6 +3,9 @@ package com.ByteKnights.com.resturarent_system.service;
 import java.util.List;
 
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.CreateInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.RemoveInventoryStockRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 
@@ -40,8 +43,39 @@ public interface InventoryService {
      * @param request        The DTO containing the new item details.
      * @param targetBranchId The resolved ID of the branch where the item will be
      *                       added.
+     * @param userId         The ID of the logged-in user.
      * @return InventoryItemDTO The newly created item, formatted for the frontend.
      */
     InventoryItemDTO addInventoryItem(CreateInventoryItemRequest request, Long targetBranchId, Long userId);
+
+    /**
+     * 4. Restocks an existing inventory item.
+     * 
+     * @param id      The ID of the item to restock.
+     * @param request The restock details (quantity, price, notes).
+     * @param userId  The ID of the logged-in user.
+     * @return InventoryItemDTO The updated item details.
+     */
+    InventoryItemDTO restockItem(Long id, RestockInventoryItemRequest request, Long userId);
+
+    /**
+     * 5. Removes stock from an existing inventory item (wastage/damage).
+     * 
+     * @param id      The ID of the item to remove stock from.
+     * @param request The removal details (quantity, reason).
+     * @param userId  The ID of the logged-in user.
+     * @return InventoryItemDTO The updated item details.
+     */
+    InventoryItemDTO removeStock(Long id, RemoveInventoryStockRequest request, Long userId);
+
+    /**
+     * 6. Corrects or updates an existing inventory item's details.
+     * 
+     * @param id      The ID of the item to correct.
+     * @param request The corrected item details.
+     * @param userId  The ID of the logged-in user.
+     * @return InventoryItemDTO The updated item details.
+     */
+    InventoryItemDTO correctItem(Long id, UpdateInventoryItemRequest request, Long userId);
 
 }
