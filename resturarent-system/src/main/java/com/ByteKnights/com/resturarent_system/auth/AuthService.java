@@ -104,10 +104,35 @@ public class AuthService {
             throw new RuntimeException("Invalid password");
         }
 
+        String roleName = user.getRole() != null ? user.getRole().getName() : null;
+
+        if (!"SUPER_ADMIN".equals(roleName)) {
+
+            if (staff == null || staff.getBranch() == null) {
+                throw new RuntimeException("Staff branch is not assigned");
+            }
+
+            if (!"ACTIVE".equals(String.valueOf(staff.getBranch().getStatus()))) {
+                throw new RuntimeException("Your branch is inactive. Please contact the system administrator.");
+            }
+        }
+
+        String branchName = null;
+
+        /*
+         * branchId is already declared above using getBranchId(staff).
+         * Here we only prepare branchName for the JWT payload.
+         */
+        if (staff != null && staff.getBranch() != null) {
+            branchName = staff.getBranch().getName();
+        }
+
         String token = jwtService.generateToken(
                 user.getId(),
                 user.getEmail(),
-                user.getRole().getName());
+                user.getRole().getName(),
+                branchId,
+                branchName);
 
         Map<String, Object> loginDetails = new LinkedHashMap<>();
         loginDetails.put("userId", user.getId());
@@ -137,8 +162,8 @@ public class AuthService {
                 .roleName(user.getRole().getName())
                 .active(user.getIsActive())
                 .passwordChanged(user.getPasswordChanged())
-                .branchId(staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null)
-                .branchName(staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null)
+                .branchId(branchId)
+                .branchName(branchName)
                 .token(token)
                 .tokenType("Bearer")
                 .build();

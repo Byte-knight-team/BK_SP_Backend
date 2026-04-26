@@ -27,83 +27,215 @@ public class DataSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
+        /*
+         * Privileges are system-level permission names.
+         *
+         * These can be used in controllers/services like:
+         * @PreAuthorize("hasAuthority('CREATE_STAFF')")
+         *
+         * Important:
+         * Use only uppercase snake_case privilege names.
+         * Do not use duplicate camelCase names like createTable or createQRCode.
+         */
+
+        // Staff & RBAC
         Privilege createStaff = createPrivilege("CREATE_STAFF");
         Privilege assignPrivileges = createPrivilege("ASSIGN_PRIVILEGES");
+
+        // System governance
         Privilege updateConfig = createPrivilege("UPDATE_CONFIG");
         Privilege viewAudit = createPrivilege("VIEW_AUDIT_LOG");
         Privilege manageBranch = createPrivilege("MANAGE_BRANCH");
         Privilege manageSystemConfig = createPrivilege("MANAGE_SYSTEM_CONFIG");
+
+        // Orders
         Privilege manageOrders = createPrivilege("MANAGE_ORDERS");
+        Privilege updateOrderStatus = createPrivilege("UPDATE_ORDER_STATUS");
+        Privilege createOrders = createPrivilege("CREATE_ORDERS");
+        Privilege viewOrders = createPrivilege("VIEW_ORDERS");
+        Privilege viewOwnOrders = createPrivilege("VIEW_OWN_ORDERS");
+
+        // Menu / reservations / customer
         Privilege manageMenu = createPrivilege("MANAGE_MENU");
         Privilege manageReservations = createPrivilege("MANAGE_RESERVATIONS");
-        Privilege updateOrderStatus = createPrivilege("UPDATE_ORDER_STATUS");
-        Privilege updateDeliveryStatus = createPrivilege("UPDATE_DELIVERY_STATUS");
-        Privilege createOrders = createPrivilege("CREATE_ORDERS");
-        Privilege viewBranch = createPrivilege("VIEW_BRANCH");
         Privilege viewCustomer = createPrivilege("VIEW_CUSTOMER");
-        Privilege viewOwnOrders = createPrivilege("VIEW_OWN_ORDERS");
-        Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
-        Privilege viewReports = createPrivilege("VIEW_REPORTS");
-        Privilege viewOrders = createPrivilege("VIEW_ORDERS");
+
+        // Delivery
+        Privilege updateDeliveryStatus = createPrivilege("UPDATE_DELIVERY_STATUS");
         Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
 
-        Role superAdminRole = createRole("SUPER_ADMIN");
-        superAdminRole.setPermissions(new HashSet<>(Set.of(
-                createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch, manageSystemConfig,
-                manageOrders, manageMenu, manageReservations, updateOrderStatus, updateDeliveryStatus,
-                createOrders, viewBranch, viewCustomer, viewOwnOrders, viewOwnProfile, viewReports,
-                viewOrders, viewDelivery
-        )));
-        roleRepository.save(superAdminRole);
+        // Branch / reports / profile
+        Privilege viewBranch = createPrivilege("VIEW_BRANCH");
+        Privilege viewReports = createPrivilege("VIEW_REPORTS");
+        Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
 
-        Role adminRole = createRole("ADMIN");
-        adminRole.setPermissions(new HashSet<>(Set.of(
-                createStaff, assignPrivileges, updateConfig, viewAudit, manageBranch
-        )));
-        roleRepository.save(adminRole);
+        // QR & restaurant table permissions
+        Privilege createQrcode = createPrivilege("CREATE_QRCODE");
+        Privilege regenerateQrcode = createPrivilege("REGENERATE_QRCODE");
+        Privilege revokeQrcode = createPrivilege("REVOKE_QRCODE");
 
-        Role managerRole = createRole("MANAGER");
-        managerRole.setPermissions(new HashSet<>(Set.of(
-                viewBranch, manageOrders, viewReports, viewCustomer
-        )));
-        roleRepository.save(managerRole);
+        Privilege createRestaurantTable = createPrivilege("CREATE_RESTAURANT_TABLE");
+        Privilege viewRestaurantTable = createPrivilege("VIEW_RESTAURANT_TABLE");
+        Privilege viewRestaurantTableById = createPrivilege("VIEW_RESTAURANT_TABLE_BY_ID");
+        Privilege updateRestaurantTable = createPrivilege("UPDATE_RESTAURANT_TABLE");
+        Privilege deleteRestaurantTable = createPrivilege("DELETE_RESTAURANT_TABLE");
 
-        Role chefRole = createRole("CHEF");
-        chefRole.setPermissions(new HashSet<>(Set.of(
-                manageMenu, updateOrderStatus, viewOrders
-        )));
-        roleRepository.save(chefRole);
+        /*
+         * All known system privileges.
+         *
+         * SUPER_ADMIN will always receive missing privileges from this set.
+         * Other roles will only receive default permissions when they are first created.
+         */
+        Set<Privilege> allPrivileges = Set.of(
+                createStaff,
+                assignPrivileges,
+                updateConfig,
+                viewAudit,
+                manageBranch,
+                manageSystemConfig,
+                manageOrders,
+                updateOrderStatus,
+                createOrders,
+                viewOrders,
+                viewOwnOrders,
+                manageMenu,
+                manageReservations,
+                viewCustomer,
+                updateDeliveryStatus,
+                viewDelivery,
+                viewBranch,
+                viewReports,
+                viewOwnProfile,
+                createQrcode,
+                regenerateQrcode,
+                revokeQrcode,
+                createRestaurantTable,
+                viewRestaurantTable,
+                viewRestaurantTableById,
+                updateRestaurantTable,
+                deleteRestaurantTable
+        );
 
-        Role receptionistRole = createRole("RECEPTIONIST");
-        receptionistRole.setPermissions(new HashSet<>(Set.of(
-                createOrders, manageReservations, viewCustomer
-        )));
-        roleRepository.save(receptionistRole);
+        /*
+         * For normal roles, default permissions are added ONLY when the role is first created.
+         *
+         * This prevents the DataSeeder from overwriting changes made from
+         * the Roles & Permissions page.
+         *
+         * Example:
+         * If SUPER_ADMIN removes CREATE_STAFF from ADMIN using the frontend,
+         * restarting the backend should NOT automatically add it back.
+         */
+        Role superAdminRole = createRoleWithDefaultPermissions("SUPER_ADMIN", allPrivileges);
 
-        Role deliveryRole = createRole("DELIVERY");
-        deliveryRole.setPermissions(new HashSet<>(Set.of(
-                updateDeliveryStatus, viewDelivery
-        )));
-        roleRepository.save(deliveryRole);
+        /*
+         * SUPER_ADMIN is the owner role.
+         *
+         * SUPER_ADMIN always gets all currently known system privileges.
+         * This is safe because SUPER_ADMIN is a protected/read-only core role.
+         */
+        addMissingPermissions(superAdminRole, allPrivileges);
 
-        Role customerRole = createRole("CUSTOMER");
-        customerRole.setPermissions(new HashSet<>(Set.of(
-                viewOwnOrders, viewOwnProfile
-        )));
-        roleRepository.save(customerRole);
+        /*
+         * ADMIN default permissions.
+         *
+         * Because existing roles are not overwritten, changing this only affects
+         * fresh databases where ADMIN does not exist yet.
+         */
+        createRoleWithDefaultPermissions("ADMIN", Set.of(
+                createStaff
+        ));
+
+        createRoleWithDefaultPermissions("MANAGER", Set.of(
+                viewBranch,
+                manageOrders,
+                viewReports,
+                viewCustomer
+        ));
+
+        createRoleWithDefaultPermissions("CHEF", Set.of(
+                manageMenu,
+                updateOrderStatus,
+                viewOrders
+        ));
+
+        createRoleWithDefaultPermissions("RECEPTIONIST", Set.of(
+                createOrders,
+                manageReservations,
+                viewCustomer
+        ));
+
+        createRoleWithDefaultPermissions("DELIVERY", Set.of(
+                updateDeliveryStatus,
+                viewDelivery
+        ));
+
+        createRoleWithDefaultPermissions("CUSTOMER", Set.of(
+                viewOwnOrders,
+                viewOwnProfile
+        ));
     }
 
+    /*
+     * Creates a privilege only if it does not already exist.
+     *
+     * This is safe to run every backend startup.
+     */
     private Privilege createPrivilege(String name) {
         return privilegeRepository.findByName(name).orElseGet(() -> {
-            Privilege privilege = Privilege.builder().name(name).build();
+            Privilege privilege = Privilege.builder()
+                    .name(name)
+                    .build();
+
             return privilegeRepository.save(privilege);
         });
     }
 
-    private Role createRole(String name) {
-        return roleRepository.findByName(name).orElseGet(() -> {
-            Role role = Role.builder().name(name).build();
-            return roleRepository.save(role);
-        });
+    /*
+     * Creates a role with default permissions only if the role does not already exist.
+     *
+     * If the role already exists, we return it as it is.
+     * We do NOT overwrite its permissions.
+     *
+     * This is important because role permissions are editable from the frontend.
+     */
+    private Role createRoleWithDefaultPermissions(String name, Set<Privilege> defaultPermissions) {
+        Role existingRole = roleRepository.findByName(name).orElse(null);
+
+        if (existingRole != null) {
+            return existingRole;
+        }
+
+        Role role = Role.builder()
+                .name(name)
+                .permissions(new HashSet<>(defaultPermissions))
+                .build();
+
+        return roleRepository.save(role);
+    }
+
+    /*
+     * Adds missing permissions without removing existing permissions.
+     *
+     * We use this only for SUPER_ADMIN so that the system owner role always
+     * receives new system privileges added later.
+     */
+    private void addMissingPermissions(Role role, Set<Privilege> permissionsToAdd) {
+        if (role == null) {
+            return;
+        }
+
+        Set<Privilege> currentPermissions = role.getPermissions();
+
+        if (currentPermissions == null) {
+            currentPermissions = new HashSet<>();
+        }
+
+        boolean changed = currentPermissions.addAll(permissionsToAdd);
+
+        if (changed) {
+            role.setPermissions(currentPermissions);
+            roleRepository.save(role);
+        }
     }
 }
