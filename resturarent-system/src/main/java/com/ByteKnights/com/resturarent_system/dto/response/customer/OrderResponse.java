@@ -12,7 +12,16 @@ public class OrderResponse {
     private Long orderId;
     private String orderNumber;
     private String orderStatus;
+    private String orderType;
     private String paymentStatus;
+    private String cancellationReason;
+    private Boolean isReviewed;
+    
+    // --- Contact & Delivery ---
+    private String contactName;
+    private String contactPhone;
+    private String deliveryAddress;
+    private String kitchenNotes;
     
     // --- Detailed Receipt Breakdown ---
     private BigDecimal subtotal;
@@ -28,14 +37,18 @@ public class OrderResponse {
     private Integer rewardPointsEarned;
     
     private LocalDateTime createdAt;
+    private BranchDetailResponse branchDetails;
     private List<OrderItemResponse> items;
 
     @Data
     @Builder
     public static class OrderItemResponse {
+        private Long orderItemId;
+        private Long menuItemId;
         private String itemName;
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal subtotal;
+        private Boolean isReviewed;
     }
 }
