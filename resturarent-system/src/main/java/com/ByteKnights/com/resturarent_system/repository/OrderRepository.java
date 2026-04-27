@@ -73,6 +73,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
 
+    @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.status IN :statuses")
+    BigDecimal sumFinalAmountByBranchIdAndStatusIn(
+            @Param("branchId") Long branchId,
+            @Param("statuses") Collection<OrderStatus> statuses);
+
+    @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.orderType = :orderType AND o.status IN :statuses")
+    BigDecimal sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
+            @Param("branchId") Long branchId,
+            @Param("orderType") com.ByteKnights.com.resturarent_system.entity.OrderType orderType,
+            @Param("statuses") Collection<OrderStatus> statuses);
+
     long countByBranchIdAndOrderTypeAndCreatedAtBetween(
             Long branchId, 
             com.ByteKnights.com.resturarent_system.entity.OrderType orderType, 
