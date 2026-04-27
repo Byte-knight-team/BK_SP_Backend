@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.inventory.CreateInvent
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.RemoveInventoryStockRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.ResolveChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryLogDTO;
@@ -14,12 +15,16 @@ import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.entity.InventoryTransaction;
 import com.ByteKnights.com.resturarent_system.entity.InventoryTransactionType;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.entity.Role;
+import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryTransactionRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +62,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final BranchRepository branchRepository;
     private final StaffRepository staffRepository;
     private final InventoryTransactionRepository inventoryTransactionRepository;
+    private final UserRepository userRepository;
 
     /**
      * Helper method to securely resolve the branch ID.
@@ -297,6 +303,40 @@ public class InventoryServiceImpl implements InventoryService {
      * 7. Retrieves the history of all inventory updates (logs).
      */
     @Override
+    @Transactional
+    public ChefRequestDTO resolveChefRequest(Long requestId, ResolveChefRequestDTO requestDTO, Long userId) {
+        ChefRequest chefRequest = chefRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Chef request not found with ID: " + requestId));
+
+        // Get the manager user resolving the request (optional to store, but good for validation)
+        User manager = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Manager not found"));
+
+        // Validate branch access if the manager is not SUPER_ADMIN
+        boolean isSuperAdmin = manager.getRole().getName().equals("SUPER_ADMIN");
+        if (!isSuperAdmin) {
+            Staff staff = staffRepository.findByUserId(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Staff record not found"));
+            if (staff.getBranch() == null || !staff.getBranch().getId().equals(chefRequest.getBranch().getId())) {
+                throw new RuntimeException("You do not have permission to resolve requests for this branch.");
+            }
+        }
+
+        ChefRequestStatus newStatus;
+        try {
+            newStatus = ChefRequestStatus.valueOf(requestDTO.getStatus().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid status: " + requestDTO.getStatus());
+        }
+
+        chefRequest.setStatus(newStatus);
+        chefRequest.setManagerNote(requestDTO.getManagerNote());
+        
+        ChefRequest updatedRequest = chefRequestRepository.save(chefRequest);
+        return toChefRequestDTO(updatedRequest);
+    }
+
+    @Override
     public List<InventoryLogDTO> getInventoryLogs(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
 
@@ -414,7 +454,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .item(req.getItemName())
                 .quantity(formattedQuantity)
                 .note(req.getChefNote())
+                .managerNote(req.getManagerNote())
                 .status(req.getStatus() != null ? req.getStatus().name() : "PENDING")
+                .requestType(req.getRequestType() != null ? req.getRequestType().name() : null)
                 .avatarColor(generateAvatarColor(req.getChefName()))
                 .build();
     }

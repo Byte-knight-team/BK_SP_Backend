@@ -34,7 +34,9 @@ public class ChefRequestDTO {
     private String item;
     private String quantity;
     private String note;
+    private String managerNote;
     private String status;
+    private String requestType;
     private String avatarColor;
 
 }
