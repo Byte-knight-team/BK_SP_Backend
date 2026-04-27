@@ -5,12 +5,23 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailTemplateService {
 
+    /*
+     * Builds the email body for newly created staff members.
+     * This class only creates email text.
+     * It does not send the email.
+     * Sending is handled by SmtpEmailService.
+     */
     public String buildStaffInviteEmailBody(String username, String temporaryPassword) {
-        // Local frontend login URL for staff users.
-        // Later, when deploying, replace this with the real hosted frontend URL.
+
+        /*
+         * Local frontend login URL for staff users.
+         * Current development URL
+         */
         String loginUrl = "http://localhost:5173/staff/login";
-    
-        // Email body sent to newly created staff members.
+
+        /*
+         * Email body sent to newly created staff members.
+         */
         return "Hello " + username + ",\n\n" +
                "Your staff account has been created successfully.\n\n" +
                "Login URL: " + loginUrl + "\n\n" +
@@ -20,6 +31,11 @@ public class EmailTemplateService {
                "Crave House Development Team";
     }
 
+    /*
+     * Subject line for staff invite email.
+     * Keeping this in a method makes it easy to change later
+     * without touching the email sending logic.
+     */
     public String getStaffInviteSubject() {
         return "Your Staff Account Credentials";
     }
