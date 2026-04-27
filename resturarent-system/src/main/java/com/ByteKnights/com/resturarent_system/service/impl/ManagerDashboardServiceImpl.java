@@ -87,7 +87,7 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
         List<ManagerDashboardSummaryDTO.ManagerRecentOrderDTO> recentOrders = topOrders.stream().map(o -> 
                 ManagerDashboardSummaryDTO.ManagerRecentOrderDTO.builder()
-                        .id(o.getId())
+                        .id(o.getOrderNumber() != null ? o.getOrderNumber() : String.valueOf(o.getId()))
                         .type(o.getOrderType() != null ? o.getOrderType().name().toLowerCase() : "unknown")
                         .status(o.getStatus().name().toLowerCase())
                         .timer(o.getCreatedAt().format(timeFormatter))
