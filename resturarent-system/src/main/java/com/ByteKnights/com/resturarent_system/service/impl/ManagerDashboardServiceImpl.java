@@ -83,7 +83,7 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                 .build();
 
         // 7. Recent Orders
-        List<Order> topOrders = orderRepository.findTop5ByBranchIdOrderByCreatedAtDesc(finalBranchId);
+        List<Order> topOrders = orderRepository.findTop50ByBranchIdOrderByCreatedAtDesc(finalBranchId);
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
         List<ManagerDashboardSummaryDTO.ManagerRecentOrderDTO> recentOrders = topOrders.stream().map(o -> 
                 ManagerDashboardSummaryDTO.ManagerRecentOrderDTO.builder()

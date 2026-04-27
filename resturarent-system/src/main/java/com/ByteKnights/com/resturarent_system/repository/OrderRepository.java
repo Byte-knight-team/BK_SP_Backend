@@ -63,6 +63,9 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = "items")
     List<Order> findTop5ByBranchIdOrderByCreatedAtDesc(Long branchId);
 
+    @EntityGraph(attributePaths = "items")
+    List<Order> findTop50ByBranchIdOrderByCreatedAtDesc(Long branchId);
+
     @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.status = :status AND o.createdAt BETWEEN :start AND :end")
     BigDecimal sumFinalAmountByBranchIdAndStatusAndCreatedAtBetween(
             @Param("branchId") Long branchId,
