@@ -127,7 +127,7 @@ public class MenuServiceImpl implements MenuService {
                 .category(category)
             .subCategory(validateAndNormalizeOptionalSubCategory(request.getSubCategory()))
                 .name(validatedName)
-                .description(request.getDescription())
+                .description(validateAndNormalizeOptionalDescription(request.getDescription()))
                 .price(request.getPrice())
                 .imageUrl(validateAndNormalizeImageUrl(request.getImageUrl()))
                 .isAvailable(false)
@@ -159,12 +159,7 @@ public class MenuServiceImpl implements MenuService {
     public List<MenuItemResponse> getAllMenuItems() {
         Long branchId = resolveCurrentUserBranchId();
 
-        List<MenuItem> items;
-        if (isCurrentUserAdmin()) {
-            items = menuItemRepository.findByBranchId(branchId);
-        } else {
-            items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(branchId, MenuItemStatus.ACTIVE);
-        }
+        List<MenuItem> items = menuItemRepository.findByBranchId(branchId);
 
         return items
                 .stream()
@@ -264,7 +259,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         if (request.getDescription() != null) {
-            menuItem.setDescription(request.getDescription());
+            menuItem.setDescription(validateAndNormalizeOptionalDescription(request.getDescription()));
         }
 
         if (request.getPrice() != null) {
@@ -281,7 +276,16 @@ public class MenuServiceImpl implements MenuService {
         }
 
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
-            menuItem.setStatus(parseStatus(request.getStatus(), menuItem.getStatus()));
+            MenuItemStatus updatedStatus = parseStatus(request.getStatus(), menuItem.getStatus());
+            menuItem.setStatus(updatedStatus);
+
+            if (request.getIsAvailable() == null) {
+                if (updatedStatus == MenuItemStatus.ACTIVE) {
+                    menuItem.setIsAvailable(true);
+                } else {
+                    menuItem.setIsAvailable(false);
+                }
+            }
         }
 
         if (request.getPreparationTime() != null) {
@@ -319,7 +323,7 @@ public class MenuServiceImpl implements MenuService {
         return buildActionResponse(
             "ACTIVE",
             menuItem,
-            "Item approved and activated",
+            "Item approved and activated. Notification sent to chef.",
             buildMenuDecisionNotificationPayload("APPROVED", menuItem, null)
         );
     }
@@ -350,7 +354,7 @@ public class MenuServiceImpl implements MenuService {
         return buildActionResponse(
             "REJECTED",
             menuItem,
-            "Item rejected: " + rejectionReason.trim(),
+            "Item rejected: " + rejectionReason.trim() + ". Notification sent to chef.",
             buildMenuDecisionNotificationPayload("REJECTED", menuItem, rejectionReason.trim())
         );
     }
@@ -408,16 +412,11 @@ public class MenuServiceImpl implements MenuService {
             return defaultStatus;
         }
 
-        // Backward compatibility for old API clients that still send APPROVED.
-        if ("APPROVED".equalsIgnoreCase(status)) {
-            return MenuItemStatus.ACTIVE;
-        }
-
         try {
             return MenuItemStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException ex) {
             throw new InvalidOperationException(
-                    "Invalid menu item status: " + status + ". Valid values: DRAFT, PENDING, ACTIVE, REJECTED");
+                    "Invalid menu item status: " + status + ". Valid values: PENDING, ACTIVE, INACTIVE, REJECTED");
         }
     }
 
@@ -496,6 +495,19 @@ public class MenuServiceImpl implements MenuService {
         }
 
         return normalizedImageUrl;
+    }
+
+    private String validateAndNormalizeOptionalDescription(String description) {
+        if (description == null) {
+            return null;
+        }
+
+        String normalizedDescription = description.trim();
+        if (normalizedDescription.isEmpty()) {
+            return null;
+        }
+
+        return normalizedDescription;
     }
 
     private String validateAndNormalizeOptionalSubCategory(String subCategory) {
