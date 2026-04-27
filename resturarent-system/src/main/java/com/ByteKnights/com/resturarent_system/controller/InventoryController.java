@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.inventory.RemoveInvent
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryLogDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
 
@@ -206,6 +207,28 @@ public class InventoryController {
         Long userId = principal.getUser().getId();
         InventoryItemDTO updatedItem = inventoryService.correctItem(id, request, userId);
         return ResponseEntity.ok(updatedItem);
+    }
+
+    /**
+     * 7. Fetches the history of all inventory updates (logs).
+     * 
+     * Path: GET /api/inventory/logs?branchId={id}
+     * 
+     * @param branchId Retrieved from the URL query parameter.
+     * @param principal The authenticated user.
+     * @return 200 OK with the list of InventoryLogDTOs.
+     */
+    @GetMapping("/logs")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    public ResponseEntity<List<InventoryLogDTO>> getInventoryLogs(
+            @RequestParam(required = false) Long branchId,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        Long targetBranchId = resolveTargetBranchId(branchId, principal);
+        Long userId = principal.getUser().getId();
+
+        List<InventoryLogDTO> logs = inventoryService.getInventoryLogs(targetBranchId, userId);
+        return ResponseEntity.ok(logs);
     }
 
     /**

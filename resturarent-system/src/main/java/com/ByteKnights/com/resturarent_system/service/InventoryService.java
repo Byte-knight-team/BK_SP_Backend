@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.inventory.RemoveInvent
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryLogDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 
 public interface InventoryService {
@@ -78,4 +79,12 @@ public interface InventoryService {
      */
     InventoryItemDTO correctItem(Long id, UpdateInventoryItemRequest request, Long userId);
 
+    /**
+     * 7. Retrieves the history of all inventory updates (logs) for a specific branch.
+     * 
+     * @param targetBranchId The ID of the branch (provided if Super Admin).
+     * @param userId         The ID of the logged-in user.
+     * @return A list of InventoryLogDTOs sorted by newest first.
+     */
+    List<InventoryLogDTO> getInventoryLogs(Long targetBranchId, Long userId);
 }
