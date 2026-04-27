@@ -6,6 +6,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInven
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryLogDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
@@ -293,7 +294,39 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     /**
-     * Internal helper to fetch an item and ensure the user has permission to update it.
+     * 7. Retrieves the history of all inventory updates (logs).
+     */
+    @Override
+    public List<InventoryLogDTO> getInventoryLogs(Long targetBranchId, Long userId) {
+        Long finalBranchId = resolveBranchId(targetBranchId, userId);
+
+        // Fetch all transactions for this branch, ordered by newest first
+        List<InventoryTransaction> transactions = inventoryTransactionRepository
+                .findByInventoryItemBranchIdOrderByCreatedAtDesc(finalBranchId);
+
+        return transactions.stream()
+                .map(this::toLogDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Private helper to convert an InventoryTransaction entity to a DTO.
+     */
+    private InventoryLogDTO toLogDTO(InventoryTransaction transaction) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a");
+
+        return InventoryLogDTO.builder()
+                .itemName(transaction.getInventoryItem().getName())
+                .updatedAt(transaction.getCreatedAt().format(formatter))
+                .updateType(transaction.getTransactionType().name())
+                .notes(transaction.getNotes())
+                .build();
+    }
+
+
+    /**
+     * Internal helper to fetch an item and ensure the user has permission to update
+     * it.
      */
     private InventoryItem getAndVerifyItem(Long id, Long userId) {
         InventoryItem item = inventoryItemRepository.findById(id)
