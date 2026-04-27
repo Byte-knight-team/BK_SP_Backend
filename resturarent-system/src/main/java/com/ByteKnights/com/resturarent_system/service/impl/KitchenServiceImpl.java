@@ -508,6 +508,46 @@ public class KitchenServiceImpl implements KitchenService {
         chefAttendanceRepository.save(attendance);
     }
 
+    // update item status to ready and check the order status is completed or not
+    @Override
+    @Transactional
+    public MealCompletionResponseDTO completeMeal(Long itemId) {
+        // Find the Meal Item
+        OrderItem item = orderItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Meal item not found"));
 
+        // 2. Update Meal Status to READY
+        item.setStatus(OrderItemStatus.READY);
+        item.setCookingCompletedAt(LocalDateTime.now());
+        orderItemRepository.save(item);
+
+        // Free up the Chef
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
+                        item.getAssignedChef().getId(), LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Chef attendance not found"));
+
+        attendance.setWorkStatus(ChefWorkStatus.AVAILABLE);
+        chefAttendanceRepository.save(attendance);
+
+        // check all other meals are finished in the same order
+        Order order = item.getOrder();
+        boolean allFinished = true;
+        for (OrderItem items : order.getItems()) {
+            if (items.getStatus() != OrderItemStatus.READY) {
+                allFinished = false;
+                break;
+            }
+        }
+
+        // If everything is done, Order becomes COMPLETED
+        if (allFinished) {
+            order.setStatus(OrderStatus.COMPLETED);
+            order.setStatusUpdatedAt(LocalDateTime.now());
+            orderRepository.save(order);
+        }
+
+        // Return the status in the DTO
+        return new MealCompletionResponseDTO(order.getStatus().toString());
+    }
 
 }
