@@ -90,6 +90,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             LocalDateTime start, 
             LocalDateTime end);
 
+    List<Order> findByBranchIdAndOrderTypeAndStatus(
+            Long branchId, 
+            com.ByteKnights.com.resturarent_system.entity.OrderType orderType, 
+            OrderStatus status);
+
     List<Order> findByStatus(OrderStatus status, Sort sort);
 
     List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
