@@ -14,7 +14,7 @@ target/
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -32,9 +32,9 @@ build/
 ### VS Code ###
 .vscode/
 
-### Configuration ###
+### Local Configuration ###
+../.env
 .env.properties
-.env
 
 # Log files
 *.log
@@ -46,3 +46,6 @@ build.log
 compile_errors.txt
 error_log.txt
 error_log_utf8.txt
+
+#doc files
+docs/

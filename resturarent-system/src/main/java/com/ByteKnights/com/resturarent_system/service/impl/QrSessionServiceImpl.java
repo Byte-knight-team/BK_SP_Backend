@@ -1,7 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.request.QrSessionStartRequest;
-import com.ByteKnights.com.resturarent_system.dto.response.QrSessionStartResponseData;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.QrSessionStartRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.QrSessionStartResponseData;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.QrSession;
 import com.ByteKnights.com.resturarent_system.entity.QrSessionStatus;
@@ -92,6 +92,32 @@ public class QrSessionServiceImpl implements QrSessionService {
                 .tableId(tableId)
         .expiresAt(formatExpiresAt(expiry))
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void endSession(Long sessionId) {
+        QrSession session = qrSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new QrSessionException(HttpStatus.NOT_FOUND, "QR session not found."));
+
+        if (session.getStatus() == QrSessionStatus.ENDED) {
+            return; // Already ended, no-op
+        }
+
+        session.setStatus(QrSessionStatus.ENDED);
+        session.setEndedAt(java.time.LocalDateTime.now());
+        qrSessionRepository.save(session);
+    }
+
+    @Override
+    public void validateActiveSession(Long sessionId) {
+        QrSession session = qrSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new QrSessionException(HttpStatus.NOT_FOUND, "QR session not found."));
+
+        if (session.getStatus() != QrSessionStatus.ACTIVE) {
+            throw new QrSessionException(HttpStatus.GONE,
+                    "Your table session has ended. Please close this tab and rescan the QR code.");
+        }
     }
 
     private void validateRequest(QrSessionStartRequest request) {

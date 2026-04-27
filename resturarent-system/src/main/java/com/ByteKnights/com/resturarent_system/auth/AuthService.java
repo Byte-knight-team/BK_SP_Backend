@@ -1,5 +1,7 @@
 package com.ByteKnights.com.resturarent_system.auth;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -10,12 +12,18 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ByteKnights.com.resturarent_system.dto.ChangePasswordRequest;
 import com.ByteKnights.com.resturarent_system.dto.LoginResponse;
 import com.ByteKnights.com.resturarent_system.dto.StaffLoginRequest;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtService;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 
 @Service
 public class AuthService {
@@ -24,40 +32,128 @@ public class AuthService {
     private final StaffRepository staffRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AuditLogService auditLogService;
 
     public AuthService(UserRepository userRepository,
-                       StaffRepository staffRepository,
-                       PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+            StaffRepository staffRepository,
+            PasswordEncoder passwordEncoder,
+            JwtService jwtService,
+            AuditLogService auditLogService) {
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.auditLogService = auditLogService;
     }
 
     public LoginResponse loginStaff(StaffLoginRequest request) {
         Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
+
         if (userOptional.isEmpty()) {
+            auditLogService.logAnonymousAction(
+                    request.getEmail(),
+                    AuditModule.AUTH,
+                    AuditEventType.LOGIN_FAILED,
+                    AuditStatus.FAILURE,
+                    AuditSeverity.WARN,
+                    AuditTargetType.AUTH,
+                    null,
+                    "Staff login failed: invalid email",
+                    null,
+                    null);
             throw new RuntimeException("Invalid email");
         }
 
         User user = userOptional.get();
+        Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
+        Long branchId = getBranchId(staff);
 
         if (!Boolean.TRUE.equals(user.getIsActive())) {
+            auditLogService.logActionAsUser(
+                    user.getId(),
+                    user.getEmail(),
+                    user.getRole() != null ? user.getRole().getName() : null,
+                    branchId,
+                    AuditModule.AUTH,
+                    AuditEventType.LOGIN_FAILED,
+                    AuditStatus.FAILURE,
+                    AuditSeverity.WARN,
+                    AuditTargetType.AUTH,
+                    user.getId(),
+                    "Staff login failed: account disabled",
+                    null,
+                    null);
             throw new RuntimeException("Account disabled");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            auditLogService.logActionAsUser(
+                    user.getId(),
+                    user.getEmail(),
+                    user.getRole() != null ? user.getRole().getName() : null,
+                    branchId,
+                    AuditModule.AUTH,
+                    AuditEventType.LOGIN_FAILED,
+                    AuditStatus.FAILURE,
+                    AuditSeverity.WARN,
+                    AuditTargetType.AUTH,
+                    user.getId(),
+                    "Staff login failed: invalid password",
+                    null,
+                    null);
             throw new RuntimeException("Invalid password");
         }
 
-        Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
+        String roleName = user.getRole() != null ? user.getRole().getName() : null;
+
+        if (!"SUPER_ADMIN".equals(roleName)) {
+
+            if (staff == null || staff.getBranch() == null) {
+                throw new RuntimeException("Staff branch is not assigned");
+            }
+
+            if (!"ACTIVE".equals(String.valueOf(staff.getBranch().getStatus()))) {
+                throw new RuntimeException("Your branch is inactive. Please contact the system administrator.");
+            }
+        }
+
+        String branchName = null;
+
+        /*
+         * branchId is already declared above using getBranchId(staff).
+         * Here we only prepare branchName for the JWT payload.
+         */
+        if (staff != null && staff.getBranch() != null) {
+            branchName = staff.getBranch().getName();
+        }
 
         String token = jwtService.generateToken(
                 user.getId(),
                 user.getEmail(),
-                user.getRole().getName()
-        );
+                user.getRole().getName(),
+                branchId,
+                branchName);
+
+        Map<String, Object> loginDetails = new LinkedHashMap<>();
+        loginDetails.put("userId", user.getId());
+        loginDetails.put("email", user.getEmail());
+        loginDetails.put("roleName", user.getRole() != null ? user.getRole().getName() : null);
+        loginDetails.put("branchId", branchId);
+
+        auditLogService.logActionAsUser(
+                user.getId(),
+                user.getEmail(),
+                user.getRole() != null ? user.getRole().getName() : null,
+                branchId,
+                AuditModule.AUTH,
+                AuditEventType.LOGIN_SUCCESS,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.AUTH,
+                user.getId(),
+                "Staff login successful",
+                null,
+                loginDetails);
 
         return LoginResponse.builder()
                 .id(user.getId())
@@ -66,8 +162,8 @@ public class AuthService {
                 .roleName(user.getRole().getName())
                 .active(user.getIsActive())
                 .passwordChanged(user.getPasswordChanged())
-                .branchId(staff != null && staff.getBranch() != null ? staff.getBranch().getId() : null)
-                .branchName(staff != null && staff.getBranch() != null ? staff.getBranch().getName() : null)
+                .branchId(branchId)
+                .branchName(branchName)
                 .token(token)
                 .tokenType("Bearer")
                 .build();
@@ -89,6 +185,9 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
+        Long branchId = getBranchId(staff);
+
         if (!Boolean.TRUE.equals(user.getIsActive())) {
             throw new RuntimeException("Account disabled");
         }
@@ -105,10 +204,35 @@ public class AuthService {
             throw new RuntimeException("Current password is incorrect");
         }
 
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        oldValues.put("passwordChanged", user.getPasswordChanged());
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setPasswordChanged(true);
         userRepository.save(user);
 
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("passwordChanged", user.getPasswordChanged());
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.AUTH,
+                AuditEventType.PASSWORD_CHANGED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.USER,
+                user.getId(),
+                branchId,
+                "Staff password changed successfully",
+                oldValues,
+                newValues);
+
         return "Password changed successfully";
+    }
+
+    private Long getBranchId(Staff staff) {
+        if (staff != null && staff.getBranch() != null) {
+            return staff.getBranch().getId();
+        }
+        return null;
     }
 }

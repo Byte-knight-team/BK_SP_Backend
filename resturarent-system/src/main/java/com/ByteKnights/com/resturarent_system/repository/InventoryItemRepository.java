@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
+
 @Repository
 public interface InventoryItemRepository extends JpaRepository<InventoryItem, Long> {
 
@@ -22,5 +24,7 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
     // Count low-stock items for a branch
     @Query("SELECT COUNT(i) FROM InventoryItem i WHERE i.branch.id = :branchId AND i.quantity <= i.reorderLevel")
     long countLowStockByBranchId(@Param("branchId") Long branchId);
+
+    Optional<InventoryItem> findByName(String name);
 
 }
