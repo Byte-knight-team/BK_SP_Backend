@@ -103,7 +103,7 @@ public class SecurityConfig {
                          * Role permission READ access.
                          *
                          * Keep this SUPER_ADMIN only because this is part of RBAC management.
-                         * Create Staff / Edit Staff does not need this endpoint.
+                         * Create Staff / Edit Staff does not need this endpoint
                          */
                         .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions")
                         .hasRole("SUPER_ADMIN")
