@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,5 +29,15 @@ public class ManagerDriverController {
         
         ManagerDriverSummaryDTO summary = managerDriverService.getDriverSummary(branchId, userDetails.getUser().getId());
         return ResponseEntity.ok(ApiResponse.success("Driver summary retrieved successfully", summary));
+    }
+
+    @PostMapping("/assign")
+    @PreAuthorize("hasAnyRole('MANAGER', 'SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> assignDriver(
+            @RequestParam Long orderId,
+            @RequestParam Long driverId) {
+        
+        managerDriverService.assignDriver(orderId, driverId);
+        return ResponseEntity.ok(ApiResponse.success("Driver assigned successfully", null));
     }
 }

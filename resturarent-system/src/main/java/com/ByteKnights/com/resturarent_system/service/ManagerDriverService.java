@@ -4,4 +4,5 @@ import com.ByteKnights.com.resturarent_system.dto.response.manager.ManagerDriver
 
 public interface ManagerDriverService {
     ManagerDriverSummaryDTO getDriverSummary(Long branchId, Long userId);
+    void assignDriver(Long orderId, Long driverId);
 }

@@ -9,10 +9,12 @@ import com.ByteKnights.com.resturarent_system.service.ManagerDriverService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
+import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 
 @Service
 @RequiredArgsConstructor
@@ -95,6 +97,38 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 .dispatchOrders(orderDTOs)
                 .drivers(driverDTOs)
                 .build();
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public void assignDriver(Long orderId, Long driverId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
+        
+        Staff rider = staffRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("Rider not found with ID: " + driverId));
+
+        if (!"RIDER".equals(rider.getUser().getRole().getName())) {
+            throw new IllegalArgumentException("Staff member is not a rider");
+        }
+
+        if (rider.getEmploymentStatus() != EmploymentStatus.ACTIVE) {
+            throw new IllegalArgumentException("Rider is not active");
+        }
+
+        // Create Delivery record
+        Delivery delivery = Delivery.builder()
+                .order(order)
+                .deliveryStaff(rider)
+                .deliveryStatus(DeliveryStatus.ASSIGNED)
+                .assignedAt(LocalDateTime.now())
+                .build();
+        
+        deliveryRepository.save(delivery);
+
+        // Update Order status
+        order.setStatus(OrderStatus.OUT_FOR_DELIVERY);
+        orderRepository.save(order);
     }
 
     private Long resolveBranchId(Long targetBranchId, Long userId) {
