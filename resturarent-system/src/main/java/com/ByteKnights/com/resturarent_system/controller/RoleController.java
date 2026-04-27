@@ -26,19 +26,19 @@ public class RoleController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<RoleSummaryResponse>> getAllRoles() {
         return ResponseEntity.ok(roleService.getAllRoleSummaries());
     }
 
     @GetMapping("/{roleId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<RoleSummaryResponse> getRoleSummary(@PathVariable Long roleId) {
         return ResponseEntity.ok(roleService.getRoleSummaryById(roleId));
     }
 
     @GetMapping("/{roleId}/permissions")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Set<String>> getPermissions(@PathVariable Long roleId) {
         return ResponseEntity.ok(roleService.getPermissionsOfRole(roleId));
     }

@@ -40,13 +40,13 @@ public class SystemConfigController {
     }
 
     @GetMapping("/branches/{branchId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<BranchConfigResponse> getBranchConfig(@PathVariable Long branchId) {
         return ResponseEntity.ok(systemConfigService.getBranchConfig(branchId));
     }
 
     @PutMapping("/branches/{branchId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<BranchConfigResponse> updateBranchConfig(
             @PathVariable Long branchId,
             @Valid @RequestBody UpdateBranchConfigRequest request
@@ -55,13 +55,13 @@ public class SystemConfigController {
     }
 
     @GetMapping("/branches/{branchId}/operating-hours")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<OperatingHourItemResponse>> getOperatingHours(@PathVariable Long branchId) {
         return ResponseEntity.ok(systemConfigService.getOperatingHours(branchId));
     }
 
     @PutMapping("/branches/{branchId}/operating-hours")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<OperatingHourItemResponse>> updateOperatingHours(
             @PathVariable Long branchId,
             @Valid @RequestBody UpdateOperatingHoursRequest request
@@ -70,7 +70,7 @@ public class SystemConfigController {
     }
 
     @GetMapping("/branches/{branchId}/effective")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<EffectiveBranchConfigResponse> getEffectiveBranchConfig(@PathVariable Long branchId) {
         return ResponseEntity.ok(systemConfigService.getEffectiveBranchConfig(branchId));
     }
