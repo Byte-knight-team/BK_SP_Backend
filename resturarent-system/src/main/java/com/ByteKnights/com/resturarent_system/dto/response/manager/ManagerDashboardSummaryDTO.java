@@ -50,7 +50,7 @@ public class ManagerDashboardSummaryDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ManagerRecentOrderDTO {
-        private Long id;
+        private String id;
         private String type; // 'online' or 'dine-in'
         private String status; // 'active', 'done', etc.
         private String timer; // e.g., '15:22'
