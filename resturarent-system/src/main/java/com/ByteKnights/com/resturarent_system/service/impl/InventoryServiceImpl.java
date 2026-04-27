@@ -10,11 +10,14 @@ import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySu
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
 import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
+import com.ByteKnights.com.resturarent_system.entity.InventoryTransaction;
+import com.ByteKnights.com.resturarent_system.entity.InventoryTransactionType;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.InventoryTransactionRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +54,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryItemRepository inventoryItemRepository;
     private final ChefRequestRepository chefRequestRepository;
     private final BranchRepository branchRepository;
-    private final StaffRepository staffRepository; // Added StaffRepository
+    private final StaffRepository staffRepository;
+    private final InventoryTransactionRepository inventoryTransactionRepository;
 
     /**
      * Helper method to securely resolve the branch ID.
@@ -205,6 +209,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public InventoryItemDTO restockItem(Long id, RestockInventoryItemRequest request, Long userId) {
         InventoryItem item = getAndVerifyItem(id, userId);
+        BigDecimal previousQuantity = item.getQuantity();
 
         BigDecimal addedQuantity = request.getQuantity() != null ? request.getQuantity() : BigDecimal.ZERO;
         item.setQuantity(item.getQuantity().add(addedQuantity));
@@ -214,6 +219,12 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         InventoryItem savedItem = inventoryItemRepository.save(item);
+
+        // LOG TRANSACTION
+        saveTransaction(savedItem, userId, InventoryTransactionType.RESTOCK,
+                addedQuantity, previousQuantity, savedItem.getQuantity(),
+                savedItem.getUnitPrice(), request.getNotes());
+
         return toItemDTO(savedItem);
     }
 
@@ -230,6 +241,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public InventoryItemDTO removeStock(Long id, RemoveInventoryStockRequest request, Long userId) {
         InventoryItem item = getAndVerifyItem(id, userId);
+        BigDecimal previousQuantity = item.getQuantity();
 
         BigDecimal removedQuantity = request.getQuantity() != null ? request.getQuantity() : BigDecimal.ZERO;
         BigDecimal newQuantity = item.getQuantity().subtract(removedQuantity);
@@ -240,6 +252,12 @@ public class InventoryServiceImpl implements InventoryService {
 
         item.setQuantity(newQuantity);
         InventoryItem savedItem = inventoryItemRepository.save(item);
+
+        // LOG TRANSACTION
+        saveTransaction(savedItem, userId, InventoryTransactionType.WASTAGE,
+                removedQuantity.negate(), previousQuantity, savedItem.getQuantity(),
+                savedItem.getUnitPrice(), request.getReason());
+
         return toItemDTO(savedItem);
     }
 
@@ -255,6 +273,7 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public InventoryItemDTO correctItem(Long id, UpdateInventoryItemRequest request, Long userId) {
         InventoryItem item = getAndVerifyItem(id, userId);
+        BigDecimal previousQuantity = item.getQuantity();
 
         item.setName(request.getName());
         item.setCategory(request.getCategory());
@@ -264,6 +283,12 @@ public class InventoryServiceImpl implements InventoryService {
         item.setReorderLevel(request.getReorderLevel());
 
         InventoryItem savedItem = inventoryItemRepository.save(item);
+
+        // LOG TRANSACTION
+        saveTransaction(savedItem, userId, InventoryTransactionType.CORRECTION,
+                savedItem.getQuantity().subtract(previousQuantity), previousQuantity, savedItem.getQuantity(),
+                savedItem.getUnitPrice(), request.getNotes());
+
         return toItemDTO(savedItem);
     }
 
@@ -281,6 +306,30 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         return item;
+    }
+
+    /**
+     * Private helper to log a stock transaction in the database.
+     */
+    private void saveTransaction(InventoryItem item, Long userId, InventoryTransactionType type,
+            BigDecimal change, BigDecimal prevQty, BigDecimal newQty,
+            BigDecimal price, String notes) {
+
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Staff not found for user id: " + userId));
+
+        InventoryTransaction transaction = InventoryTransaction.builder()
+                .inventoryItem(item)
+                .staff(staff)
+                .transactionType(type)
+                .quantityChange(change)
+                .previousQuantity(prevQty)
+                .newQuantity(newQty)
+                .unitPrice(price)
+                .notes(notes)
+                .build();
+
+        inventoryTransactionRepository.save(transaction);
     }
 
     // ───────────────────────── PRIVATE HELPER MAPPERS ─────────────────────────
