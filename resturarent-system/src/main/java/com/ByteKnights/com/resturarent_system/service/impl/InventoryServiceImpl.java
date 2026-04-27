@@ -323,16 +323,24 @@ public class InventoryServiceImpl implements InventoryService {
         }
 
         ChefRequestStatus newStatus;
-        try {
-            newStatus = ChefRequestStatus.valueOf(requestDTO.getStatus().toUpperCase());
-        } catch (IllegalArgumentException e) {
-            throw new RuntimeException("Invalid status: " + requestDTO.getStatus());
+        String statusStr = requestDTO.getStatus().toUpperCase();
+        
+        if ("ACCEPTED".equals(statusStr) || "APPROVED".equals(statusStr)) {
+            newStatus = ChefRequestStatus.APPROVED;
+        } else if ("REJECTED".equals(statusStr)) {
+            newStatus = ChefRequestStatus.REJECTED;
+        } else {
+            try {
+                newStatus = ChefRequestStatus.valueOf(statusStr);
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException("Invalid status: " + requestDTO.getStatus());
+            }
         }
 
         chefRequest.setStatus(newStatus);
         chefRequest.setManagerNote(requestDTO.getManagerNote());
         
-        ChefRequest updatedRequest = chefRequestRepository.save(chefRequest);
+        ChefRequest updatedRequest = chefRequestRepository.saveAndFlush(chefRequest);
         return toChefRequestDTO(updatedRequest);
     }
 
