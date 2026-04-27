@@ -115,7 +115,7 @@ public class MenuServiceImpl implements MenuService {
         // only branch 1 is doing online services
         Long targetBranchId = (branchId != null) ? branchId : 1;
 
-        // Fetch only APPROVED and AVAILABLE items for this specific branch
+        // Fetch only ACTIVE items for this specific branch
         List<MenuItem> items = menuItemRepository.findByBranchIdAndStatus(
                 targetBranchId, 
                 MenuItemStatus.ACTIVE
