@@ -11,8 +11,8 @@ public enum OrderStatus {
     OUT_FOR_DELIVERY,
     SERVED,
     COMPLETED,
-    ON_HOLD,
-    CLOSED}
+    ON_HOLD
+}
 
 /*
  * PENDING // waiting for cheff to start preparing.

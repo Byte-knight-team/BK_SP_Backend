@@ -70,6 +70,16 @@ public class JwtService {
                 .compact();
     }
 
+    public String generateQrToken(Map<String, Object> claims, String subject, long expirationMs) {
+        return Jwts.builder()
+                .claims(claims)
+                .subject(subject)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + expirationMs))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
     public String extractEmail(String token) {
         return extractClaim(token, Claims::getSubject);
     }
