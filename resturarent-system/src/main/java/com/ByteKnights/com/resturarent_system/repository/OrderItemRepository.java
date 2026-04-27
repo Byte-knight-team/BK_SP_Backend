@@ -12,7 +12,9 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
     // --- Kitchen Queries START ---
 
-    //1. kitchen dashboard top 5 most popular meals with count
+    // 1. kitchen dashboard top 5 most popular meals with count
+    // Native Queries: Direct SQL execution on the database.
+    // Essential for complex analytical tasks or database-specific functions (like TIMESTAMPDIFF, HOUR, SUM, NOW).
     @Query(value = "SELECT oi.item_name, SUM(oi.quantity) as mealCount " +
             "FROM order_items oi " +
             "JOIN orders o ON oi.order_id = o.id " +
