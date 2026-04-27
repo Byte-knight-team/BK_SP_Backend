@@ -463,5 +463,10 @@ public class KitchenServiceImpl implements KitchenService {
         orderRepository.save(order);
     }
 
+    @Override
+    public void startMeal(Long itemId) {
+
+    }
+
 
 }
