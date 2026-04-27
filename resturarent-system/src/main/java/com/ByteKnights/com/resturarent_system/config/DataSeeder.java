@@ -1,21 +1,8 @@
 package com.ByteKnights.com.resturarent_system.config;
 
-import com.ByteKnights.com.resturarent_system.entity.Branch;
-import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
-import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
-import com.ByteKnights.com.resturarent_system.entity.Customer;
-import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
-import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
-import com.ByteKnights.com.resturarent_system.entity.MenuItem;
-import com.ByteKnights.com.resturarent_system.entity.MenuItemStatus;
-import com.ByteKnights.com.resturarent_system.entity.Order;
-import com.ByteKnights.com.resturarent_system.entity.OrderItem;
-import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
-import com.ByteKnights.com.resturarent_system.entity.OrderType;
-import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 import com.ByteKnights.com.resturarent_system.entity.Privilege;
 import com.ByteKnights.com.resturarent_system.entity.Role;
-import com.ByteKnights.com.resturarent_system.entity.User;
+
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.CustomerRepository;
@@ -32,23 +19,13 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 
 @Component
 public class DataSeeder implements CommandLineRunner {
 
-        private final BranchRepository branchRepository;
-        private final CustomerRepository customerRepository;
-        private final OrderRepository orderRepository;
-        private final UserRepository userRepository;
         private final RoleRepository roleRepository;
-        private final MenuCategoryRepository menuCategoryRepository;
-        private final MenuItemRepository menuItemRepository;
-        private final OrderItemRepository orderItemRepository;
-        private final InventoryItemRepository inventoryItemRepository;
-        private final ChefRequestRepository chefRequestRepository;
         private final PrivilegeRepository privilegeRepository;
 
         public DataSeeder(BranchRepository branchRepository,
@@ -62,24 +39,14 @@ public class DataSeeder implements CommandLineRunner {
                         InventoryItemRepository inventoryItemRepository,
                         ChefRequestRepository chefRequestRepository,
                         PrivilegeRepository privilegeRepository) {
-                this.branchRepository = branchRepository;
-                this.customerRepository = customerRepository;
-                this.orderRepository = orderRepository;
-                this.userRepository = userRepository;
+
                 this.roleRepository = roleRepository;
-                this.menuCategoryRepository = menuCategoryRepository;
-                this.menuItemRepository = menuItemRepository;
-                this.orderItemRepository = orderItemRepository;
-                this.inventoryItemRepository = inventoryItemRepository;
-                this.chefRequestRepository = chefRequestRepository;
                 this.privilegeRepository = privilegeRepository;
         }
 
         @Override
         @Transactional
         public void run(String... args) throws Exception {
-                // Only seed users/orders if none exist
-                boolean shouldSeedOrders = orderRepository.count() == 0;
 
                 /*
                  * Privileges are system-level permission names.
