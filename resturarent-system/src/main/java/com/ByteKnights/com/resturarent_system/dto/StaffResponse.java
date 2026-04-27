@@ -30,12 +30,5 @@ public class StaffResponse {
     private Long branchId;
     private String branchName;
     private String employmentStatus;
-
-    /*
-        Actual salary for this specific staff member.
-
-        This value is copied from Role.baseSalary during staff creation,
-        but it can be changed later for an individual raise/reduction.
-    */
     private BigDecimal salary;
 }

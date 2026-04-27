@@ -14,5 +14,5 @@ public class UpdateStaffRequest {
     private String phone;
     private String roleName;
     private Long branchId;
-    private BigDecimal salary; /*Optional individual salary update.*/
+    private BigDecimal salary; 
 }
