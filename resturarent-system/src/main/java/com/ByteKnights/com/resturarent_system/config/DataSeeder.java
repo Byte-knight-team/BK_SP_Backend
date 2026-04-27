@@ -178,7 +178,6 @@ public class DataSeeder implements CommandLineRunner {
 
     /*
      * Creates a privilege only if it does not already exist.
-     *
      * This is safe to run every backend startup.
      */
     private Privilege createPrivilege(String name) {

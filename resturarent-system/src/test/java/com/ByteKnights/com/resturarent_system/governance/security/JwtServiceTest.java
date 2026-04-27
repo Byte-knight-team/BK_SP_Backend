@@ -62,29 +62,6 @@ class JwtServiceTest {
     }
 
     @Test
-    void generateToken_oldMethod_shouldCreateTokenWithNullBranchClaims() {
-        // Act
-        String token = jwtService.generateToken(
-                1L,
-                "superadmin@test.com",
-                "SUPER_ADMIN"
-        );
-
-        // Assert
-        assertNotNull(token);
-        assertEquals("superadmin@test.com", jwtService.extractEmail(token));
-        assertEquals("SUPER_ADMIN", jwtService.extractRole(token));
-        assertEquals(1L, jwtService.getUserIdFromToken(token));
-
-        /*
-         * SUPER_ADMIN is global, so branch details can be null.
-         */
-        assertNull(jwtService.getBranchIdFromToken(token));
-        assertNull(jwtService.getBranchNameFromToken(token));
-        assertTrue(jwtService.validateToken(token));
-    }
-
-    @Test
     void isTokenValid_shouldReturnTrue_whenEmailMatchesAndTokenNotExpired() {
         // Arrange
         String token = jwtService.generateToken(
