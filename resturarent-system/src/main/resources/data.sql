@@ -32,21 +32,4 @@ INSERT INTO menu_items (id, branch_id, category_id, sub_category, name, descript
 VALUES
 	(1, 1, 1, 'Rice', 'Chicken Biryani', 'Spiced basmati rice with chicken', 350.00, NULL, true, 'APPROVED', 20, '2026-02-14 06:45:00'),
 	(2, 1, 2, 'Cold Drinks', 'Lime Juice', 'Fresh lime with ice', 70.00, NULL, true, 'APPROVED', 5, '2026-02-14 06:45:00');
-
--- Payment methods
-INSERT INTO payment_methods (id, name, description, status, created_at)
-VALUES
-	(1, 'CARD', 'Card payment', 'ACTIVE', '2026-02-14 06:50:00'),
-	(2, 'CASH', 'Cash payment', 'ACTIVE', '2026-02-14 06:50:00');
-
--- Orders with required customer_id (no guest QR orders)
-INSERT INTO orders (id, order_number, branch_id, table_id, customer_id, order_type, status, total_amount, discount_amount, final_amount, payment_status, created_at, updated_at)
-VALUES
-	(1, 'ORD-1204', 1, 1, 1, 'QR', 'PLACED', 420.00, 0.00, 420.00, 'PENDING', '2026-02-14 10:45:00', '2026-02-14 10:50:00'),
-	(2, 'ORD-1205', 1, 2, 2, 'ONLINE', 'APPROVED', 140.00, 0.00, 140.00, 'PAID', '2026-02-14 11:02:00', '2026-02-14 11:05:00');
-
-INSERT INTO order_items (id, order_id, menu_item_id, item_name, quantity, unit_price, subtotal, kitchen_notes)
-VALUES
-	(1, 1, 1, 'Chicken Biryani', 1, 350.00, 350.00, 'Extra spicy'),
-	(2, 1, 2, 'Lime Juice', 1, 70.00, 70.00, NULL),
-	(3, 2, 2, 'Lime Juice', 2, 70.00, 140.00, NULL);
+;
