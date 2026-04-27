@@ -91,6 +91,7 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                         .type(o.getOrderType() != null ? o.getOrderType().name().toLowerCase() : "unknown")
                         .status(o.getStatus().name().toLowerCase())
                         .timer(o.getCreatedAt().format(timeFormatter))
+                        .amount(o.getFinalAmount())
                         .build()
         ).collect(Collectors.toList());
 

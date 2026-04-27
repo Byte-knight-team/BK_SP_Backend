@@ -54,6 +54,7 @@ public class ManagerDashboardSummaryDTO {
         private String type; // 'online' or 'dine-in'
         private String status; // 'active', 'done', etc.
         private String timer; // e.g., '15:22'
+        private java.math.BigDecimal amount;
     }
 
     @Data
