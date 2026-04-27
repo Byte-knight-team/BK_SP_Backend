@@ -1,0 +1,25 @@
+package com.ByteKnights.com.resturarent_system.dto.response.admin;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+import java.util.Map;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class MenuItemActionResponse {
+
+    private String type;
+    private Long menuItemId;
+    private String menuItemName;
+    private String message;
+    private Map<String, Object> notificationPayload;
+    private LocalDateTime timestamp;
+}

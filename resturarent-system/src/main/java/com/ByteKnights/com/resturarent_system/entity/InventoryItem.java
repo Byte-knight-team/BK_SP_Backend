@@ -40,6 +40,12 @@ public class InventoryItem {
     @Column(name = "max_stock", precision = 10, scale = 2)
     private BigDecimal maxStock;
 
+    @Column(length = 50)
+    private String category;
+
+    @Column(name = "unit_price", precision = 10, scale = 2)
+    private BigDecimal unitPrice;
+
     @PrePersist
     @PreUpdate
     protected void onUpdate() {

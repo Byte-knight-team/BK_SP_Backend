@@ -6,14 +6,24 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailTestingService {
 
-    // Runtime flag used by the email service
+    /*
+     * Runtime testing flag
+     * false -> email service tries to send real email
+     * true  -> email service intentionally fails
+     */
     private boolean forceFail;
 
-    // Load initial default from application.properties
+    /*
+     * Loads the default value from application.properties.
+     */
     public EmailTestingService(@Value("${app.email.force-fail:false}") boolean forceFail) {
         this.forceFail = forceFail;
     }
 
+    /*
+     * Returns whether email sending should be forced to fail.
+     * SmtpEmailService checks this before sending the real email.
+     */
     public boolean isForceFail() {
         return forceFail;
     }

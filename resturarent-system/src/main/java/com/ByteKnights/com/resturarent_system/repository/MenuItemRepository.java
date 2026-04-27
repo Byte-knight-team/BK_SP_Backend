@@ -3,6 +3,8 @@ package com.ByteKnights.com.resturarent_system.repository;
 import com.ByteKnights.com.resturarent_system.entity.MenuItem;
 import com.ByteKnights.com.resturarent_system.entity.MenuItemStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -20,6 +22,8 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     List<MenuItem> findByStatusAndIsAvailableTrue(MenuItemStatus status);
 
+    List<MenuItem> findByBranchId(Long branchId);
+
     // Fetches items by Branch ID, ensures they are APPROVED, and currently AVAILABLE
     List<MenuItem> findByBranchIdAndStatusAndIsAvailableTrue(Long branchId, MenuItemStatus status);
 
@@ -28,4 +32,34 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
     void deleteByBranchIdAndNameIn(Long branchId, List<String> names);
 
     List<MenuItem> findByBranchIdAndStatus(Long targetBranchId, MenuItemStatus active);
+    boolean existsByCategoryIdAndIsAvailableTrue(Long categoryId);
+
+    boolean existsByCategoryId(Long categoryId);
+
+        @Query("""
+            SELECT DISTINCT mi.subCategory
+            FROM MenuItem mi
+            WHERE (:branchId IS NULL OR mi.branch.id = :branchId)
+              AND (:categoryId IS NULL OR mi.category.id = :categoryId)
+              AND mi.subCategory IS NOT NULL
+            ORDER BY mi.subCategory
+            """)
+        List<String> findDistinctSubCategories(
+            @Param("branchId") Long branchId,
+            @Param("categoryId") Long categoryId);
+
+    @Query("SELECT COUNT(DISTINCT mi.category.id) FROM MenuItem mi WHERE mi.branch.id = :branchId")
+    long countDistinctCategoryByBranchId(@Param("branchId") Long branchId);
+
+    long countByBranchId(Long branchId);
+
+    long countByBranchIdAndIsAvailableTrue(Long branchId);
+
+    long countByIsAvailableTrue();
+
+    @Query("SELECT COUNT(DISTINCT mi.subCategory) FROM MenuItem mi WHERE mi.branch.id = :branchId AND mi.subCategory IS NOT NULL")
+    long countDistinctSubCategoryByBranchId(@Param("branchId") Long branchId);
+
+    @Query("SELECT COUNT(DISTINCT mi.subCategory) FROM MenuItem mi WHERE mi.subCategory IS NOT NULL")
+    long countDistinctSubCategory();
 }

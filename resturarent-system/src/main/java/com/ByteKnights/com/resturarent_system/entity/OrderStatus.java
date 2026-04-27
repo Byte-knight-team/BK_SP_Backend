@@ -24,12 +24,10 @@ public enum OrderStatus {
  * COMPLETED // order is completed - cooking done
  * CANCELLED // order is cancelled by receiptionist or user
  */
-
 /*
 PLACED // just placed by customer
 CANCELLED // order is cancelled by user,receiptionist or auto cacelld cause error
 */
-
 /*
 SERVED // is the last state of order receiptionist and delivery person should update this to served
 */
