@@ -41,4 +41,6 @@ public interface KitchenService {
     void holdOrder(Long orderId, String holdReason);
 
     void startMeal(Long itemId);
+
+    MealCompletionResponseDTO completeMeal(Long itemId);
 }

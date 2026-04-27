@@ -242,5 +242,16 @@ public class KitchenController {
         );
     }
 
+    // update meal status as completed and return current order status
+    @PutMapping("/order-items/{itemId}/complete")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> completeMeal(@PathVariable Long itemId) {
 
+        MealCompletionResponseDTO orderStats = kitchenService.completeMeal(itemId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", orderStats),
+                HttpStatus.OK
+        );
+    }
 }
