@@ -80,7 +80,7 @@ public class MenuServiceImpl implements MenuService {
     @Override
     @Transactional(readOnly = true)
     public List<MenuItemResponse> getAllMenuItems() {
-        return menuItemRepository.findByStatusAndIsAvailableTrue(MenuItemStatus.APPROVED)
+        return menuItemRepository.findByStatusAndIsAvailableTrue(MenuItemStatus.ACTIVE)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
@@ -116,9 +116,9 @@ public class MenuServiceImpl implements MenuService {
         Long targetBranchId = (branchId != null) ? branchId : 1;
 
         // Fetch only APPROVED and AVAILABLE items for this specific branch
-        List<MenuItem> items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(
+        List<MenuItem> items = menuItemRepository.findByBranchIdAndStatus(
                 targetBranchId, 
-                MenuItemStatus.APPROVED
+                MenuItemStatus.ACTIVE
         );
 
         // Convert the database Entities into clean DTOs for React
@@ -209,7 +209,7 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Cannot approve invalid menu item");
         }
 
-        menuItem.setStatus(MenuItemStatus.APPROVED);
+        menuItem.setStatus(MenuItemStatus.ACTIVE);
         menuItem.setApprovedAt(LocalDateTime.now());
         menuItem.setRejectedAt(null);
         menuItem.setRejectionReason(null);
@@ -246,7 +246,7 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemActionResponse toggleMenuItemAvailability(Long id, boolean isAvailable) {
         MenuItem menuItem = findMenuItemOrThrow(id);
 
-        if (menuItem.getStatus() != MenuItemStatus.APPROVED) {
+        if (menuItem.getStatus() != MenuItemStatus.ACTIVE) {
             throw new InvalidOperationException("Cannot toggle availability if not APPROVED");
         }
 
@@ -263,7 +263,7 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemActionResponse deleteMenuItem(Long id, DeleteMenuItemRequest request) {
         MenuItem menuItem = findMenuItemOrThrow(id);
 
-        if (menuItem.getStatus() == MenuItemStatus.APPROVED) {
+        if (menuItem.getStatus() == MenuItemStatus.ACTIVE) {
             throw new InvalidOperationException("Cannot delete approved item");
         }
 

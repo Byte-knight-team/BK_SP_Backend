@@ -26,4 +26,6 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
     Optional<MenuItem> findByBranchIdAndName(Long branchId, String name);
 
     void deleteByBranchIdAndNameIn(Long branchId, List<String> names);
+
+    List<MenuItem> findByBranchIdAndStatus(Long targetBranchId, MenuItemStatus active);
 }
