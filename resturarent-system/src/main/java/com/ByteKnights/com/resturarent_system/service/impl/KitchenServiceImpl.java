@@ -463,10 +463,51 @@ public class KitchenServiceImpl implements KitchenService {
         orderRepository.save(order);
     }
 
+    //update meal status, order status, and chef work status when start preparing a meal
     @Override
+    @Transactional
     public void startMeal(Long itemId) {
+        // Find the Meal Item
+        OrderItem item = orderItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Meal item not found"));
 
+        // SAFETY CHECK: Must have a chef assigned to start
+        if (item.getAssignedChef() == null) {
+            throw new RuntimeException("Cannot start meal: No chef assigned yet!");
+        }
+
+        // Update Meal Status and Start Time
+        item.setStatus(OrderItemStatus.PREPARING);
+        item.setCookingStartedAt(LocalDateTime.now());
+        orderItemRepository.save(item);
+
+        // Update the Parent Order Status to PREPARING
+        Order order = item.getOrder();
+        if (order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.PREPARING);
+            order.setStatusUpdatedAt(LocalDateTime.now());
+            orderRepository.save(order);
+        }
+
+        // Update Chef's Work Status to COOKING
+        // Find today's attendance record for this chef
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
+                        item.getAssignedChef().getId(), LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Chef attendance record not found for today"));
+
+        // SAFETY CHECK: Ensure they are actually at work!
+        if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+            throw new RuntimeException("Cannot start: Chef " + item.getAssignedChef().getUser().getFullName() + " has already checked out!");
+        }
+        // check if they are ON_BREAK here if you have that status
+        if (attendance.getWorkStatus() == ChefWorkStatus.ON_BREAK) {
+            throw new RuntimeException("Cannot start: Chef is currently on a break.");
+        }
+
+        attendance.setWorkStatus(ChefWorkStatus.COOKING);
+        chefAttendanceRepository.save(attendance);
     }
+
 
 
 }
