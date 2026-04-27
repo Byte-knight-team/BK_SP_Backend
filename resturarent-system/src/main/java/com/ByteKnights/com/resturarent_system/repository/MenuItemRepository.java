@@ -22,6 +22,8 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     List<MenuItem> findByStatusAndIsAvailableTrue(MenuItemStatus status);
 
+    List<MenuItem> findByBranchId(Long branchId);
+
     // Fetches items by Branch ID, ensures they are APPROVED, and currently AVAILABLE
     List<MenuItem> findByBranchIdAndStatusAndIsAvailableTrue(Long branchId, MenuItemStatus status);
 

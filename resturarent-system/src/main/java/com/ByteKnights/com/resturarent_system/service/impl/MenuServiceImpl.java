@@ -159,7 +159,12 @@ public class MenuServiceImpl implements MenuService {
     public List<MenuItemResponse> getAllMenuItems() {
         Long branchId = resolveCurrentUserBranchId();
 
-        List<MenuItem> items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(branchId, MenuItemStatus.ACTIVE);
+        List<MenuItem> items;
+        if (isCurrentUserAdmin()) {
+            items = menuItemRepository.findByBranchId(branchId);
+        } else {
+            items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(branchId, MenuItemStatus.ACTIVE);
+        }
 
         return items
                 .stream()
@@ -618,6 +623,32 @@ public class MenuServiceImpl implements MenuService {
         return staffRepository.findByUserId(jwtUser.getUser().getId())
                 .map(staff -> staff.getBranch().getId())
                 .orElseThrow(() -> new InvalidOperationException("Staff profile not found for authenticated user"));
+    }
+
+    private Long resolveCurrentAdminBranchIdOrNull() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return null;
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+
+        if (!isAdmin) {
+            return null;
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (!(principal instanceof JwtUserPrincipal jwtUser)
+                || jwtUser.getUser() == null
+                || jwtUser.getUser().getId() == null) {
+            throw new InvalidOperationException("Authenticated ADMIN user not found");
+        }
+
+        return staffRepository.findByUserId(jwtUser.getUser().getId())
+                .map(staff -> staff.getBranch().getId())
+                .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
     }
 
     private Map<String, Object> buildMenuDecisionNotificationPayload(
