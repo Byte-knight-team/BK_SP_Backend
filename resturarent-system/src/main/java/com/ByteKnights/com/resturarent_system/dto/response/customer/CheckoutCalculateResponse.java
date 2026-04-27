@@ -26,4 +26,5 @@ public class CheckoutCalculateResponse {
     private Integer availableLoyaltyPoints;
     private Integer loyaltyPointsEarnedThisOrder;
     private Integer minPointsToRedeem;
+    private Integer maxRedeemablePoints; // Backend-calculated 50% cap
 }

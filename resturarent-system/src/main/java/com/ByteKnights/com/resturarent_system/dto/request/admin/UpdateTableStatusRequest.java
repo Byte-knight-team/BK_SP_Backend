@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.dto;
+package com.ByteKnights.com.resturarent_system.dto.request.admin;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
@@ -8,8 +8,12 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+/**
+ * Payload for status-only updates.
+ */
 public class UpdateTableStatusRequest {
 
     @NotBlank(message = "Status is required")
-    private String status; // AVAILABLE, OCCUPIED, RESERVED
+    // Allowed values: AVAILABLE, OCCUPIED, RESERVED.
+    private String status;
 }

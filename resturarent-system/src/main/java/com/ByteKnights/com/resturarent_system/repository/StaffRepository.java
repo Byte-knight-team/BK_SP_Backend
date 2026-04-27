@@ -23,4 +23,5 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     Optional<Staff> findByUserIdWithBranch(@Param("userId") Long userId);
 
     boolean existsByUser(User user);
+
 }

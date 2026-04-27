@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.dto;
+package com.ByteKnights.com.resturarent_system.dto.request.admin;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,7 +11,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ApproveMenuItemRequest {
+public class DeleteMenuItemRequest {
 
     private Long adminUserId;
 }

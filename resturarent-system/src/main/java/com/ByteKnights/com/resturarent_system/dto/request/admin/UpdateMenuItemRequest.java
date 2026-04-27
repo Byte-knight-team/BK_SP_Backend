@@ -1,4 +1,4 @@
-package com.ByteKnights.com.resturarent_system.dto;
+package com.ByteKnights.com.resturarent_system.dto.request.admin;
 
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.DecimalMax;

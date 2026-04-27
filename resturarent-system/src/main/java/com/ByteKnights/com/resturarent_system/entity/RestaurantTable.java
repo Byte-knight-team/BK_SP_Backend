@@ -13,6 +13,9 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+/**
+ * Represents a physical table in a branch.
+ */
 public class RestaurantTable {
 
     @Id
@@ -44,6 +47,9 @@ public class RestaurantTable {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * Sets creation timestamp when a row is first persisted.
+     */
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
