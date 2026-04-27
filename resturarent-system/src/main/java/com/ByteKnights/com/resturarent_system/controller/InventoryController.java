@@ -63,7 +63,7 @@ public class InventoryController {
      * @return 200 OK with a list of InventoryItemDTOs in the response body.
      */
     @GetMapping("/items")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'CHEF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER', 'CHEF')")
     public ResponseEntity<List<InventoryItemDTO>> getAllItemsByBranch(
             @RequestParam(required = false) Long branchId,
             @AuthenticationPrincipal JwtUserPrincipal principal) {
@@ -120,7 +120,7 @@ public class InventoryController {
      * @return 201 Created with the newly created InventoryItemDTO.
      */
     @PostMapping("/items")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<InventoryItemDTO> addInventoryItem(
             @Valid @RequestBody CreateInventoryItemRequest request,
             @AuthenticationPrincipal JwtUserPrincipal principal) {
@@ -150,7 +150,7 @@ public class InventoryController {
      * @return 200 OK with the updated InventoryItemDTO.
      */
     @PatchMapping("/items/{id}/restock")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<InventoryItemDTO> restockItem(
             @PathVariable Long id,
             @RequestBody RestockInventoryItemRequest request,
@@ -174,7 +174,7 @@ public class InventoryController {
      * @return 200 OK with the updated InventoryItemDTO.
      */
     @PatchMapping("/items/{id}/remove")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<InventoryItemDTO> removeStock(
             @PathVariable Long id,
             @RequestBody RemoveInventoryStockRequest request,
@@ -198,7 +198,7 @@ public class InventoryController {
      * @return 200 OK with the updated InventoryItemDTO.
      */
     @PutMapping("/items/{id}/correct")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MANAGER')")
+    @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<InventoryItemDTO> correctItem(
             @PathVariable Long id,
             @RequestBody UpdateInventoryItemRequest request,
@@ -214,7 +214,7 @@ public class InventoryController {
      * 
      * Path: GET /api/inventory/logs?branchId={id}
      * 
-     * @param branchId Retrieved from the URL query parameter.
+     * @param branchId  Retrieved from the URL query parameter.
      * @param principal The authenticated user.
      * @return 200 OK with the list of InventoryLogDTOs.
      */
