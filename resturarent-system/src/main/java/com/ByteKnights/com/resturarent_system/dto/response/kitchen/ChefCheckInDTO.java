@@ -7,10 +7,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class OrderItemDetailsDTO {
-    private Long id;
-    private String itemName;
-    private Integer quantity;
-    private String status;
-    private String assignedChefName;
+public class ChefCheckInDTO {
+    private Long id;        // Staff ID of the Line Chef
+    private String fullName; // Chef's Name
 }
