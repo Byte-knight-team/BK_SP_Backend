@@ -11,7 +11,8 @@ public enum OrderStatus {
     OUT_FOR_DELIVERY,
     SERVED,
     COMPLETED,
-    ON_HOLD
+    ON_HOLD,
+    REFUNDED
 }
 
 /*
