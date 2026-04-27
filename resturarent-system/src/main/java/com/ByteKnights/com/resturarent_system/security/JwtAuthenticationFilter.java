@@ -25,8 +25,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final StaffRepository staffRepository;
 
     public JwtAuthenticationFilter(JwtService jwtService,
-                                   UserRepository userRepository,
-                                   StaffRepository staffRepository) {
+            UserRepository userRepository,
+            StaffRepository staffRepository) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
@@ -39,17 +39,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 1. Read JWT token from request header.
      * 2. Validate JWT token.
      * 3. Load logged-in user from database.
-     * 4. Check whether user account is active.
-     * 5. Check whether branch-linked staff belongs to an ACTIVE branch.
+     * 4. Block request if user account is deactivated.
+     * 5. Block request if branch-linked staff belongs to an inactive branch.
      * 6. If all checks pass, tell Spring Security that this user is authenticated.
      */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         try {
-            // Read JWT token from Authorization header
+            // Read JWT token from Authorization header.
             String jwt = getJwtFromRequest(request);
 
             // Continue only if token exists and token is valid.
@@ -58,100 +58,123 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // Extract user ID stored inside JWT.
                 Long userId = jwtService.getUserIdFromToken(jwt);
 
-                // Load the latest user data from database.
+                /*
+                 * Load the latest user data from database.
+                 * This is important because the user may have been deactivated after login.
+                 */
                 User userEntity = userRepository.findById(userId).orElse(null);
 
-                // Only active users are allowed to continue.
-                if (userEntity != null && Boolean.TRUE.equals(userEntity.getIsActive())) {
+                /*
+                 * If the user no longer exists, block the request.
+                 * This prevents old JWT tokens from working for deleted/missing users.
+                 */
+                if (userEntity == null) {
+                    denyRequest(
+                            response,
+                            "USER_NOT_FOUND",
+                            "User account no longer exists");
+                    return;
+                }
 
-                    String roleName = userEntity.getRole() != null
-                            ? userEntity.getRole().getName()
-                            : null;
+                /*
+                 * If the user was deactivated after login, block the old JWT session.
+                 * This handles already logged-in users after staff/user deactivation.
+                 */
+                if (!Boolean.TRUE.equals(userEntity.getIsActive())) {
+                    denyRequest(
+                            response,
+                            "USER_INACTIVE",
+                            "Your account has been deactivated. Please contact the system administrator.");
+                    return;
+                }
+
+                // If user exists and is active, continue with role and branch checks.
+                String roleName = userEntity.getRole() != null
+                        ? userEntity.getRole().getName()
+                        : null;
+
+                /*
+                 * SUPER_ADMIN is global, so branch status checking is skipped.
+                 * This supports both role name formats:
+                 * - SUPER_ADMIN
+                 * - ROLE_SUPER_ADMIN
+                 */
+                boolean isSuperAdmin = "SUPER_ADMIN".equals(roleName) ||
+                        "ROLE_SUPER_ADMIN".equals(roleName);
+
+                /*
+                 * Non-SUPER_ADMIN users must have a Staff record and an assigned branch.
+                 * Their branch must also be ACTIVE.
+                 */
+                if (!isSuperAdmin) {
 
                     /*
-                     * we skip branch-status checking for SUPER_ADMIN.
-                     * Some projects store role as SUPER_ADMIN.
-                     * Some store it as ROLE_SUPER_ADMIN.
+                     * Use findByUserIdWithBranch instead of findByUserId.
+                     *
+                     * Reason:
+                     * Branch is lazy-loaded in Staff entity.
+                     * If we use normal findByUserId, staff.getBranch().getStatus()
+                     * can cause LazyInitializationException inside this filter.
+                     *
+                     * findByUserIdWithBranch uses JOIN FETCH and loads Staff + Branch together.
                      */
-                    boolean isSuperAdmin =
-                            "SUPER_ADMIN".equals(roleName) ||
-                            "ROLE_SUPER_ADMIN".equals(roleName);
+                    Staff staff = staffRepository
+                            .findByUserIdWithBranch(userEntity.getId())
+                            .orElse(null);
 
-                    /*
-
-                    Non- super admin must have a Staff record and an assigned branch.*/
-
-                     
-                    if (!isSuperAdmin) {
-
-                        /*
-                         * Use findByUserIdWithBranch instead of findByUserId.
-                         *
-                         * Reason:
-                         * Branch is lazy-loaded in Staff entity.
-                         * If we use normal findByUserId, staff.getBranch().getStatus()
-                         * can cause LazyInitializationException inside this filter.
-                         *
-                         * findByUserIdWithBranch uses JOIN FETCH and loads Staff + Branch together.
-                         */
-                        Staff staff = staffRepository
-                                .findByUserIdWithBranch(userEntity.getId())
-                                .orElse(null);
-
-                        // If staff has no branch, block the request.
-                        if (staff == null || staff.getBranch() == null) {
-                            denyRequest(
-                                    response,
-                                    "STAFF_BRANCH_NOT_ASSIGNED",
-                                    "Staff branch is not assigned"
-                            );
-                            return;
-                        }
-
-                        // If staff branch is inactive, block the request.
-                        // This handles already logged-in users after their branch is deactivated.
-                        if (!"ACTIVE".equals(String.valueOf(staff.getBranch().getStatus()))) {
-                            denyRequest(
-                                    response,
-                                    "BRANCH_INACTIVE",
-                                    "Your branch is inactive. Please contact the system administrator."
-                            );
-                            return;
-                        }
+                    // If staff has no branch, block the request.
+                    if (staff == null || staff.getBranch() == null) {
+                        denyRequest(
+                                response,
+                                "STAFF_BRANCH_NOT_ASSIGNED",
+                                "Staff branch is not assigned");
+                        return;
                     }
 
                     /*
-                     * If all checks passed, create JwtUserPrincipal.
-                     * This object contains logged-in user details and authorities/permissions.
+                     * If staff branch is inactive, block the request.
+                     * This handles already logged-in staff after their branch is deactivated.
                      */
-                    JwtUserPrincipal userDetails = new JwtUserPrincipal(userEntity);
-
-                    /*
-                     * Create Spring Security authentication object.
-                     * After this, backend controllers can recognize the logged-in user.
-                     */
-                    UsernamePasswordAuthenticationToken authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    userDetails,
-                                    null,
-                                    userDetails.getAuthorities()
-                            );
-
-                    // Attach request details like IP/session info.
-                    authentication.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request)
-                    );
-
-                    // Save authentication in Spring Security context.
-                    // This means the request is now treated as authenticated.
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    if (!"ACTIVE".equals(String.valueOf(staff.getBranch().getStatus()))) {
+                        denyRequest(
+                                response,
+                                "BRANCH_INACTIVE",
+                                "Your branch is inactive. Please contact the system administrator.");
+                        return;
+                    }
                 }
+
+                /*
+                 * If all checks passed, create JwtUserPrincipal.
+                 * This object contains logged-in user details and authorities/permissions.
+                 */
+                JwtUserPrincipal userDetails = new JwtUserPrincipal(userEntity);
+
+                /*
+                 * Create Spring Security authentication object.
+                 * After this, backend controllers can recognize the logged-in user.
+                 */
+                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        userDetails.getAuthorities());
+
+                // Attach request details like IP/session info.
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request));
+
+                /*
+                 * Save authentication in Spring Security context.
+                 * This means the request is now treated as authenticated.
+                 */
+                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
 
         } catch (Exception ex) {
             /*
              * If token validation or user loading fails, do not crash the backend.
-             * The request will continue without authentication and Spring Security will block it later.
+             * The request will continue without authentication and Spring Security will
+             * block it later.
              */
             logger.error("Could not set user authentication in security context", ex);
         }
@@ -164,6 +187,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * Sends a 403 Forbidden response manually.
      *
      * Used when:
+     * - User account no longer exists.
+     * - User account is inactive.
      * - Staff branch is not assigned.
      * - Staff branch is inactive.
      *
@@ -176,8 +201,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setContentType("application/json");
 
         response.getWriter().write(
-                "{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}"
-        );
+                "{\"code\":\"" + code + "\",\"message\":\"" + message + "\"}");
     }
 
     /*

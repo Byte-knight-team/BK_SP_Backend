@@ -196,13 +196,14 @@ public class StaffService {
 
             staffRepository.save(staff);
         }
-
+        
+        //Send email to the new staff member
         try {
             emailService.sendStaffInviteEmail(savedUser.getEmail(), savedUser.getUsername(), tempPassword);
             savedUser.setEmailSent(true);
             savedUser.setInviteStatus(InviteStatus.SENT);
 
-        } catch (Exception e) {
+        } catch (Exception e) { //Catch any exception during email sending
             savedUser.setEmailSent(false);
             savedUser.setInviteStatus(InviteStatus.FAILED);
 
