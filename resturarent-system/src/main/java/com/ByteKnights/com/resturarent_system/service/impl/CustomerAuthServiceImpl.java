@@ -21,9 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Random;
@@ -131,18 +128,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String normalizedRole = normalizeRole(customerRole.getName());
         String token = customerJwtService.generateToken(savedUser.getId(), savedUser.getEmail(), normalizedRole);
 
-        //getting time as it uneffected by zone
-        String createdAtUtc = savedUser.getCreatedAt()
-                .atZone(ZoneId.systemDefault())
-                .withZoneSameInstant(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_INSTANT);
-
         //returning response
         return CustomerRegisterResponseData.builder()
-                .userId(savedUser.getId())
-                .username(savedUser.getUsername())
                 .token(token)
-                .createdAt(createdAtUtc)
                 .build();
     }
 
@@ -175,7 +163,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         //return response
         return CustomerLoginResponseData.builder()
-                .userId(user.getId())
                 .token(token)
                 .build();
     }
@@ -262,7 +249,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String token = customerJwtService.generateToken(user.getId(), user.getPhone(), normalizedRole); // Use phone as subject if email is missing
 
         return CustomerLoginResponseData.builder()
-                .userId(user.getId())
                 .token(token)
                 .build();
     }
