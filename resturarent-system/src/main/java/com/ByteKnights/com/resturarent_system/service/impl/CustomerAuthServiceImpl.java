@@ -246,7 +246,10 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         // 3. Issue JWT Token so they can place the order!
         String normalizedRole = normalizeRole(user.getRole().getName());
-        String token = customerJwtService.generateToken(user.getId(), user.getPhone(), normalizedRole); // Use phone as subject if email is missing
+        // Use email if available, otherwise use phone for JWT subject
+        // This ensures Principal.getName() returns a valid identifier for profile lookups
+        String tokenSubject = user.getEmail() != null ? user.getEmail() : user.getPhone();
+        String token = customerJwtService.generateToken(user.getId(), tokenSubject, normalizedRole);
 
         return CustomerLoginResponseData.builder()
                 .token(token)
