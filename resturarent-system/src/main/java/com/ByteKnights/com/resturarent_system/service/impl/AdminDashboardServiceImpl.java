@@ -39,29 +39,26 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
     // Dashboard "active orders" are those still in operational flow (not finished/cancelled).
     private static final Set<OrderStatus> ACTIVE_ORDER_STATUSES = EnumSet.of(
-            //OrderStatus.OPEN,
             OrderStatus.PLACED,
-            OrderStatus.APPROVED,
+            OrderStatus.PENDING,
             OrderStatus.PREPARING,
             OrderStatus.READY,
             OrderStatus.OUT_FOR_DELIVERY,
-            OrderStatus.SERVED
-            //OrderStatus.PAID
-    );
+            OrderStatus.SERVED,
+            OrderStatus.ON_HOLD);
 
     // Revenue should only include orders that have a successful payment outcome.
     private static final Set<PaymentStatus> REVENUE_PAYMENT_STATUSES = EnumSet.of(
             PaymentStatus.PAID,
-            PaymentStatus.SUCCESS
-    );
+            PaymentStatus.SUCCESS);
 
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
 
     public AdminDashboardServiceImpl(OrderRepository orderRepository,
-                                     UserRepository userRepository,
-                                     StaffRepository staffRepository) {
+            UserRepository userRepository,
+            StaffRepository staffRepository) {
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
@@ -89,8 +86,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             activeUsers = userRepository.countActiveUsersByBranchId(adminBranchId);
             totalRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(
                     adminBranchId,
-                    REVENUE_PAYMENT_STATUSES
-            );
+                    REVENUE_PAYMENT_STATUSES);
         }
 
         return AdminDashboardSummaryResponse.builder()
@@ -180,8 +176,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 adminBranchId,
                 REVENUE_PAYMENT_STATUSES,
                 start,
-                end
-        );
+                end);
     }
 
     private int normalizeTrendDays(int days) {

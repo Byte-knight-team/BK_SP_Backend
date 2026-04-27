@@ -15,10 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -302,7 +299,7 @@ public class KitchenServiceImpl implements KitchenService {
                 order.getStatus().toString(),
                 order.getHoldReason(),
                 order.getKitchenNotes(),
-                itemDTOs
+                itemDTOs //list of items
         );
     }
 
@@ -316,7 +313,13 @@ public class KitchenServiceImpl implements KitchenService {
         Staff currentStaff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
         Long branchId = currentStaff.getBranch().getId();
+
         // Define filters
+        // Logic to filter Line Chefs:
+        // 1. Same Branch: Only chefs working at the same location as the logged-in Chief Chef.
+        // 2. Today's Attendance: Must have a recorded attendance entry for the current date.
+        // 3. On-Duty Only: The chef must be currently clocked-in (Attendance Status: ON_DUTY).
+        // 4. Working Status: Must be either currently 'AVAILABLE' (idle) or 'COOKING' (already assigned to a meal).
         LocalDate today = LocalDate.now();
         List<ChefWorkStatus> allowedStatuses = List.of(ChefWorkStatus.AVAILABLE, ChefWorkStatus.COOKING);
         // Fetch raw Entities from the database
@@ -349,5 +352,202 @@ public class KitchenServiceImpl implements KitchenService {
         orderItemRepository.save(item);
     }
 
+    //get all the Line Chefs Who is not checked in yet
+    @Override
+    public List<ChefCheckInDTO> getLineChefsForCheckIn(String userEmail) {
+        // Get logged-in Chief Chef
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff currentStaff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Fetch line chefs who haven't checked in today at this branch from database
+        List<Staff> staffList = staffRepository.findLineChefsNotCheckedInToday(currentStaff.getBranch().getId(), LocalDate.now());
+
+        // Create a new empty list for our DTOs
+        List<ChefCheckInDTO> checkInList = new ArrayList<>();
+
+        // Loop through each Staff and convert to ChefCheckInDTO
+        for (Staff s : staffList) {
+            ChefCheckInDTO dto = new ChefCheckInDTO();
+            dto.setId(s.getId());
+            dto.setFullName(s.getUser().getFullName());
+
+            // Add to our list
+            checkInList.add(dto);
+        }
+
+        // Return the final list
+        return checkInList;
+    }
+
+    // save check in attendance record
+    @Override
+    @Transactional // This is important because we are saving to the database
+    public void checkInChef(Long chefId) {
+
+        // 1. Try to find if there is ALREADY an attendance record for today
+        Optional<ChefAttendance> existingRecord = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now());
+
+        if (existingRecord.isPresent()) {
+            ChefAttendance record = existingRecord.get();
+
+            // If they are currently ON_DUTY, don't let them check in again
+            if (record.getAttendanceStatus() == ChefAttendanceStatus.ON_DUTY) {
+                throw new RuntimeException("Chef is already currently clocked in!");
+            }
+
+            // If they are OFF_DUTY, it means they already finished their shift for today
+            if (record.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+                throw new RuntimeException("Cannot chek-in for today. Chef has already completed their shift for today!");
+            }
+        }
+        // 2. If no record exists at all, proceed with the normal check-in
+        Staff chef = staffRepository.findById(chefId)
+                .orElseThrow(() -> new RuntimeException("Chef not found"));
+
+        // Create a new attendance record
+        ChefAttendance attendance = new ChefAttendance();
+        attendance.setStaff(chef); // Sets staff id
+        attendance.setAttendanceDate(LocalDate.now()); // Sets today's date
+        attendance.setClockInTime(LocalDateTime.now()); // Sets the exact time right now
+        attendance.setAttendanceStatus(ChefAttendanceStatus.ON_DUTY); // now the chef is clocked in and ready to work
+        attendance.setWorkStatus(ChefWorkStatus.AVAILABLE); // not started cooking yet
+
+        // Save it to the database
+        chefAttendanceRepository.save(attendance);
+    }
+
+    // check out a chef and update the attendance record with clock-out time, attendance status, and work status
+    @Override
+    @Transactional
+    public void checkOutChef(Long chefId) {
+        // Find the attendance record for today
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("No check-in record found for this chef today!"));
+
+        // Safety Check: If they are already OFF_DUTY, don't update again
+        if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+            throw new RuntimeException("Chef has already checked out for today!");
+        }
+
+        // Update the fields
+        attendance.setClockOutTime(LocalDateTime.now()); // Record date and time when they left
+        attendance.setAttendanceStatus(ChefAttendanceStatus.OFF_DUTY); // They are no longer on duty
+        attendance.setWorkStatus(ChefWorkStatus.UNAVAILABLE); // They are no longer available to cook
+
+        // Save the changes
+        chefAttendanceRepository.save(attendance);
+    }
+
+    // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
+    @Override
+    @Transactional
+    public void holdOrder(Long orderId, String holdReason) {
+        // Find the order
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+
+        // Update Order Status and Reason
+        order.setStatus(OrderStatus.ON_HOLD);
+        order.setHoldReason(holdReason);
+        order.setStatusUpdatedAt(LocalDateTime.now());
+
+        // Update ALL items inside this order to ON_HOLD as well
+        for (OrderItem item : order.getItems()) {
+            item.setStatus(OrderItemStatus.ON_HOLD);
+        }
+
+        // Save the order (This will save the items too because of Cascade)
+        orderRepository.save(order);
+    }
+
+    //update meal status, order status, and chef work status when start preparing a meal
+    @Override
+    @Transactional
+    public void startMeal(Long itemId) {
+        // Find the Meal Item
+        OrderItem item = orderItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Meal item not found"));
+
+        // SAFETY CHECK: Must have a chef assigned to start
+        if (item.getAssignedChef() == null) {
+            throw new RuntimeException("Cannot start meal: No chef assigned yet!");
+        }
+
+        // Update Meal Status and Start Time
+        item.setStatus(OrderItemStatus.PREPARING);
+        item.setCookingStartedAt(LocalDateTime.now());
+        orderItemRepository.save(item);
+
+        // Update the Parent Order Status to PREPARING
+        Order order = item.getOrder();
+        if (order.getStatus() == OrderStatus.PENDING) {
+            order.setStatus(OrderStatus.PREPARING);
+            order.setStatusUpdatedAt(LocalDateTime.now());
+            orderRepository.save(order);
+        }
+
+        // Update Chef's Work Status to COOKING
+        // Find today's attendance record for this chef
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
+                        item.getAssignedChef().getId(), LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Chef attendance record not found for today"));
+
+        // SAFETY CHECK: Ensure they are actually at work!
+        if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+            throw new RuntimeException("Cannot start: Chef " + item.getAssignedChef().getUser().getFullName() + " has already checked out!");
+        }
+        // check if they are ON_BREAK here if you have that status
+        if (attendance.getWorkStatus() == ChefWorkStatus.ON_BREAK) {
+            throw new RuntimeException("Cannot start: Chef is currently on a break.");
+        }
+
+        attendance.setWorkStatus(ChefWorkStatus.COOKING);
+        chefAttendanceRepository.save(attendance);
+    }
+
+    // update item status to ready and check the order status is completed or not
+    @Override
+    @Transactional
+    public MealCompletionResponseDTO completeMeal(Long itemId) {
+        // Find the Meal Item
+        OrderItem item = orderItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Meal item not found"));
+
+        // 2. Update Meal Status to READY
+        item.setStatus(OrderItemStatus.READY);
+        item.setCookingCompletedAt(LocalDateTime.now());
+        orderItemRepository.save(item);
+
+        // Free up the Chef
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
+                        item.getAssignedChef().getId(), LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Chef attendance not found"));
+
+        attendance.setWorkStatus(ChefWorkStatus.AVAILABLE);
+        chefAttendanceRepository.save(attendance);
+
+        // check all other meals are finished in the same order
+        Order order = item.getOrder();
+        boolean allFinished = true;
+        for (OrderItem items : order.getItems()) {
+            if (items.getStatus() != OrderItemStatus.READY) {
+                allFinished = false;
+                break;
+            }
+        }
+
+        // If everything is done, Order becomes COMPLETED
+        if (allFinished) {
+            order.setStatus(OrderStatus.COMPLETED);
+            order.setStatusUpdatedAt(LocalDateTime.now());
+            orderRepository.save(order);
+        }
+
+        // Return the status in the DTO
+        return new MealCompletionResponseDTO(order.getStatus().toString());
+    }
 
 }
