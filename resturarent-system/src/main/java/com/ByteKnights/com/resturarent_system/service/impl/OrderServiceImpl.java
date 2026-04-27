@@ -342,6 +342,57 @@ public class OrderServiceImpl implements OrderService {
                         throw new CheckoutException(HttpStatus.BAD_REQUEST, "Cannot cancel an order that is already preparing, completed, or cancelled.");
                 }
 
+                // Rollback loyalty points
+                if (!loyaltyTransactionRepository.existsByOrderAndTransactionType(order, LoyaltyTransactionType.REFUND)) {
+                        int currentPoints = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+                        int redeemedPoints = order.getRewardPointsRedeemed() != null ? order.getRewardPointsRedeemed() : 0;
+                        int earnedPoints = order.getRewardPointsEarned() != null ? order.getRewardPointsEarned() : 0;
+
+                        if (redeemedPoints > 0) {
+                                customer.setLoyaltyPoints(currentPoints + redeemedPoints);
+                                currentPoints = customer.getLoyaltyPoints();
+
+                                LoyaltyTransaction refundRedeemedTx = LoyaltyTransaction.builder()
+                                                .customer(customer)
+                                                .order(order)
+                                                .transactionType(LoyaltyTransactionType.REFUND)
+                                                .points(redeemedPoints)
+                                                .description("Refunded redeemed points for cancelled order " + order.getOrderNumber())
+                                                .build();
+                                loyaltyTransactionRepository.save(refundRedeemedTx);
+                        }
+
+                        if (earnedPoints > 0) {
+                                int pointsToReverse = Math.min(currentPoints, earnedPoints);
+                                customer.setLoyaltyPoints(Math.max(0, currentPoints - pointsToReverse));
+
+                                LoyaltyTransaction reverseEarnedTx = LoyaltyTransaction.builder()
+                                                .customer(customer)
+                                                .order(order)
+                                                .transactionType(LoyaltyTransactionType.REFUND)
+                                                .points(-pointsToReverse)
+                                                .description("Reversed earned points for cancelled order " + order.getOrderNumber())
+                                                .build();
+                                loyaltyTransactionRepository.save(reverseEarnedTx);
+                        }
+                }
+                //restock used coupon and delete usage record
+                if (order.getAppliedCouponCode() != null && !order.getAppliedCouponCode().isBlank()) {
+                        couponUsageRepository.findByOrder(order).ifPresent(couponUsageRepository::delete);
+
+                        couponRepository.findByCode(order.getAppliedCouponCode()).ifPresent(coupon -> {
+                                int usedCount = coupon.getUsedCount() != null ? coupon.getUsedCount() : 0;
+                                coupon.setUsedCount(Math.max(0, usedCount - 1));
+                                couponRepository.save(coupon);
+                        });
+                }
+
+                if (order.getFinalAmount() != null && customer.getTotalSpent() != null) {
+                        customer.setTotalSpent(customer.getTotalSpent().subtract(order.getFinalAmount()).max(BigDecimal.ZERO));
+                }
+
+                customerRepository.save(customer);
+
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelReason(cancelReason);
                 orderRepository.save(order);
