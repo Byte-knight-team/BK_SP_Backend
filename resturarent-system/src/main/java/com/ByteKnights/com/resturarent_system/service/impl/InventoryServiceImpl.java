@@ -15,7 +15,6 @@ import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.entity.InventoryTransaction;
 import com.ByteKnights.com.resturarent_system.entity.InventoryTransactionType;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
-import com.ByteKnights.com.resturarent_system.entity.Role;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
@@ -308,7 +307,8 @@ public class InventoryServiceImpl implements InventoryService {
         ChefRequest chefRequest = chefRequestRepository.findById(requestId)
                 .orElseThrow(() -> new ResourceNotFoundException("Chef request not found with ID: " + requestId));
 
-        // Get the manager user resolving the request (optional to store, but good for validation)
+        // Get the manager user resolving the request (optional to store, but good for
+        // validation)
         User manager = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Manager not found"));
 
@@ -324,7 +324,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         ChefRequestStatus newStatus;
         String statusStr = requestDTO.getStatus().toUpperCase();
-        
+
         if ("ACCEPTED".equals(statusStr) || "APPROVED".equals(statusStr)) {
             newStatus = ChefRequestStatus.APPROVED;
         } else if ("REJECTED".equals(statusStr)) {
@@ -339,7 +339,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         chefRequest.setStatus(newStatus);
         chefRequest.setManagerNote(requestDTO.getManagerNote());
-        
+
         ChefRequest updatedRequest = chefRequestRepository.saveAndFlush(chefRequest);
         return toChefRequestDTO(updatedRequest);
     }
@@ -370,7 +370,6 @@ public class InventoryServiceImpl implements InventoryService {
                 .notes(transaction.getNotes())
                 .build();
     }
-
 
     /**
      * Internal helper to fetch an item and ensure the user has permission to update

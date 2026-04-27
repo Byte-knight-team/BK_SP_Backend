@@ -43,7 +43,6 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         int activeOrders = (int) orderRepository.countByBranchIdAndStatusIn(finalBranchId, activeStatuses);
 
         // 3. Pending Deliveries
-        List<OrderStatus> deliveryStatuses = Arrays.asList(OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY);
         // We use countByBranchIdAndStatusIn because OrderRepository doesn't have orderType and status combined.
         // Let's do a manual fetch or add a query if needed. 
         // For now, let's fetch orders for today with delivery statuses and filter by ONLINE
