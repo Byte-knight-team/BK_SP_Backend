@@ -228,5 +228,19 @@ public class KitchenController {
         );
     }
 
+    // update the status of a specific meal item to "PREPARING" when the chef starts preparing it
+    // at the same time the order status will update as PREPARING and chef working status becomes COOKING
+    @PutMapping("/order-items/{itemId}/start")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> startMeal(@PathVariable Long itemId) {
+
+        kitchenService.startMeal(itemId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Meal preparation started", null),
+                HttpStatus.OK
+        );
+    }
+
 
 }
