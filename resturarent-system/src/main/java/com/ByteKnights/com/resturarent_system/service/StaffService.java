@@ -122,9 +122,7 @@ public class StaffService {
         }
 
         if (validationErrors.length() > 0) {
-            return CreateStaffResponse.builder()
-                    .message(validationErrors.toString().trim())
-                    .build();
+            throw new RuntimeException(validationErrors.toString().trim());
         }
 
         String email = request.getEmail().trim();
@@ -147,9 +145,7 @@ public class StaffService {
         }
 
         if (conflictMsg.length() > 0) {
-            return CreateStaffResponse.builder()
-                    .message(conflictMsg.toString().trim())
-                    .build();
+            throw new RuntimeException(conflictMsg.toString().trim());
         }
 
         Role role = roleRepository.findByName(normalizedRoleName)

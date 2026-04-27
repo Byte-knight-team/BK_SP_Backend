@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.AssignChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.HoldOrderRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
@@ -164,7 +165,7 @@ public class KitchenController {
             @PathVariable Long itemId,
             @RequestBody AssignChefRequestDTO requestDTO) {
 
-        kitchenService.assignChefToMeal(itemId, requestDTO.getChefId());
+        kitchenService.assignChefToMeal(itemId, requestDTO.getChefStaffId());
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Chef assigned successfully", null),
@@ -172,7 +173,85 @@ public class KitchenController {
         );
     }
 
+    // get all the Line Chefs Who is not checked in yet for the day and display them in the check-in list of the kitchen dashboard
+    // then the chef can check in from there
+    @GetMapping("/chefs/check-in-list")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> getChefsForCheckIn(Principal principal) {
 
+        List<ChefCheckInDTO> chefList = kitchenService.getLineChefsForCheckIn(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "success", chefList),
+                HttpStatus.OK
+        );
+    }
+
+    // create an attendance record for the chef when they check in for the day from the kitchen dashboard
+    @PostMapping("/chefs/{chefId}/check-in")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> checkInChef(@PathVariable Long chefId) {
+
+        kitchenService.checkInChef(chefId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef checked in successfully", null),
+                HttpStatus.OK
+        );
+    }
+
+    // check out a chef
+    @PostMapping("/chefs/{chefId}/check-out")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> checkOutChef(@PathVariable Long chefId) {
+
+        kitchenService.checkOutChef(chefId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef checked out successfully", null),
+                HttpStatus.OK
+        );
+    }
+
+    // hold a pending order.
+    @PutMapping("/orders/{orderId}/hold")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> holdOrder(
+            @PathVariable Long orderId,
+            @RequestBody HoldOrderRequestDTO requestDTO) {
+
+        kitchenService.holdOrder(orderId, requestDTO.getHoldReason());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Order put on hold successfully", null),
+                HttpStatus.OK
+        );
+    }
+
+    // update the status of a specific meal item to "PREPARING" when the chef starts preparing it
+    // at the same time the order status will update as PREPARING and chef working status becomes COOKING
+    @PutMapping("/order-items/{itemId}/start")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> startMeal(@PathVariable Long itemId) {
+
+        kitchenService.startMeal(itemId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Meal preparation started", null),
+                HttpStatus.OK
+        );
+    }
+
+    // update meal status as completed and return current order status
+    @PutMapping("/order-items/{itemId}/complete")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> completeMeal(@PathVariable Long itemId) {
+
+        MealCompletionResponseDTO orderStats = kitchenService.completeMeal(itemId);
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", orderStats),
+                HttpStatus.OK
+        );
+    }
 }
-
-

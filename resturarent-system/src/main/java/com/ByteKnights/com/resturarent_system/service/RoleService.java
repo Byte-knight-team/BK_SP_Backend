@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.RoleSummaryResponse;
 import com.ByteKnights.com.resturarent_system.dto.UpdateRoleRequest;
+import org.springframework.security.access.AccessDeniedException;
 import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
 import com.ByteKnights.com.resturarent_system.entity.AuditModule;
 import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
@@ -18,6 +19,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.GrantedAuthority;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -104,7 +107,7 @@ public class RoleService {
         return savedRole;
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public Set<String> getPermissionsOfRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
@@ -150,19 +153,58 @@ public class RoleService {
         return savedRole;
     }
 
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    /*
+     * Returns role summaries.
+     * 
+     * SUPER_ADMIN:
+     * - Can see all roles because SUPER_ADMIN manages RBAC.
+     * 
+     * ADMIN:
+     * - Can only see branch-level assignable roles.
+     * - ADMIN should not receive CUSTOMER, SUPER_ADMIN, or ADMIN.
+     * - This is used by Create Staff / Edit Staff dropdown.
+     */
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public List<RoleSummaryResponse> getAllRoleSummaries() {
-        List<Role> roles = roleRepository.findAll();
+        String currentUserRole = getCurrentAuthenticatedRoleName();
 
-        return roles.stream()
+        return roleRepository.findAll()
+                .stream()
+                .filter(role -> {
+                    String roleName = normalizeRoleNameForAccessCheck(role.getName());
+
+                    /*
+                     * ADMIN can only see lower branch-level roles.
+                     * This keeps SUPER_ADMIN, ADMIN, and CUSTOMER hidden from ADMIN response.
+                     */
+                    if ("ADMIN".equals(currentUserRole)) {
+                        return !ADMIN_HIDDEN_ROLE_NAMES.contains(roleName);
+                    }
+
+                    /*
+                     * SUPER_ADMIN can see all roles.
+                     */
+                    return true;
+                })
+                .sorted((role1, role2) -> role1.getName().compareToIgnoreCase(role2.getName()))
                 .map(this::mapToRoleSummary)
                 .toList();
     }
 
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public RoleSummaryResponse getRoleSummaryById(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
+
+        /*
+         * ADMIN cannot access SUPER_ADMIN, ADMIN, CUSTOMER
+         */
+        String currentUserRole = getCurrentAuthenticatedRoleName();
+        String requestedRoleName = normalizeRoleNameForAccessCheck(role.getName());
+
+        if ("ADMIN".equals(currentUserRole) && ADMIN_HIDDEN_ROLE_NAMES.contains(requestedRoleName)) {
+            throw new AccessDeniedException("ADMIN cannot access this role");
+        }
 
         return mapToRoleSummary(role);
     }
@@ -253,6 +295,53 @@ public class RoleService {
                 "Role deleted successfully",
                 oldValues,
                 null);
+    }
+
+    /*
+     * Roles that ADMIN should not receive from GET /api/admin/roles.
+     * 
+     * ADMIN only needs lower branch-level roles for staff create/edit.
+     */
+    private static final Set<String> ADMIN_HIDDEN_ROLE_NAMES = Set.of(
+            "CUSTOMER",
+            "SUPER_ADMIN",
+            "ADMIN");
+
+    /*
+     * Reads the current logged-in user's role from Spring Security.
+     * 
+     * We use authorities because @PreAuthorize already works from authorities like:
+     * ROLE_SUPER_ADMIN
+     * ROLE_ADMIN
+     */
+    private String getCurrentAuthenticatedRoleName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return "";
+        }
+
+        return authentication.getAuthorities()
+                .stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(authority -> authority != null && authority.startsWith("ROLE_"))
+                .map(authority -> authority.replace("ROLE_", ""))
+                .findFirst()
+                .orElse("");
+    }
+
+    /*
+     * Normalizes role names for safe comparison.
+     * 
+     * Example:
+     * " admin " -> "ADMIN"
+     */
+    private String normalizeRoleNameForAccessCheck(String roleName) {
+        if (roleName == null) {
+            return "";
+        }
+
+        return roleName.trim().toUpperCase();
     }
 
     private RoleSummaryResponse mapToRoleSummary(Role role) {
