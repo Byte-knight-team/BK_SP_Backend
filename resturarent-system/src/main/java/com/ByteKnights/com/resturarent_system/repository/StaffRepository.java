@@ -22,6 +22,10 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     @Query("SELECT s FROM Staff s LEFT JOIN FETCH s.branch WHERE s.user.id = :userId")
     Optional<Staff> findByUserIdWithBranch(@Param("userId") Long userId);
 
+    long countByBranchIdAndUserRoleNameAndEmploymentStatus(Long branchId, String roleName, com.ByteKnights.com.resturarent_system.entity.EmploymentStatus status);
+    
+    long countByBranchIdAndUserRoleName(Long branchId, String roleName);
+
     boolean existsByUser(User user);
 
 }

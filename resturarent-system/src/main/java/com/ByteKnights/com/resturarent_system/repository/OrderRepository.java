@@ -60,6 +60,22 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = "items")
     Optional<Order> findOrderById(Long id);
 
+    @EntityGraph(attributePaths = "items")
+    List<Order> findTop5ByBranchIdOrderByCreatedAtDesc(Long branchId);
+
+    @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.status = :status AND o.createdAt BETWEEN :start AND :end")
+    BigDecimal sumFinalAmountByBranchIdAndStatusAndCreatedAtBetween(
+            @Param("branchId") Long branchId,
+            @Param("status") OrderStatus status,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    long countByBranchIdAndOrderTypeAndCreatedAtBetween(
+            Long branchId, 
+            com.ByteKnights.com.resturarent_system.entity.OrderType orderType, 
+            LocalDateTime start, 
+            LocalDateTime end);
+
     List<Order> findByStatus(OrderStatus status, Sort sort);
 
     List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
