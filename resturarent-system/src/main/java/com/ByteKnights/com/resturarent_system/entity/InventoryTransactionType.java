@@ -12,8 +12,5 @@ public enum InventoryTransactionType {
     WASTAGE,
 
     /** Stock adjusted to fix data entry errors from previous updates. */
-    CORRECTION,
-
-    /** Stock consumed by the kitchen for orders (reserved for future use). */
-    CONSUMPTION
+    CORRECTION
 }
