@@ -55,9 +55,10 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
             ManagerDriverSummaryDTO.CurrentTaskDTO currentTask = null;
             if (isBusy) {
                 Delivery current = activeDeliveries.get(0);
+                java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
                 currentTask = ManagerDriverSummaryDTO.CurrentTaskDTO.builder()
                         .orderId(current.getOrder().getOrderNumber() != null ? current.getOrder().getOrderNumber() : "ORD-" + current.getOrder().getId())
-                        .eta("Calculating...") // Placeholder for ETA logic
+                        .assignedTime(current.getAssignedAt() != null ? current.getAssignedAt().format(timeFormatter) : "--:--")
                         .build();
             }
 
