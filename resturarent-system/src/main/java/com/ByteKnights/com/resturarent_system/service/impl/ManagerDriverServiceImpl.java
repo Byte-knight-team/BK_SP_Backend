@@ -15,6 +15,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 
+import org.springframework.transaction.annotation.Transactional;
+
 @Service
 @RequiredArgsConstructor
 public class ManagerDriverServiceImpl implements ManagerDriverService {
@@ -24,6 +26,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
     private final DeliveryRepository deliveryRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public ManagerDriverSummaryDTO getDriverSummary(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
 

@@ -26,6 +26,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     private final StaffRepository staffRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public List<DeliveryOrderDTO> getAssignedOrders(Long userId) {
         Staff staff = staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
@@ -36,6 +37,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<DeliveryOrderDTO> getActiveOrder(Long userId) {
         Staff staff = staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
