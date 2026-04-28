@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.service;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
+import com.ByteKnights.com.resturarent_system.entity.ChefWorkStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import jakarta.validation.Valid;
 
@@ -45,4 +46,6 @@ public interface KitchenService {
     MealCompletionResponseDTO completeMeal(Long itemId);
 
     List<ChefDetailsDTO> getChefDetailsToday(String name);
+
+    void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus);
 }
