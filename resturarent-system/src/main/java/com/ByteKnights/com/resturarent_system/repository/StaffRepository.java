@@ -28,6 +28,8 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
 
     java.util.List<Staff> findByBranchIdAndUserRoleName(Long branchId, String roleName);
 
+    java.util.List<Staff> findByBranchId(Long branchId);
+
     boolean existsByUser(User user);
 
 }
