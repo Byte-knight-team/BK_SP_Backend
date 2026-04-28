@@ -47,7 +47,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                     activeStatuses);
             boolean isBusy = !activeDeliveries.isEmpty();
 
-            String status = "Offline";
+            String status = "INACTIVE";
             if (rider.getEmploymentStatus() == EmploymentStatus.ACTIVE) {
                 status = isBusy ? activeDeliveries.get(0).getDeliveryStatus().name() : "Available";
             }
@@ -77,7 +77,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
 
         // Update metrics
         for (ManagerDriverSummaryDTO.DriverStatusDTO d : driverDTOs) {
-            if (!"Offline".equals(d.getStatus())) {
+            if (!"INACTIVE".equals(d.getStatus())) {
                 driversOnline++;
                 if ("Available".equals(d.getStatus()))
                     available++;
