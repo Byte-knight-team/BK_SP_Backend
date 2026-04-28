@@ -6,12 +6,12 @@ Backend services for the **BK Software Project** — a comprehensive restaurant 
 
 ## Project Overview
 
-The BK Software Project is an enterprise-grade restaurant management platform designed to streamline operations across multiple branches. Built with modern **QR-code technology** and **comprehensive online ordering support**, the backend (`BK_SP_Backend`) provides a complete REST API and business logic for managing customers, orders, inventory, staff, branch configuration, and audit logging.
+The BK Software Project is an enterprise-grade restaurant management platform designed to streamline operations across multiple branches. Built with both **QR* and **online** ordering support, the backend (`BK_SP_Backend`) provides a complete REST API and business logic for managing customers, orders, inventory, staff, branch configuration, and audit logging.
 
 ### What It Does
 
-- **🔗 QR-Based Specialty Orders** ⭐: Generate dynamic QR codes for table sessions; customers scan to access branch-specific menus and place specialty orders directly from their devices. Real-time order tracking and status updates.
-- **💻 Online Order Support** ⭐: Full online ordering system supporting web and mobile clients. Customers can browse menus, customize items, and place orders for delivery or pickup with integrated payment support.
+- **🔗 QR-Based Orders**: Generate dynamic QR codes for table sessions; customers scan to access branch-specific menus and place specialty orders directly from their devices. Real-time order tracking and status updates.
+- **💻 Online Orders**: Full online ordering system supporting web and mobile clients. Customers can browse menus, customize items, and place orders for delivery or pickup with integrated payment support.
 - **Order Management**: Process customer orders (dine-in, takeout, delivery), track fulfillment, and manage order status across all channels.
 - **Inventory & Menu Management**: Centralized menu and ingredient inventory tracking across branches with QR code integration.
 - **Staff & Access Control**: Role-based access control (RBAC) with staff invitations and privilege management.
@@ -28,7 +28,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 | Component | Technology |
 |-----------|-----------|
 | **Framework** | Spring Boot 3.x |
-| **Language** | Java 11+ |
+| **Language** | Java 11+(17) |
 | **Database** | Relational Database (SQL) with JPA/Hibernate ORM |
 | **Build Tool** | Maven (via Maven Wrapper) |
 | **Authentication** | Spring Security with JWT/Session-based auth |
@@ -39,13 +39,10 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 
 ## Features
 
-### 🌟 Signature Features
+### core Features
 
-- **QR-Based Table Ordering** ⭐: Generate unique QR codes for each table; customers scan to access branch-specific menus, place orders, request service, and pay directly from their devices. Secure session management with automatic expiration.
-- **Comprehensive Online Ordering** ⭐: Full-featured online ordering system supporting web and mobile platforms. Real-time menu availability, customizable items, multiple payment methods, and order scheduling (immediate or future delivery/pickup).
-
-### Core Features
-
+- **QR-Based Table Ordering**  Generate unique QR codes for each table; customers scan to access branch-specific menus, place orders, request service, and pay directly from their devices. Secure session management with automatic expiration.
+- **Comprehensive Online Ordering**: Full-featured online ordering system supporting web and mobile platforms. Real-time menu availability, customizable items, multiple payment methods, and order scheduling (immediate or future delivery/pickup).
 - **Multi-tenant Support**: Manage multiple restaurant branches with isolated configurations and QR code namespaces.
 - **Dual-Channel Order Processing**: Unified order management across QR-based in-store orders and online orders from web/mobile.
 - **RBAC (Role-Based Access Control)**: Granular permissions for Admin, Manager, Chef, Staff, Receptionist, Delivery, and Customer roles.
@@ -61,7 +58,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Online Menu Customization**: Per-branch menus with time-based availability, seasonal items, and promotional offerings.
 - **Kitchen Workflow Optimization**: Assign chefs to orders (QR or online), track preparation time, prioritize orders, and mark completion.
 - **Staff Invitation System**: Invite staff members with predefined roles; track acceptance/rejection and shift assignments.
-- **Payment Integration**: Support for multiple payment gateways for both QR-based and online orders.
+- **Payment Integration**:can Support for multiple payment gateways for both QR-based and online orders.
 - **Delivery Management**: Route optimization and real-time tracking for online delivery orders.
 - **Exception Handling**: Robust error handling with detailed audit trails for order cancellations, modifications, and disputes.
 - **Branch-Specific Reports**: Sales analytics, inventory insights, and operational reports per branch, segmented by order channel (QR vs. online).
