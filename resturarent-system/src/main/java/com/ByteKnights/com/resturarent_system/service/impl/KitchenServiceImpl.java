@@ -556,4 +556,49 @@ public class KitchenServiceImpl implements KitchenService {
         return new MealCompletionResponseDTO(order.getStatus().toString());
     }
 
+    // get line chefs details
+    @Override
+    public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
+        // Identify the Branch
+        User chief = userRepository.findByEmail(chiefChefEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff currentStaff = staffRepository.findByUser(chief)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = currentStaff.getBranch().getId();
+
+        // Get all line chefs in this branch
+        List<Staff> lineChefs = staffRepository.findAllLineChefsByBranch(branchId);
+
+        List<ChefDetailsDTO> dtoList = new ArrayList<>();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
+
+        for (Staff chef : lineChefs) {
+            // Get Today's Clock-in and Status
+            // the record where the Staff ID AND the date matches Today's Date
+            Optional<ChefAttendance> attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chef.getId(), LocalDate.now());
+
+            String clockIn = (attendance.isPresent() && attendance.get().getClockInTime() != null)
+                    ? attendance.get().getClockInTime().format(timeFormatter)
+                    : "Not Checked In";
+
+            String status = attendance.isPresent() ? attendance.get().getWorkStatus().toString() : "OFF_DUTY";
+
+            // Count meals prepared today
+            long mealsToday = orderItemRepository.countMealsPreparedToday(chef.getId(), startOfToday);
+
+            dtoList.add(new ChefDetailsDTO(
+                    chef.getId(),
+                    chef.getUser().getFullName(),
+                    clockIn,
+                    status,
+                    mealsToday
+            ));
+        }
+        return dtoList;
+    }
+
+
 }
