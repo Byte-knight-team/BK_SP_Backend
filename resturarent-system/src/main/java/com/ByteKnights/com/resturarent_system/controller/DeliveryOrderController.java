@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryOrderDTO;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
+import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -54,5 +55,17 @@ public class DeliveryOrderController {
         String reason = request.getOrDefault("reason", "No reason provided");
         deliveryOrderService.rejectOrder(orderId, principal.getUser().getId(), reason);
         return ResponseEntity.ok(ApiResponse.success("Order rejected successfully", null));
+    }
+
+    @PostMapping("/{orderId}/status")
+    public ResponseEntity<ApiResponse<Void>> updateStatus(
+            @PathVariable Long orderId,
+            @RequestBody Map<String, String> request,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+        
+        DeliveryStatus status = DeliveryStatus.valueOf(request.get("status"));
+                
+        deliveryOrderService.updateStatus(orderId, principal.getUser().getId(), status);
+        return ResponseEntity.ok(ApiResponse.success("Status updated successfully", null));
     }
 }
