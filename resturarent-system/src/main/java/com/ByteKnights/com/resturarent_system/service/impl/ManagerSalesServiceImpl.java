@@ -34,23 +34,30 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
         // 1. Gross Sales (COMPLETED + REFUNDED)
         List<OrderStatus> grossStatuses = Arrays.asList(OrderStatus.COMPLETED, OrderStatus.REFUNDED);
         BigDecimal grossSales = orderRepository.sumFinalAmountByBranchIdAndStatusIn(finalBranchId, grossStatuses);
+        grossSales = (grossSales != null) ? grossSales : BigDecimal.ZERO;
 
         // 2. Total Refunds
         BigDecimal totalRefunds = orderRepository.sumFinalAmountByBranchIdAndStatusIn(finalBranchId, List.of(OrderStatus.REFUNDED));
+        totalRefunds = (totalRefunds != null) ? totalRefunds : BigDecimal.ZERO;
 
         // 3. Net Sales
         BigDecimal netSales = grossSales.subtract(totalRefunds);
 
         // 4. Payment Methods
         BigDecimal cardPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethod(finalBranchId, PaymentMethod.CARD);
+        cardPayments = (cardPayments != null) ? cardPayments : BigDecimal.ZERO;
+
         BigDecimal cashPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethod(finalBranchId, PaymentMethod.CASH);
+        cashPayments = (cashPayments != null) ? cashPayments : BigDecimal.ZERO;
 
         // 5. Source Breakdown
         BigDecimal dineIn = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
                 finalBranchId, OrderType.QR, List.of(OrderStatus.COMPLETED, OrderStatus.REFUNDED));
+        dineIn = (dineIn != null) ? dineIn : BigDecimal.ZERO;
         
         BigDecimal delivery = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
                 finalBranchId, OrderType.ONLINE_DELIVERY, List.of(OrderStatus.COMPLETED, OrderStatus.REFUNDED));
+        delivery = (delivery != null) ? delivery : BigDecimal.ZERO;
 
         // 6. Recent Transactions
         List<ManagerSalesSummaryDTO.TransactionDTO> transactions = orderRepository.findTop50ByBranchIdOrderByCreatedAtDesc(finalBranchId)
