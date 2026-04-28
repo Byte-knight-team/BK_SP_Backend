@@ -194,6 +194,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .name(request.getName())
                 .category(request.getCategory())
                 .quantity(request.getQuantity())
+                .maxStock(request.getQuantity()) // Set initial stock as max stock
                 .unit(request.getUnit())
                 .reorderLevel(request.getReorderLevel())
                 .unitPrice(request.getUnitPrice())
