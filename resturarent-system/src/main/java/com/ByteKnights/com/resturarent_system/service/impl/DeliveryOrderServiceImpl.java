@@ -11,10 +11,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 
 @Service
 @RequiredArgsConstructor
@@ -86,6 +88,25 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         delivery.setDeliveryStatus(DeliveryStatus.CANCELLED);
         delivery.setCancelledReason(reason);
+        deliveryRepository.save(delivery);
+    }
+
+    @Override
+    @Transactional
+    public void updateStatus(Long orderId, Long userId, DeliveryStatus status) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
+
+        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Assignment not found for order ID: " + orderId));
+
+        delivery.setDeliveryStatus(status);
+        if (status == DeliveryStatus.DELIVERED) {
+            delivery.setDeliveredAt(LocalDateTime.now());
+            // Also update the main Order status
+            delivery.getOrder().updateStatus(OrderStatus.COMPLETED);
+        }
+        
         deliveryRepository.save(delivery);
     }
 }
