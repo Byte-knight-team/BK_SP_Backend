@@ -102,6 +102,16 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege updateRestaurantTable = createPrivilege("UPDATE_RESTAURANT_TABLE");
                 Privilege deleteRestaurantTable = createPrivilege("DELETE_RESTAURANT_TABLE");
 
+                // Kitchen & Chef Management
+                Privilege kitchenViewStats = createPrivilege("KITCHEN_VIEW_STATS");
+                Privilege kitchenOrderView = createPrivilege("KITCHEN_ORDER_VIEW");
+                Privilege kitchenOrderUpdate = createPrivilege("KITCHEN_ORDER_UPDATE");
+                Privilege kitchenOrderAssign = createPrivilege("KITCHEN_ORDER_ASSIGN");
+                Privilege kitchenInventoryView = createPrivilege("KITCHEN_INVENTORY_VIEW");
+                Privilege kitchenInventoryRequest = createPrivilege("KITCHEN_INVENTORY_REQUEST");
+                Privilege kitchenInventoryUpdate = createPrivilege("KITCHEN_INVENTORY_UPDATE");
+                Privilege kitchenChefManage = createPrivilege("KITCHEN_CHEF_MANAGE");
+
                 /*
                  * All known system privileges.
                  *
@@ -136,7 +146,16 @@ public class DataSeeder implements CommandLineRunner {
                                 viewRestaurantTable,
                                 viewRestaurantTableById,
                                 updateRestaurantTable,
-                                deleteRestaurantTable);
+                                deleteRestaurantTable,
+                                kitchenViewStats,
+                                kitchenOrderView,
+                                kitchenOrderUpdate,
+                                kitchenOrderAssign,
+                                kitchenInventoryView,
+                                kitchenInventoryRequest,
+                                kitchenInventoryUpdate,
+                                kitchenChefManage
+                );
 
                 /*
                  * For normal roles, default permissions are added ONLY when the role is first
