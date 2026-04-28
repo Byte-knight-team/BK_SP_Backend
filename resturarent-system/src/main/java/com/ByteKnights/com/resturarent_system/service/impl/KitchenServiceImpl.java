@@ -600,10 +600,21 @@ public class KitchenServiceImpl implements KitchenService {
         return dtoList;
     }
 
+    // update the work status of a chef
     @Override
+    @Transactional
     public void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus) {
+        // Find today's attendance for this chef
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Chef is not checked in today!"));
 
+        // Update the status
+        attendance.setWorkStatus(newStatus);
+
+        // Save the change
+        chefAttendanceRepository.save(attendance);
     }
+
 
 
 }
