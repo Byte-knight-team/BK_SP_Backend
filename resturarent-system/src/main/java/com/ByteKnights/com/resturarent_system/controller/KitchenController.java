@@ -268,6 +268,20 @@ public class KitchenController {
         );
     }
 
+    @PutMapping("/chefs/{chefId}/work-status")
+    @PreAuthorize("hasRole('CHIEF_CHEF')")
+    public ResponseEntity<StandardResponse> updateChefWorkStatus(
+            @PathVariable Long chefId,
+            @RequestBody UpdateWorkStatusDTO request) {
+
+        kitchenService.updateChefWorkStatus(chefId, request.getNewStatus());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef status updated to " + request.getNewStatus(), null),
+                HttpStatus.OK
+        );
+    }
+
 
 
 }
