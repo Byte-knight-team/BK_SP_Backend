@@ -600,5 +600,10 @@ public class KitchenServiceImpl implements KitchenService {
         return dtoList;
     }
 
+    @Override
+    public void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus) {
+
+    }
+
 
 }
