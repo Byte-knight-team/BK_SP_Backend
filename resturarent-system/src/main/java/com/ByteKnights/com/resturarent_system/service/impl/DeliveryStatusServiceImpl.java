@@ -19,7 +19,7 @@ public class DeliveryStatusServiceImpl implements DeliveryStatusService {
         Staff staff = staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
         
-        staff.setOnline(online);
+        staff.setIsOnline(online);
         staffRepository.save(staff);
     }
 

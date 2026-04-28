@@ -18,6 +18,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.transaction.annotation.Transactional;
+
 @Service
 @RequiredArgsConstructor
 public class ManagerDashboardServiceImpl implements ManagerDashboardService {
@@ -27,6 +29,7 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
     private final InventoryItemRepository inventoryItemRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public ManagerDashboardSummaryDTO getDashboardSummary(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
