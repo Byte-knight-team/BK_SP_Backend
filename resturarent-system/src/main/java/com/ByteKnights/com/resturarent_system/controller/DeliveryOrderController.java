@@ -27,6 +27,15 @@ public class DeliveryOrderController {
         return ResponseEntity.ok(ApiResponse.success("Assigned orders retrieved successfully", orders));
     }
 
+    @GetMapping("/active")
+    public ResponseEntity<ApiResponse<DeliveryOrderDTO>> getActiveOrder(
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+        
+        return deliveryOrderService.getActiveOrder(principal.getUser().getId())
+                .map(order -> ResponseEntity.ok(ApiResponse.success("Active order retrieved successfully", order)))
+                .orElse(ResponseEntity.ok(ApiResponse.success("No active order found", null)));
+    }
+
     @PostMapping("/{orderId}/accept")
     public ResponseEntity<ApiResponse<Void>> acceptOrder(
             @PathVariable Long orderId,

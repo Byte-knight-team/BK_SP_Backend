@@ -5,6 +5,7 @@ import java.util.List;
 
 public interface DeliveryOrderService {
     List<DeliveryOrderDTO> getAssignedOrders(Long userId);
+    Optional<DeliveryOrderDTO> getActiveOrder(Long userId);
     void acceptOrder(Long orderId, Long userId);
     void rejectOrder(Long orderId, Long userId, String reason);
 }
