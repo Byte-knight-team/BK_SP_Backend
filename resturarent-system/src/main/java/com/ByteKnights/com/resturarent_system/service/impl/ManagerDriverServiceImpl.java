@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
@@ -37,36 +36,40 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
 
         // 3. Map Riders and calculate metrics
         List<DeliveryStatus> activeStatuses = Arrays.asList(DeliveryStatus.ASSIGNED, DeliveryStatus.OUT_FOR_DELIVERY);
-        
+
         int driversOnline = 0;
         int available = 0;
         int busy = 0;
 
         List<ManagerDriverSummaryDTO.DriverStatusDTO> driverDTOs = riders.stream().map(rider -> {
             // Find active delivery
-            List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(rider.getId(), activeStatuses);
+            List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(rider.getId(),
+                    activeStatuses);
             boolean isBusy = !activeDeliveries.isEmpty();
-            
+
             String status = "Offline";
             if (rider.getEmploymentStatus() == EmploymentStatus.ACTIVE) {
                 status = isBusy ? activeDeliveries.get(0).getDeliveryStatus().name() : "Available";
             }
-            
+
             ManagerDriverSummaryDTO.CurrentTaskDTO currentTask = null;
             if (isBusy) {
                 Delivery current = activeDeliveries.get(0);
-                java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+                java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter
+                        .ofPattern("HH:mm");
                 currentTask = ManagerDriverSummaryDTO.CurrentTaskDTO.builder()
-                        .orderId(current.getOrder().getOrderNumber() != null ? current.getOrder().getOrderNumber() : "ORD-" + current.getOrder().getId())
-                        .assignedTime(current.getAssignedAt() != null ? current.getAssignedAt().format(timeFormatter) : "--:--")
+                        .orderId(current.getOrder().getOrderNumber() != null ? current.getOrder().getOrderNumber()
+                                : "ORD-" + current.getOrder().getId())
+                        .assignedTime(current.getAssignedAt() != null ? current.getAssignedAt().format(timeFormatter)
+                                : "--:--")
                         .build();
             }
 
             return ManagerDriverSummaryDTO.DriverStatusDTO.builder()
                     .id(rider.getId())
                     .name(rider.getFirstName() + " " + rider.getLastName())
-                    .avatar(null) 
-                    .rating(4.5) 
+                    .avatar(null)
+                    .rating(4.5)
                     .status(status)
                     .currentTask(currentTask)
                     .build();
@@ -76,22 +79,24 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         for (ManagerDriverSummaryDTO.DriverStatusDTO d : driverDTOs) {
             if (!"Offline".equals(d.getStatus())) {
                 driversOnline++;
-                if ("Available".equals(d.getStatus())) available++;
-                else busy++;
+                if ("Available".equals(d.getStatus()))
+                    available++;
+                else
+                    busy++;
             }
         }
 
         // 4. Map Dispatch Orders
-        List<ManagerDriverSummaryDTO.DispatchOrderDTO> orderDTOs = dispatchableOrders.stream().map(order -> 
-            ManagerDriverSummaryDTO.DispatchOrderDTO.builder()
-                    .id(order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId())
-                    .orderId(order.getId())
-                    .status("Ready for Pickup")
-                    .customerName(order.getContactName() != null ? order.getContactName() : "Customer")
-                    .zone(order.getDeliveryAddress() != null ? order.getDeliveryAddress() : "Pickup Order")
-                    .distance("N/A")
-                    .build()
-        ).collect(Collectors.toList());
+        List<ManagerDriverSummaryDTO.DispatchOrderDTO> orderDTOs = dispatchableOrders.stream()
+                .map(order -> ManagerDriverSummaryDTO.DispatchOrderDTO.builder()
+                        .id(order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId())
+                        .orderId(order.getId())
+                        .status("Ready for Pickup")
+                        .customerName(order.getContactName() != null ? order.getContactName() : "Customer")
+                        .zone(order.getDeliveryAddress() != null ? order.getDeliveryAddress() : "Pickup Order")
+                        .distance("N/A")
+                        .build())
+                .collect(Collectors.toList());
 
         return ManagerDriverSummaryDTO.builder()
                 .driversOnline(driversOnline)
@@ -108,7 +113,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
     public void assignDriver(Long orderId, Long driverId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found with ID: " + orderId));
-        
+
         Staff rider = staffRepository.findById(driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rider not found with ID: " + driverId));
 
@@ -127,7 +132,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 .deliveryStatus(DeliveryStatus.ASSIGNED)
                 .assignedAt(LocalDateTime.now())
                 .build();
-        
+
         deliveryRepository.save(delivery);
 
         // Update Order status
@@ -136,7 +141,8 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
     }
 
     private Long resolveBranchId(Long targetBranchId, Long userId) {
-        if (targetBranchId != null) return targetBranchId;
+        if (targetBranchId != null)
+            return targetBranchId;
         Staff staff = staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User is not assigned to any branch as staff"));
         if (staff.getBranch() == null) {
