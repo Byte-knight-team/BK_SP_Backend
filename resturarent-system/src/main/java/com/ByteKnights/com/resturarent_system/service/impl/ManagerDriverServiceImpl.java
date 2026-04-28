@@ -29,7 +29,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
 
         // 1. Fetch all Riders for the branch
-        List<Staff> riders = staffRepository.findByBranchIdAndUserRoleName(finalBranchId, "RIDER");
+        List<Staff> riders = staffRepository.findByBranchIdAndUserRoleName(finalBranchId, "DELIVERY");
 
         // 2. Fetch Dispatchable Orders (READY for pickup)
         List<Order> dispatchableOrders = orderRepository.findByBranchIdAndOrderTypeAndStatus(
@@ -83,8 +83,8 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                     .id(order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId())
                     .orderId(order.getId())
                     .status("Ready for Pickup")
-                    .customerName(order.getContactName() != null ? order.getContactName() : "Walk-in")
-                    .zone("N/A")
+                    .customerName(order.getContactName() != null ? order.getContactName() : "Customer")
+                    .zone(order.getDeliveryAddress() != null ? order.getDeliveryAddress() : "Pickup Order")
                     .distance("N/A")
                     .build()
         ).collect(Collectors.toList());
@@ -108,8 +108,8 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         Staff rider = staffRepository.findById(driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("Rider not found with ID: " + driverId));
 
-        if (!"RIDER".equals(rider.getUser().getRole().getName())) {
-            throw new IllegalArgumentException("Staff member is not a rider");
+        if (!"DELIVERY".equals(rider.getUser().getRole().getName())) {
+            throw new IllegalArgumentException("Staff member is not a delivery person");
         }
 
         if (rider.getEmploymentStatus() != EmploymentStatus.ACTIVE) {
