@@ -11,7 +11,9 @@ public enum OrderStatus {
     ARRIVED, // when delivery arrive targeted location
     SERVED,
     COMPLETED,
-    ON_HOLD
+    ON_HOLD,
+    APPROVED
+
 }
 
 /*

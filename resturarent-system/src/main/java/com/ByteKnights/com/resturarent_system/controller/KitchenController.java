@@ -254,4 +254,15 @@ public class KitchenController {
                 HttpStatus.OK
         );
     }
+
+    @GetMapping("/chefs/details")
+    @PreAuthorize("hasRole('CHIEF_CHEF')")
+    public ResponseEntity<StandardResponse> getChefsDetails(Principal principal) { // <--- Changed back to Principal
+        // principal.getName() returns the logged-in user's email
+        List<ChefDetailsDTO> chefs = kitchenService.getAllChefsDetails(principal.getName());
+
+        return ResponseEntity.ok(new StandardResponse(200, "Success", chefs));
+    }
+
+
 }

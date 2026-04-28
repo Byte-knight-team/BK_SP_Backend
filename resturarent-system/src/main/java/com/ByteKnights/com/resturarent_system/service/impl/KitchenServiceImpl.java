@@ -32,19 +32,25 @@ public class KitchenServiceImpl implements KitchenService {
     // kitchen dashboard stat
     @Override
     public KitchenDashboardStatsDTO getKitchenDashboardStats() {
+        // 1. Define "Today" (Midnight of today)
+        LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
 
-        long pending = orderRepository.countByStatus(OrderStatus.PENDING);
-        long preparing = orderRepository.countByStatus(OrderStatus.PREPARING);
-        long completed = orderRepository.countByStatus(OrderStatus.COMPLETED);
+        // 2. Fetch counts ONLY for today
+        long pending = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.PENDING, startOfToday);
+        long preparing = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.PREPARING, startOfToday);
+        long completed = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.COMPLETED, startOfToday);
 
-        Double avgTime = orderRepository.getAveragePreparationTime();
+        // 3. Fetch Average Time ONLY for today
+        Double avgTime = orderRepository.getAveragePreparationTimeToday(startOfToday);
+
         return new KitchenDashboardStatsDTO(
                 pending,
                 preparing,
                 completed,
-                avgTime != null ? Math.round(avgTime * 100.0) / 100.0 : 0.0 // Round to 2 decimal places
+                avgTime != null ? Math.round(avgTime * 100.0) / 100.0 : 0.0
         );
     }
+
 
     // most popular meals
     @Override
