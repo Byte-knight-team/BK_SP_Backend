@@ -53,5 +53,6 @@ public class ManagerDriverSummaryDTO {
     public static class CurrentTaskDTO {
         private String orderId;
         private String eta;
+        private String assignedTime;
     }
 }
