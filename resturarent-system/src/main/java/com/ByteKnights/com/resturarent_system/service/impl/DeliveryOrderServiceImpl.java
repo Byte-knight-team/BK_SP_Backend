@@ -11,7 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,14 +30,36 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         List<Delivery> assignments = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatus(staff.getId(), DeliveryStatus.ASSIGNED);
 
-        return assignments.stream().map(d -> DeliveryOrderDTO.builder()
+        return assignments.stream().map(d -> mapToDTO(d)).collect(Collectors.toList());
+    }
+
+    @Override
+    public Optional<DeliveryOrderDTO> getActiveOrder(Long userId) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
+
+        List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+                staff.getId(), 
+                Arrays.asList(DeliveryStatus.ACCEPTED, DeliveryStatus.OUT_FOR_DELIVERY)
+        );
+
+        if (activeDeliveries.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // Return the first one (assuming one active delivery at a time)
+        return Optional.of(mapToDTO(activeDeliveries.get(0)));
+    }
+
+    private DeliveryOrderDTO mapToDTO(Delivery d) {
+        return DeliveryOrderDTO.builder()
                 .id(d.getOrder().getId())
                 .orderNumber(d.getOrder().getOrderNumber() != null ? d.getOrder().getOrderNumber() : "ORD-" + d.getOrder().getId())
                 .location(d.getOrder().getDeliveryAddress())
-                .paymentType("CASH ON DELIVERY") // TODO: Get from Order or Payment
+                .paymentType("CASH ON DELIVERY")
                 .amount(d.getOrder().getFinalAmount())
                 .status(d.getDeliveryStatus().name())
-                .build()).collect(Collectors.toList());
+                .build();
     }
 
     @Override
