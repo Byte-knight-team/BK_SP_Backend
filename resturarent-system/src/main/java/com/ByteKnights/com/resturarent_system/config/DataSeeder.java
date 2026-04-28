@@ -194,9 +194,16 @@ public class DataSeeder implements CommandLineRunner {
                                 viewCustomer));
 
                 createRoleWithDefaultPermissions("CHEF", Set.of(
-                                manageMenu,
-                                updateOrderStatus,
-                                viewOrders));
+                        manageMenu,
+                        kitchenViewStats,
+                        kitchenOrderView,
+                        kitchenOrderUpdate,
+                        kitchenOrderAssign,
+                        kitchenInventoryView,
+                        kitchenInventoryRequest,
+                        kitchenInventoryUpdate,
+                        kitchenChefManage
+                ));
 
                 createRoleWithDefaultPermissions("RECEPTIONIST", Set.of(
                                 createOrders,
