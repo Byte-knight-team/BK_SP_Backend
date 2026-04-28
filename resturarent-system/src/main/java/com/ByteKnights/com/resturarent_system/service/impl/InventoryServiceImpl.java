@@ -150,11 +150,16 @@ public class InventoryServiceImpl implements InventoryService {
                 .map(this::toChefRequestDTO)
                 .toList();
 
+        // 4. Fetch Branch name for the header
+        String branchName = branchRepository.findById(finalBranchId)
+                .map(Branch::getName)
+                .orElse("Unknown Branch");
+
         /*
-         * 4. Package all our calculations into the Summary DTO and return it.
+         * 5. Package all our calculations into the Summary DTO and return it.
          */
         return InventorySummaryDTO.builder()
-                .branch("Colombo Main") // Hardcoded for now; can fetch from Branch entity later
+                .branch(branchName)
                 .totalInventoryValue(totalValue)
                 .lowStockAlerts(lowStockCount)
                 .pendingChefDrafts(chefRequestDTOs.size()) // The number of pending drafts is just the size of the list!
