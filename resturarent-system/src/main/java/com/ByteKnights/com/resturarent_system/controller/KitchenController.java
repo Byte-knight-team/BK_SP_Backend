@@ -1,10 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.AssignChefRequestDTO;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.HoldOrderRequestDTO;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.*;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.service.KitchenService;
@@ -269,7 +266,7 @@ public class KitchenController {
     }
 
     @PutMapping("/chefs/{chefId}/work-status")
-    @PreAuthorize("hasRole('CHIEF_CHEF')")
+    @PreAuthorize("hasRole('CHEF')")
     public ResponseEntity<StandardResponse> updateChefWorkStatus(
             @PathVariable Long chefId,
             @RequestBody UpdateWorkStatusDTO request) {
