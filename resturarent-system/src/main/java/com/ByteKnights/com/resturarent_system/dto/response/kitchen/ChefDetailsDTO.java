@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 public class ChefDetailsDTO {
     private Long staffId;
     private String fullName;
-    private String attendanceStatus; // "PRESENT" or "ABSENT"
-    private String workStatus;       // e.g., "AVAILABLE", "COOKING", "OFF_DUTY"
-    private Long totalMealsPrepared; // All-time count
+    private String clockInTime;    // e.g., "08:30 AM" or "Not Checked In"
+    private String workStatus;     // e.g., "AVAILABLE", "COOKING", "OFF_DUTY"
+    private long totalMealsToday;  // Only meals finished TODAY
 }

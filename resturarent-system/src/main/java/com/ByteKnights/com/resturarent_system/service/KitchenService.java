@@ -43,4 +43,6 @@ public interface KitchenService {
     void startMeal(Long itemId);
 
     MealCompletionResponseDTO completeMeal(Long itemId);
+
+    List<ChefDetailsDTO> getChefDetailsToday(String name);
 }

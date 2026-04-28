@@ -255,14 +255,19 @@ public class KitchenController {
         );
     }
 
-    @GetMapping("/chefs/details")
-    @PreAuthorize("hasRole('CHIEF_CHEF')")
-    public ResponseEntity<StandardResponse> getChefsDetails(Principal principal) { // <--- Changed back to Principal
-        // principal.getName() returns the logged-in user's email
-        List<ChefDetailsDTO> chefs = kitchenService.getAllChefsDetails(principal.getName());
+    // get all details of all line chefs today
+    @GetMapping("/chefs/today-details")
+    @PreAuthorize("hasRole('CHEF')")
+    public ResponseEntity<StandardResponse> getChefDetailsToday(Principal principal) {
 
-        return ResponseEntity.ok(new StandardResponse(200, "Success", chefs));
+        List<ChefDetailsDTO> chefs = kitchenService.getChefDetailsToday(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", chefs),
+                HttpStatus.OK
+        );
     }
+
 
 
 }
