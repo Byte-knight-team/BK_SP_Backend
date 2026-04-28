@@ -615,6 +615,4 @@ public class KitchenServiceImpl implements KitchenService {
         chefAttendanceRepository.save(attendance);
     }
 
-
-
 }
