@@ -34,6 +34,20 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * Service implementing QR code lifecycle operations.
+ *
+ * Responsibilities:
+ * - Create, revoke and regenerate QR code records in the database.
+ * - Build a secure QR payload (short URL containing a JWT token), render the
+ *   QR image bytes and return a DTO suitable for admin UI consumption.
+ *
+ * Important notes:
+ * - The QR image is purely a rendering of a URL that contains a signed JWT
+ *   (`qr_token`). Token expiry is controlled by `app.jwt.qr-token-expiration-ms`.
+ * - Revocation is enforced via the `QrCode.active` flag in the database;
+ *   even if a token is unexpired, a revoked QR is considered invalid.
+ */
 public class QrCodeServiceImpl implements QrCodeService {
 
     private final QrCodeRepository qrCodeRepository;
@@ -51,6 +65,9 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Override
     @Transactional
     public QrCodeResponse createQrCode(Long tableId, Long actorUserId) {
+        // Creates and persists a new QrCode entity for the given table.
+        // If an active QR already exists, the existing active QR is returned
+        // (idempotent behavior for repeated create requests).
         RestaurantTable table = findTableForUpdateOrThrow(tableId);
         validateTableHasBranch(table);
         enforceAdminBranchAccess(table.getBranch().getId());
@@ -76,6 +93,9 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Override
     @Transactional
     public QrCodeResponse revokeQrCode(Long qrCodeId, String revokedReason) {
+        // Mark an existing QR code as revoked. This makes the QR immediately
+        // inactive for scanning even if the previously issued JWT token
+        // would otherwise remain valid until its `exp` time.
         QrCode qrCode = findQrCodeOrThrow(qrCodeId);
         enforceAdminBranchAccess(qrCode.getBranch().getId());
 
@@ -94,6 +114,9 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Override
     @Transactional
     public QrCodeResponse regenerateQrCode(Long qrCodeId, Long actorUserId, String revokeReason) {
+        // Safely replace an active QR with a newly generated one. The
+        // operation revokes the old QR and creates a replacement bound to
+        // the same table and branch. This avoids token reuse after rotation.
         QrCode existing = findQrCodeOrThrow(qrCodeId);
         enforceAdminBranchAccess(existing.getBranch().getId());
         User actorUser = findUserByIdOrThrow(actorUserId);
@@ -132,6 +155,8 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Override
     @Transactional(readOnly = true)
     public byte[] downloadQrCodeImage(Long qrCodeId) {
+        // Produce PNG bytes for the active QR's URL. Throws if QR is
+        // revoked or the caller lacks admin access to the branch.
         QrCode qrCode = findQrCodeOrThrow(qrCodeId);
         enforceAdminBranchAccess(qrCode.getBranch().getId());
         if (!Boolean.TRUE.equals(qrCode.getActive())) {
@@ -145,6 +170,8 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Override
     @Transactional(readOnly = true)
     public QrCodeResponse getActiveQrCodeForTable(Long tableId) {
+        // Retrieve the active QR for a table and return a DTO that
+        // includes a secure payload and base64 image for easy UI display.
         QrCode activeQr = qrCodeRepository.findFirstByTableIdAndActiveTrue(tableId)
                 .orElseThrow(() -> new ResourceNotFoundException("No active QR code found for table: " + tableId));
         
@@ -194,6 +221,11 @@ public class QrCodeServiceImpl implements QrCodeService {
     }
 
     private SecureQrPayload buildSecureQrPayload(QrCode qrCode) {
+        // Build the secure payload included in responses. The payload
+        // contains:
+        // - a signed `qr_token` JWT with expiry set from configuration
+        // - a `qrUrl` that appends the token as a query parameter
+        // - rendered PNG bytes for the QR image
         Instant expiresAt = Instant.now().plusMillis(qrTokenExpirationMs);
         String qrToken = generateQrToken(qrCode, expiresAt);
         String qrUrl = buildQrUrl(qrToken);
@@ -209,6 +241,9 @@ public class QrCodeServiceImpl implements QrCodeService {
         claims.put("table_id", qrCode.getTable().getId());
         claims.put("token_type", "table_qr");
 
+        // Calculate remaining milliseconds until the chosen expiry instant
+        // and delegate JWT assembly to `JwtService`. The resulting token
+        // contains the `exp` claim and is signed with the application key.
         long remainingMs = Math.max(1, expiresAt.toEpochMilli() - Instant.now().toEpochMilli());
         return jwtService.generateQrToken(claims, "table-qr-" + qrCode.getId(), remainingMs);
     }
