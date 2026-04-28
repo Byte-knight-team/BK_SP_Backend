@@ -18,6 +18,10 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     
     List<Delivery> findByDeliveryStaffIdAndDeliveryStatusIn(Long staffId, Collection<DeliveryStatus> statuses);
 
+    List<Delivery> findByDeliveryStaffIdAndDeliveryStatus(Long staffId, DeliveryStatus status);
+
+    Optional<Delivery> findByOrderIdAndDeliveryStaffId(Long orderId, Long staffId);
+
     @Query("SELECT d FROM Delivery d WHERE d.order.branch.id = :branchId AND d.deliveryStatus IN :statuses")
     List<Delivery> findByBranchIdAndStatusIn(
             @Param("branchId") Long branchId, 
