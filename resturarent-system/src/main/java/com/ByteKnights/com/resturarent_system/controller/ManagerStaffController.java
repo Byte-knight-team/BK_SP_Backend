@@ -1,10 +1,12 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.response.manager.ManagerStaffSummaryDTO;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.ManagerStaffService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,8 +20,8 @@ public class ManagerStaffController {
     @PreAuthorize("hasRole('MANAGER') or hasRole('SUPER_ADMIN')")
     public ResponseEntity<ManagerStaffSummaryDTO> getStaffSummary(
             @RequestParam(required = false) Long branchId,
-            @RequestAttribute("userId") Long userId) {
+            @AuthenticationPrincipal JwtUserPrincipal userDetails) {
         
-        return ResponseEntity.ok(managerStaffService.getStaffSummary(branchId, userId));
+        return ResponseEntity.ok(managerStaffService.getStaffSummary(branchId, userDetails.getUser().getId()));
     }
 }
