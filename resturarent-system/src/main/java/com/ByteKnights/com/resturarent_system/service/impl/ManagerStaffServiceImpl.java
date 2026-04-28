@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.manager.ManagerStaffM
 import com.ByteKnights.com.resturarent_system.dto.response.manager.ManagerStaffSummaryDTO;
 import com.ByteKnights.com.resturarent_system.entity.EmploymentStatus;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.ManagerStaffService;
 import lombok.RequiredArgsConstructor;
@@ -18,25 +19,29 @@ import java.util.stream.Collectors;
 public class ManagerStaffServiceImpl implements ManagerStaffService {
 
     private final StaffRepository staffRepository;
+    private final BranchRepository branchRepository;
 
     @Override
     public ManagerStaffSummaryDTO getStaffSummary(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
+        String branchName = branchRepository.findById(finalBranchId)
+                .map(b -> b.getName())
+                .orElse("Unknown Branch");
 
         // 1. Fetch all staff members for this branch
         List<Staff> staffList = staffRepository.findByBranchId(finalBranchId);
 
         // 2. Map members to DTOs
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy/MM /dd");
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
         List<ManagerStaffMemberDTO> memberDTOs = staffList.stream()
                 .map(s -> ManagerStaffMemberDTO.builder()
-                        .userId(s.getUser().getId())
-                        .name(s.getFirstName() + " " + s.getLastName())
-                        .role(formatRole(s.getUser().getRole().getName()))
+                        .userId(s.getUser() != null ? s.getUser().getId() : null)
+                        .name(s.getFirstName() + " " + (s.getLastName() != null ? s.getLastName() : ""))
+                        .role(s.getUser() != null && s.getUser().getRole() != null ? formatRole(s.getUser().getRole().getName()) : "Unknown")
                         .hireDate(s.getHireDate() != null ? s.getHireDate().format(dateFormatter) : "N/A")
-                        .contactNumber(s.getUser().getPhone())
+                        .contactNumber(s.getUser() != null ? s.getUser().getPhone() : "N/A")
                         .salary(s.getSalary())
-                        .status(s.getEmploymentStatus().name())
+                        .status(s.getEmploymentStatus() != null ? s.getEmploymentStatus().name() : "ACTIVE")
                         .build())
                 .collect(Collectors.toList());
 
@@ -51,6 +56,7 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
                 finalBranchId, "RECEPTIONIST", EmploymentStatus.ACTIVE);
 
         return ManagerStaffSummaryDTO.builder()
+                .branchName(branchName)
                 .kitchenCount(kitchenCount)
                 .deliveryCount(deliveryCount)
                 .receptionistCount(receptionistCount)
@@ -73,6 +79,6 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
         if (targetBranchId != null) return targetBranchId;
         Staff staff = staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User is not assigned to any branch as staff"));
-        return staff.getBranch().getId();
+        return (staff.getBranch() != null) ? staff.getBranch().getId() : null;
     }
 }
