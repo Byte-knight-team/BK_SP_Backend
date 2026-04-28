@@ -47,7 +47,10 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
             List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(rider.getId(), activeStatuses);
             boolean isBusy = !activeDeliveries.isEmpty();
             
-            String status = rider.getEmploymentStatus() == EmploymentStatus.ACTIVE ? (isBusy ? "Delivering" : "Available") : "Offline";
+            String status = "Offline";
+            if (rider.getEmploymentStatus() == EmploymentStatus.ACTIVE) {
+                status = isBusy ? activeDeliveries.get(0).getDeliveryStatus().name() : "Available";
+            }
             
             ManagerDriverSummaryDTO.CurrentTaskDTO currentTask = null;
             if (isBusy) {
