@@ -127,7 +127,7 @@ public class KitchenServiceImpl implements KitchenService {
 
         // convert the Map to a DTO list for the response
         List<PeakHourDTO> dtos = new ArrayList<>();
-        peakHourMap.forEach((time, mealsCount) -> dtos.add(new PeakHourDTO(time, mealsCount)));
+        peakHourMap.forEach((time, ordersCount) -> dtos.add(new PeakHourDTO(time, ordersCount)));
 
         return dtos;
     }
