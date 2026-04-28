@@ -66,7 +66,7 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
                         .id(order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId())
                         .date(order.getCreatedAt().format(DATE_FORMATTER))
                         .customer(order.getContactName() != null ? order.getContactName() : "Walk-in")
-                        .mode(order.getPaymentStatus().name()) 
+                        .mode(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : "PENDING") 
                         .amount(order.getFinalAmount())
                         .status(order.getStatus().name())
                         .build())
