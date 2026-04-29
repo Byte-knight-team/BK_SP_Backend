@@ -184,7 +184,7 @@ public class KitchenController {
         );
     }
 
-    // create an attendance record for the chef when they check in for the day from the kitchen dashboard
+    // check in a chef
     @PostMapping("/chefs/{chefId}/check-in")
     @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
     public ResponseEntity<StandardResponse> checkInChef(@PathVariable Long chefId) {
