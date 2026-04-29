@@ -496,7 +496,31 @@ public class KitchenServiceImpl implements KitchenService {
         // Save the changes
         chefAttendanceRepository.save(attendance);
     }
+    // update the work status of a chef
+    @Override
+    @Transactional
+    public void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus) {
+        // Find today's attendance for this chef
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Chef is not checked in today!. Cannot update status."));
 
+        // cannot update the status if the chef is already checked out
+        if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+            throw new RuntimeException("Cannot update status! Chef has already checked out for today.");
+        }
+
+        // cannot update the status manually to unavailable status.
+        // I do not provide this option in the frontend. but this is just an extra safety check.
+        if (newStatus == ChefWorkStatus.UNAVAILABLE) {
+            throw new RuntimeException("Cannot set status to UNAVAILABLE manually! Use Check-out instead.");
+        }
+
+        // Update the status
+        attendance.setWorkStatus(newStatus);
+
+        // Save the change
+        chefAttendanceRepository.save(attendance);
+    }
 
 
     // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
