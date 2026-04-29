@@ -2,7 +2,9 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.AnalyticsSummaryDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.RevenueTrendDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.ChannelDistributionDTO;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.entity.OrderType;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
@@ -16,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -31,6 +34,7 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
     @Transactional(readOnly = true)
     public AnalyticsSummaryDTO getBranchAnalyticsSummary(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         LocalDateTime start = startDate.atStartOfDay();
+            
         LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
         // 1. Calculate Net Revenue (Step 1.3)
@@ -58,12 +62,30 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                     .build();
         }).collect(Collectors.toList());
 
+        // 5. Channel Distribution (Step 1.4) - Using EXISTING repository methods
+        List<ChannelDistributionDTO> channelDistribution = new ArrayList<>();
+        for (OrderType type : OrderType.values()) {
+            long typeCount = orderRepository.countByBranchIdAndOrderTypeAndCreatedAtBetween(
+                    branchId, type, start, end);
+            
+            BigDecimal typeRevenue = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
+                    branchId, type, Collections.singletonList(OrderStatus.COMPLETED));
+            
+            if (typeCount > 0 || (typeRevenue != null && typeRevenue.compareTo(BigDecimal.ZERO) > 0)) {
+                channelDistribution.add(ChannelDistributionDTO.builder()
+                        .channel(type.name())
+                        .count(typeCount)
+                        .revenue(typeRevenue != null ? typeRevenue : BigDecimal.ZERO)
+                        .build());
+            }
+        }
+
         return AnalyticsSummaryDTO.builder()
                 .netRevenue(netRevenue != null ? netRevenue : BigDecimal.ZERO)
                 .orderCount(orderCount)
                 .avgPrepTimeMinutes(avgPrepTime != null ? avgPrepTime : 0.0)
                 .revenueTrends(revenueTrends)
-                .channelDistribution(new ArrayList<>()) // Placeholder for Step 1.4
+                .channelDistribution(channelDistribution)
                 .totalInventoryValue(BigDecimal.ZERO)  // Placeholder for Step 1.5
                 .build();
     }
