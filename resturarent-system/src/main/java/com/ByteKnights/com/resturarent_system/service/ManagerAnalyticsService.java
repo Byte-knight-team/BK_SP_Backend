@@ -17,5 +17,5 @@ public interface ManagerAnalyticsService {
      * @param endDate   The end date for the analysis period.
      * @return AnalyticsSummaryDTO containing aggregated metrics and trends.
      */
-    AnalyticsSummaryDTO getAnalyticsSummary(Long branchId, Long userId, LocalDate startDate, LocalDate endDate);
+    AnalyticsSummaryDTO getBranchAnalyticsSummary(Long branchId, Long userId, LocalDate startDate, LocalDate endDate);
 }
