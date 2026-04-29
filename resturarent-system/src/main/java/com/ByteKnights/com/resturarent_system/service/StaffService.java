@@ -48,11 +48,8 @@ public class StaffService {
 
     /*
      * Roles are now database-driven.
-     * 
      * Any role in the roles table can be used as a staff role,
      * except roles listed in NON_STAFF_ROLES.
-     * 
-     * Example:
      * If we create LINE_CHEF in the roles table, the staff creation flow can use it
      * without adding LINE_CHEF here manually.
      */
@@ -61,7 +58,6 @@ public class StaffService {
 
     /*
      * ADMIN should not be able to create high-level/global roles.
-     * 
      * ADMIN can create branch-level operational staff roles such as:
      * MANAGER, CHEF, LINE_CHEF, RECEPTIONIST, DELIVERY, CASHIER, WAITER, etc.
      */
@@ -131,6 +127,8 @@ public class StaffService {
         String fullName = request.getFullName().trim();
 
         StringBuilder conflictMsg = new StringBuilder();
+
+        //Check if the email,phone number and username are already exists
 
         if (userRepository.existsByEmail(email)) {
             conflictMsg.append("Email already exists. ");
