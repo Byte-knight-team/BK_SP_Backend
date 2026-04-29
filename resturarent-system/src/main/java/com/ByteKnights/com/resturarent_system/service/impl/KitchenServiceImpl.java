@@ -358,36 +358,6 @@ public class KitchenServiceImpl implements KitchenService {
         orderItemRepository.save(item);
     }
 
-    //get all the Line Chefs Who is not checked in yet
-    @Override
-    public List<ChefCheckInDTO> getLineChefsForCheckIn(String userEmail) {
-        // Get logged-in Chief Chef
-        User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Staff currentStaff = staffRepository.findByUser(user)
-                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
-
-        // Fetch line chefs who haven't checked in today at this branch from database
-        List<Staff> staffList = staffRepository.findLineChefsNotCheckedInToday(currentStaff.getBranch().getId(), LocalDate.now());
-
-        // Create a new empty list for our DTOs
-        List<ChefCheckInDTO> checkInList = new ArrayList<>();
-
-        // Loop through each Staff and convert to ChefCheckInDTO
-        for (Staff s : staffList) {
-            ChefCheckInDTO dto = new ChefCheckInDTO();
-            dto.setId(s.getId());
-            dto.setFullName(s.getUser().getFullName());
-
-            // Add to our list
-            checkInList.add(dto);
-        }
-
-        // Return the final list
-        return checkInList;
-    }
-
     // get all line chefs details
     @Override
     public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
