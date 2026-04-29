@@ -81,6 +81,26 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege manageMenu = createPrivilege("MANAGE_MENU");
                 Privilege manageReservations = createPrivilege("MANAGE_RESERVATIONS");
                 Privilege viewCustomer = createPrivilege("VIEW_CUSTOMER");
+                Privilege viewCatergories = createPrivilege("VIEW_CATEGORIES");
+                Privilege viewCategoryById = createPrivilege("VIEW_CATEGORY_BY_ID");
+                Privilege createCategory = createPrivilege("CREATE_CATEGORY");
+                Privilege updateCategory = createPrivilege("UPDATE_CATEGORY");
+                Privilege deleteCategory = createPrivilege("DELETE_CATEGORY");
+                Privilege viewPendingItems = createPrivilege("VIEW_PENDING_ITEMS");
+                Privilege viewCategoryCount = createPrivilege("VIEW_CATEGORY_COUNT");
+                Privilege viewSubCategory = createPrivilege("VIEW_SUBCATEGORY_COUNT");
+                Privilege viewItemsCount = createPrivilege("VIEW_ITEMS_COUNT");
+                Privilege viewAvailbleItemsCount = createPrivilege("VIEW_AVAILABLE_ITEMS_COUNT");
+                Privilege viewAllItems = createPrivilege("VIEW_ALL_ITEMS");
+                Privilege viewItemById = createPrivilege("VIEW_ITEM_BY_ID");
+                Privilege createItem = createPrivilege("CREATE_ITEM");
+                Privilege updateItem = createPrivilege("UPDATE_ITEM");
+                Privilege rejectPendingItem = createPrivilege("APPROVE_PENDING_ITEM");
+                Privilege approvePendingItem = createPrivilege("APPROVE_PENDING_ITEM");
+                Privilege toggleItemAvailability = createPrivilege("TOGLLE_ITEM_AVAILABILITY");
+                Privilege deleteItem = createPrivilege("DELETE_ITEM");
+                Privilege viewAllSubcategories = createPrivilege("VIEW_ALL_SUBCATEGORIES");
+
 
                 // Delivery
                 Privilege updateDeliveryStatus = createPrivilege("UPDATE_DELIVERY_STATUS");
@@ -136,7 +156,27 @@ public class DataSeeder implements CommandLineRunner {
                                 viewRestaurantTable,
                                 viewRestaurantTableById,
                                 updateRestaurantTable,
-                                deleteRestaurantTable);
+                                deleteRestaurantTable,
+                                viewCatergories,
+                                viewCategoryById,
+                                createCategory,
+                                updateCategory,
+                                deleteCategory,
+                                viewPendingItems, 
+                                viewCategoryCount,            
+                                viewSubCategory,
+                                viewItemsCount,
+                                viewAvailbleItemsCount, 
+                                viewAllItems,
+                                viewItemById,
+                                createItem,
+                                updateItem, 
+                                rejectPendingItem, 
+                                approvePendingItem,
+                                toggleItemAvailability, 
+                                deleteItem, 
+                                viewAllSubcategories
+                        );
 
                 /*
                  * For normal roles, default permissions are added ONLY when the role is first
@@ -166,7 +206,32 @@ public class DataSeeder implements CommandLineRunner {
                  * fresh databases where ADMIN does not exist yet.
                  */
                 createRoleWithDefaultPermissions("ADMIN", Set.of(
-                                createStaff));
+                                createStaff,
+                                viewCatergories,
+                                viewCategoryById,
+                                viewPendingItems, 
+                                viewCategoryCount,            
+                                viewSubCategory,
+                                viewItemsCount,
+                                viewAvailbleItemsCount, 
+                                viewAllItems,
+                                viewItemById,
+                                createItem,
+                                updateItem, 
+                                rejectPendingItem, 
+                                approvePendingItem,
+                                toggleItemAvailability, 
+                                deleteItem, 
+                                viewAllSubcategories,
+                                createQrcode,
+                                regenerateQrcode,
+                                revokeQrcode,
+                                createRestaurantTable,
+                                deleteRestaurantTable,
+                                updateRestaurantTable,
+                                viewRestaurantTable,
+                                viewRestaurantTableById
+                        ));
 
                 createRoleWithDefaultPermissions("MANAGER", Set.of(
                                 viewBranch,

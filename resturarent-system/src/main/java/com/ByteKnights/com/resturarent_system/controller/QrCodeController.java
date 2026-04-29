@@ -56,6 +56,7 @@ public class QrCodeController {
         // If an active QR already exists for the table, the service returns it
         // instead of creating a duplicate. The response contains a secure
         // payload: QR token, URL, image (base64) and token expiry iso string.
+
         Long actorUserId = extractActorUserId(authentication);
         log.info("Create QR requested for tableId={}, actorUserId={}", tableId, actorUserId);
         QrCodeResponse response = qrCodeService.createQrCode(tableId, actorUserId);
@@ -66,8 +67,10 @@ public class QrCodeController {
     @GetMapping("/tables/{tableId}/qr-codes/active")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<ApiResponse<QrCodeResponse>> getActiveQrCodeForTable(@PathVariable Long tableId) {
+
         // Return details for the currently active QR for a table. Useful for
         // admin UI to display / re-download the QR without regenerating it.
+
         log.info("Get active QR requested for tableId={}", tableId);
         QrCodeResponse response = qrCodeService.getActiveQrCodeForTable(tableId);
         return ResponseEntity.ok(ApiResponse.success("Active QR code fetched successfully", response));
@@ -79,9 +82,11 @@ public class QrCodeController {
             @PathVariable Long qrCodeId,
             @Valid @RequestBody(required = false) RevokeQrCodeRequest request
     ) {
+
         // Revoke an active QR. Revocation sets `active=false` and records
         // a reason and revocation timestamp. Previously issued images will
         // no longer be accepted by the backend even if their JWT remains valid.
+
         String reason = request != null ? request.getRevokedReason() : null;
         QrCodeResponse response = qrCodeService.revokeQrCode(qrCodeId, reason);
         return ResponseEntity.ok(ApiResponse.success("QR code revoked successfully", response));
@@ -94,9 +99,11 @@ public class QrCodeController {
             @Valid @RequestBody(required = false) RegenerateQrCodeRequest request,
             Authentication authentication
     ) {
+
         // Regenerate replaces an existing active QR with a new one and
         // revokes the old QR. This is a safe rotation operation for cases
         // where a QR must be invalidated without administrative revocation.
+
         Long actorUserId = extractActorUserId(authentication);
         String revokeReason = request != null ? request.getRevokeReason() : null;
         QrCodeResponse response = qrCodeService.regenerateQrCode(qrCodeId, actorUserId, revokeReason);
@@ -106,8 +113,10 @@ public class QrCodeController {
     @GetMapping("/qr-codes/{qrCodeId}/download")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public ResponseEntity<byte[]> downloadQrCode(@PathVariable Long qrCodeId) {
+
         // Returns the PNG bytes for the active QR. Download will fail if
         // the QR has been revoked.
+        
         byte[] image = qrCodeService.downloadQrCodeImage(qrCodeId);
         String filename = "qr-code-" + qrCodeId + ".png";
 
