@@ -362,10 +362,10 @@ public class KitchenServiceImpl implements KitchenService {
     @Override
     public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
         // Identify the Branch
-        User chief = userRepository.findByEmail(chiefChefEmail)
+        User chiefChef = userRepository.findByEmail(chiefChefEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Staff currentStaff = staffRepository.findByUser(chief)
+        Staff currentStaff = staffRepository.findByUser(chiefChef)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
         Long branchId = currentStaff.getBranch().getId();
