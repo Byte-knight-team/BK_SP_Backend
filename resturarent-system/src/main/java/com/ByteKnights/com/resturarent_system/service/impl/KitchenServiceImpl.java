@@ -388,12 +388,56 @@ public class KitchenServiceImpl implements KitchenService {
         return checkInList;
     }
 
+    // get line chefs details
+    @Override
+    public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
+        // Identify the Branch
+        User chief = userRepository.findByEmail(chiefChefEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff currentStaff = staffRepository.findByUser(chief)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = currentStaff.getBranch().getId();
+
+        // Get all line chefs in this branch
+        List<Staff> lineChefs = staffRepository.findAllLineChefsByBranch(branchId);
+
+        List<ChefDetailsDTO> dtoList = new ArrayList<>();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
+
+        for (Staff chef : lineChefs) {
+            // Get Today's Clock-in and Status
+            // the record where the Staff ID AND the date matches Today's Date
+            Optional<ChefAttendance> attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chef.getId(), LocalDate.now());
+
+            String clockIn = (attendance.isPresent() && attendance.get().getClockInTime() != null)
+                    ? attendance.get().getClockInTime().format(timeFormatter)
+                    : "Not Checked In";
+
+            String status = attendance.isPresent() ? attendance.get().getWorkStatus().toString() : "OFF_DUTY";
+
+            // Count meals prepared today
+            long mealsToday = orderItemRepository.countMealsPreparedToday(chef.getId(), startOfToday);
+
+            dtoList.add(new ChefDetailsDTO(
+                    chef.getId(),
+                    chef.getUser().getFullName(),
+                    clockIn,
+                    status,
+                    mealsToday
+            ));
+        }
+        return dtoList;
+    }
+
     // save check in attendance record
     @Override
     @Transactional // This is important because we are saving to the database
     public void checkInChef(Long chefId) {
 
-        // 1. Try to find if there is ALREADY an attendance record for today
+        // Try to find if there is ALREADY an attendance record for today
         Optional<ChefAttendance> existingRecord = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now());
 
         if (existingRecord.isPresent()) {
@@ -406,10 +450,11 @@ public class KitchenServiceImpl implements KitchenService {
 
             // If they are OFF_DUTY, it means they already finished their shift for today
             if (record.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
-                throw new RuntimeException("Cannot chek-in for today. Chef has already completed their shift for today!");
+                throw new RuntimeException("Cannot check-in for today. Chef has already completed their shift for today!");
             }
         }
-        // 2. If no record exists at all, proceed with the normal check-in
+        // If no record exists at all, proceed with the normal check-in
+        // now we have to find that chef is in the staff list
         Staff chef = staffRepository.findById(chefId)
                 .orElseThrow(() -> new RuntimeException("Chef not found"));
 
@@ -438,6 +483,11 @@ public class KitchenServiceImpl implements KitchenService {
             throw new RuntimeException("Chef has already checked out for today!");
         }
 
+        // Safety Check. cannot check out while cooking
+        if (attendance.getWorkStatus() == ChefWorkStatus.COOKING) {
+            throw new RuntimeException("Cannot check-out while a meal is in preparation!");
+        }
+
         // Update the fields
         attendance.setClockOutTime(LocalDateTime.now()); // Record date and time when they left
         attendance.setAttendanceStatus(ChefAttendanceStatus.OFF_DUTY); // They are no longer on duty
@@ -446,6 +496,8 @@ public class KitchenServiceImpl implements KitchenService {
         // Save the changes
         chefAttendanceRepository.save(attendance);
     }
+
+
 
     // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
     @Override
@@ -556,63 +608,5 @@ public class KitchenServiceImpl implements KitchenService {
         return new MealCompletionResponseDTO(order.getStatus().toString());
     }
 
-    // get line chefs details
-    @Override
-    public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
-        // Identify the Branch
-        User chief = userRepository.findByEmail(chiefChefEmail)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Staff currentStaff = staffRepository.findByUser(chief)
-                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
-
-        Long branchId = currentStaff.getBranch().getId();
-
-        // Get all line chefs in this branch
-        List<Staff> lineChefs = staffRepository.findAllLineChefsByBranch(branchId);
-
-        List<ChefDetailsDTO> dtoList = new ArrayList<>();
-        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
-
-        for (Staff chef : lineChefs) {
-            // Get Today's Clock-in and Status
-            // the record where the Staff ID AND the date matches Today's Date
-            Optional<ChefAttendance> attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chef.getId(), LocalDate.now());
-
-            String clockIn = (attendance.isPresent() && attendance.get().getClockInTime() != null)
-                    ? attendance.get().getClockInTime().format(timeFormatter)
-                    : "Not Checked In";
-
-            String status = attendance.isPresent() ? attendance.get().getWorkStatus().toString() : "OFF_DUTY";
-
-            // Count meals prepared today
-            long mealsToday = orderItemRepository.countMealsPreparedToday(chef.getId(), startOfToday);
-
-            dtoList.add(new ChefDetailsDTO(
-                    chef.getId(),
-                    chef.getUser().getFullName(),
-                    clockIn,
-                    status,
-                    mealsToday
-            ));
-        }
-        return dtoList;
-    }
-
-    // update the work status of a chef
-    @Override
-    @Transactional
-    public void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus) {
-        // Find today's attendance for this chef
-        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now())
-                .orElseThrow(() -> new RuntimeException("Chef is not checked in today!"));
-
-        // Update the status
-        attendance.setWorkStatus(newStatus);
-
-        // Save the change
-        chefAttendanceRepository.save(attendance);
-    }
 
 }
