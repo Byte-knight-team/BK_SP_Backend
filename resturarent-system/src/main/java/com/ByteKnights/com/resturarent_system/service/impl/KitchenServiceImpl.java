@@ -358,19 +358,20 @@ public class KitchenServiceImpl implements KitchenService {
         orderItemRepository.save(item);
     }
 
-    // get all line chefs details
+    // Get all line chefs details
     @Override
     public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
-        // Identify the Branch
+        // Identify the logged-in Chief Chef and their branch
         User chiefChef = userRepository.findByEmail(chiefChefEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         Staff currentStaff = staffRepository.findByUser(chiefChef)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
+        // because branch id is provided for only staf members.
         Long branchId = currentStaff.getBranch().getId();
 
-        // Get all line chefs in this branch
+        // Fetch all line chefs registered at this branch
         List<Staff> lineChefs = staffRepository.findAllLineChefsByBranch(branchId);
 
         List<ChefDetailsDTO> dtoList = new ArrayList<>();
@@ -378,29 +379,48 @@ public class KitchenServiceImpl implements KitchenService {
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
 
         for (Staff chef : lineChefs) {
-            // Get Today's Clock-in and Status
-            // the record where the Staff ID AND the date matches Today's Date
+            // Only process ACTIVE staff members ---
+            // If a chef is terminated or suspended (not ACTIVE), we skip them entirely
+            if (chef.getEmploymentStatus() != EmploymentStatus.ACTIVE) {
+                continue;
+            }
+
+            // Look for today's attendance record for this specific chef
             Optional<ChefAttendance> attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chef.getId(), LocalDate.now());
 
+            // Format Clock-In Time
             String clockIn = (attendance.isPresent() && attendance.get().getClockInTime() != null)
                     ? attendance.get().getClockInTime().format(timeFormatter)
-                    : "Not Checked In";
+                    : "---"; // Not Checked In yet
 
-            String status = attendance.isPresent() ? attendance.get().getWorkStatus().toString() : "OFF_DUTY";
+            // Format Clock-Out Time
+            String clockOut = (attendance.isPresent() && attendance.get().getClockOutTime() != null)
+                    ? attendance.get().getClockOutTime().format(timeFormatter)
+                    : "---"; // Still working or not checked in
 
-            // Count meals prepared today
+            // Determine Work Status
+            // If there is an attendance record, use its status (e.g., AVAILABLE, COOKING, UNAVAILABLE)
+            // If they haven't checked in at all, we just mark them as UNAVAILABLE
+            String status = attendance.isPresent()
+                    ? attendance.get().getWorkStatus().toString()
+                    : "UNAVAILABLE";
+
+            // Count how many meals this chef finished today
             long mealsToday = orderItemRepository.countMealsPreparedToday(chef.getId(), startOfToday);
 
+            // 8. Map all data to the DTO
             dtoList.add(new ChefDetailsDTO(
                     chef.getId(),
                     chef.getUser().getFullName(),
                     clockIn,
+                    clockOut,
                     status,
                     mealsToday
             ));
         }
         return dtoList;
     }
+
 
     // save check in attendance record
     @Override
