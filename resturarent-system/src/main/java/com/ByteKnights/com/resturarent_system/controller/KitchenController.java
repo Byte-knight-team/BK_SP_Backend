@@ -170,20 +170,6 @@ public class KitchenController {
         );
     }
 
-    // get all the Line Chefs Who is not checked in yet for the day and display them in the check-in list of the kitchen dashboard
-    // then the chef can check in from there
-    @GetMapping("/chefs/check-in-list")
-    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
-    public ResponseEntity<StandardResponse> getChefsForCheckIn(Principal principal) {
-
-        List<ChefCheckInDTO> chefList = kitchenService.getLineChefsForCheckIn(principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(200, "success", chefList),
-                HttpStatus.OK
-        );
-    }
-
     // check in a chef
     @PostMapping("/chefs/{chefId}/check-in")
     @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
@@ -206,6 +192,34 @@ public class KitchenController {
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Chef checked out successfully", null),
+                HttpStatus.OK
+        );
+    }
+
+    // get all details of all line chefs in the branch
+    @GetMapping("/chefs/today-details")
+    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
+    public ResponseEntity<StandardResponse> getChefDetailsToday(Principal principal) {
+
+        List<ChefDetailsDTO> chefs = kitchenService.getChefDetailsToday(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", chefs),
+                HttpStatus.OK
+        );
+    }
+
+    // update the work status
+    @PutMapping("/chefs/{chefId}/work-status")
+    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
+    public ResponseEntity<StandardResponse> updateChefWorkStatus(
+            @PathVariable Long chefId,
+            @RequestBody UpdateWorkStatusDTO request) {
+
+        kitchenService.updateChefWorkStatus(chefId, request.getNewStatus());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef status updated to " + request.getNewStatus(), null),
                 HttpStatus.OK
         );
     }
@@ -252,30 +266,5 @@ public class KitchenController {
         );
     }
 
-    // get all details of all line chefs today
-    @GetMapping("/chefs/today-details")
-    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
-    public ResponseEntity<StandardResponse> getChefDetailsToday(Principal principal) {
 
-        List<ChefDetailsDTO> chefs = kitchenService.getChefDetailsToday(principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(200, "Success", chefs),
-                HttpStatus.OK
-        );
-    }
-
-    @PutMapping("/chefs/{chefId}/work-status")
-    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
-    public ResponseEntity<StandardResponse> updateChefWorkStatus(
-            @PathVariable Long chefId,
-            @RequestBody UpdateWorkStatusDTO request) {
-
-        kitchenService.updateChefWorkStatus(chefId, request.getNewStatus());
-
-        return new ResponseEntity<>(
-                new StandardResponse(200, "Chef status updated to " + request.getNewStatus(), null),
-                HttpStatus.OK
-        );
-    }
 }
