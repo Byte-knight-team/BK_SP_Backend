@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.Rev
 import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.ChannelDistributionDTO;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderType;
+import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
@@ -80,13 +81,23 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
             }
         }
 
+        // 6. Total Inventory Value (Step 1.5)
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);
+        BigDecimal totalInventoryValue = items.stream()
+                .map(item -> {
+                    BigDecimal qty = item.getQuantity() != null ? item.getQuantity() : BigDecimal.ZERO;
+                    BigDecimal price = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+                    return qty.multiply(price);
+                })
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         return AnalyticsSummaryDTO.builder()
                 .netRevenue(netRevenue != null ? netRevenue : BigDecimal.ZERO)
                 .orderCount(orderCount)
                 .avgPrepTimeMinutes(avgPrepTime != null ? avgPrepTime : 0.0)
                 .revenueTrends(revenueTrends)
                 .channelDistribution(channelDistribution)
-                .totalInventoryValue(BigDecimal.ZERO)  // Placeholder for Step 1.5
+                .totalInventoryValue(totalInventoryValue)
                 .build();
     }
 }
