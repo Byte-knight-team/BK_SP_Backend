@@ -13,13 +13,36 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Controller responsible for handling all HTTP requests related to Delivery Operations.
+ * 
+ * This controller provides endpoints for delivery personnel (drivers) to manage their
+ * assigned tasks, track active deliveries, and update the status of orders as they
+ * progress from acceptance to final delivery.
+ */
 @RestController
 @RequestMapping("/api/delivery/orders")
 @RequiredArgsConstructor
 public class DeliveryOrderController {
 
+    /**
+     * INJECTED SERVICE
+     * 
+     * We inject the DeliveryOrderService INTERFACE here, not the implementation class.
+     * This ensures our controller is completely decoupled from database logic.
+     * The controller's only job is to receive the HTTP request, pass the data to
+     * the service, and return the service's response back to the frontend.
+     */
     private final DeliveryOrderService deliveryOrderService;
 
+    /**
+     * Endpoint to fetch all orders currently assigned to the logged-in delivery staff member.
+     * 
+     * Path: GET /api/delivery/orders/assigned
+     * 
+     * @param principal The authenticated user principal (driver).
+     * @return 200 OK with a list of assigned DeliveryOrderDTOs.
+     */
     @GetMapping("/assigned")
     public ResponseEntity<ApiResponse<List<DeliveryOrderDTO>>> getAssignedOrders(
             @AuthenticationPrincipal JwtUserPrincipal principal) {
@@ -28,6 +51,14 @@ public class DeliveryOrderController {
         return ResponseEntity.ok(ApiResponse.success("Assigned orders retrieved successfully", orders));
     }
 
+    /**
+     * Endpoint to retrieve the single active delivery task for the logged-in driver.
+     * 
+     * Path: GET /api/delivery/orders/active
+     * 
+     * @param principal The authenticated user principal.
+     * @return 200 OK with the active DeliveryOrderDTO, or null if no active task exists.
+     */
     @GetMapping("/active")
     public ResponseEntity<ApiResponse<DeliveryOrderDTO>> getActiveOrder(
             @AuthenticationPrincipal JwtUserPrincipal principal) {
@@ -37,6 +68,15 @@ public class DeliveryOrderController {
                 .orElse(ResponseEntity.ok(ApiResponse.success("No active order found", null)));
     }
 
+    /**
+     * Endpoint to accept a newly assigned order.
+     * 
+     * Path: POST /api/delivery/orders/{orderId}/accept
+     * 
+     * @param orderId   The unique ID of the order.
+     * @param principal The authenticated user principal.
+     * @return 200 OK on successful acceptance.
+     */
     @PostMapping("/{orderId}/accept")
     public ResponseEntity<ApiResponse<Void>> acceptOrder(
             @PathVariable Long orderId,
@@ -46,6 +86,16 @@ public class DeliveryOrderController {
         return ResponseEntity.ok(ApiResponse.success("Order accepted successfully", null));
     }
 
+    /**
+     * Endpoint to reject an assigned order with a specific reason.
+     * 
+     * Path: POST /api/delivery/orders/{orderId}/reject
+     * 
+     * @param orderId   The unique ID of the order.
+     * @param request   Map containing the "reason" for rejection.
+     * @param principal The authenticated user principal.
+     * @return 200 OK on successful rejection.
+     */
     @PostMapping("/{orderId}/reject")
     public ResponseEntity<ApiResponse<Void>> rejectOrder(
             @PathVariable Long orderId,
@@ -57,6 +107,16 @@ public class DeliveryOrderController {
         return ResponseEntity.ok(ApiResponse.success("Order rejected successfully", null));
     }
 
+    /**
+     * Endpoint to update the lifecycle status of an active delivery.
+     * 
+     * Path: POST /api/delivery/orders/{orderId}/status
+     * 
+     * @param orderId   The unique ID of the order.
+     * @param request   Map containing the new "status" (e.g., OUT_FOR_DELIVERY, DELIVERED).
+     * @param principal The authenticated user principal.
+     * @return 200 OK on successful status update.
+     */
     @PostMapping("/{orderId}/status")
     public ResponseEntity<ApiResponse<Void>> updateStatus(
             @PathVariable Long orderId,
