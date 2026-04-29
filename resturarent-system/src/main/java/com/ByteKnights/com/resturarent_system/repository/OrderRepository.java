@@ -73,6 +73,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
 
+    long countByBranchIdAndStatusAndCreatedAtBetween(Long branchId, OrderStatus status, LocalDateTime start, LocalDateTime end);
+
     @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.status IN :statuses")
     BigDecimal sumFinalAmountByBranchIdAndStatusIn(
             @Param("branchId") Long branchId,
@@ -117,4 +119,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     List<Object[]> findOrderCountByHour();
 
     // --- Kitchen Queries END ---
+
+    @Query(value = "SELECT DATE(created_at) as day, SUM(final_amount) as revenue, COUNT(id) as orders " +
+           "FROM orders " +
+           "WHERE branch_id = :branchId AND status = 'COMPLETED' AND created_at BETWEEN :start AND :end " +
+           "GROUP BY day ORDER BY day", nativeQuery = true)
+    List<Object[]> findRevenueTrendByBranchAndDates(
+            @Param("branchId") Long branchId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
 }
