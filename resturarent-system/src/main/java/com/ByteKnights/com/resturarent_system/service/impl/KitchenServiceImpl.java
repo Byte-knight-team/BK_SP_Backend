@@ -388,7 +388,7 @@ public class KitchenServiceImpl implements KitchenService {
         return checkInList;
     }
 
-    // get line chefs details
+    // get all line chefs details
     @Override
     public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
         // Identify the Branch
@@ -496,6 +496,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Save the changes
         chefAttendanceRepository.save(attendance);
     }
+
     // update the work status of a chef
     @Override
     @Transactional
