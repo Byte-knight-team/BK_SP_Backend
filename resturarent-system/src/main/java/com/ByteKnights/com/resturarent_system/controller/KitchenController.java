@@ -294,6 +294,20 @@ public class KitchenController {
         );
     }
 
+    @PutMapping("/alerts/{id}/resolve")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_RESOLVE')")
+    public ResponseEntity<StandardResponse> resolveAlert(
+            @PathVariable Long id,
+            Principal principal) {
+
+        kitchenService.resolveAlert(id, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Alert marked as resolved", null),
+                HttpStatus.OK
+        );
+    }
+
 
 
 }

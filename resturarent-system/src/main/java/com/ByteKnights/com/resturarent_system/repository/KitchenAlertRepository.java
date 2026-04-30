@@ -9,6 +9,12 @@ import java.util.List;
 @Repository
 public interface KitchenAlertRepository extends JpaRepository<KitchenAlert, Long> {
 
-    // We will use this later to fetch alerts for a specific branch
     List<KitchenAlert> findByBranchIdAndIsResolvedFalseOrderByCreatedAtDesc(Long branchId);
+    /*
+    no need to write a query like this
+        SELECT * FROM kitchen_alerts
+        WHERE branch_id = ?
+        AND is_resolved = false
+        ORDER BY created_at DESC;
+     */
 }
