@@ -631,11 +631,11 @@ public class KitchenServiceImpl implements KitchenService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 2. Find the Staff profile (to get their branch and staff ID)
+        // Find the Staff profile (to get their branch and staff ID)
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
-        // 3. Map DTO to Entity and Save
+        // Map DTO to Entity and Save
         KitchenAlert alert = KitchenAlert.builder()
                 .branch(staff.getBranch())
                 .reportedBy(staff) //cannot send id directly (private Staff reportedBy)
