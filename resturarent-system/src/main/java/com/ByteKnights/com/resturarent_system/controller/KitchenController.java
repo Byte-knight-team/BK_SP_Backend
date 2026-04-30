@@ -281,6 +281,19 @@ public class KitchenController {
         );
     }
 
+    // get all active kitchen alerts
+    @GetMapping("/alerts")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_VIEW')")
+    public ResponseEntity<StandardResponse> getActiveAlerts(Principal principal) {
+
+        List<ActiveAlertDTO> alerts = kitchenService.getActiveAlerts(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", alerts),
+                HttpStatus.OK
+        );
+    }
+
 
 
 }
