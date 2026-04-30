@@ -29,6 +29,7 @@ public class KitchenServiceImpl implements KitchenService {
     final UserRepository userRepository;
     final StaffRepository staffRepository;
     final ChefAttendanceRepository chefAttendanceRepository;
+    final KitchenAlertRepository kitchenAlertRepository;
 
     // kitchen dashboard stat
     @Override
@@ -514,12 +515,6 @@ public class KitchenServiceImpl implements KitchenService {
         chefAttendanceRepository.save(attendance);
     }
 
-    @Override
-    public void createKitchenAlert(CreateAlertRequestDTO requestDTO, String name) {
-
-    }
-
-
     // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
     @Override
     @Transactional
@@ -628,4 +623,28 @@ public class KitchenServiceImpl implements KitchenService {
         // Return the status in the DTO
         return new MealCompletionResponseDTO(order.getStatus().toString());
     }
+
+    @Override
+    @Transactional
+    public void createKitchenAlert(CreateAlertRequestDTO dto, String userEmail) {
+        // Find the logged-in user
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // 2. Find the Staff profile (to get their branch and staff ID)
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // 3. Map DTO to Entity and Save
+        KitchenAlert alert = KitchenAlert.builder()
+                .branch(staff.getBranch())
+                .reportedBy(staff) //cannot send id directly (private Staff reportedBy)
+                .message(dto.getMessage())
+                .type(dto.getType())
+                .isResolved(false)
+                .build();
+
+        kitchenAlertRepository.save(alert);
+    }
+
 }
