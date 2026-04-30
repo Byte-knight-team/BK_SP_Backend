@@ -647,4 +647,37 @@ public class KitchenServiceImpl implements KitchenService {
         kitchenAlertRepository.save(alert);
     }
 
+    @Override
+    public List<ActiveAlertDTO> getActiveAlerts(String userEmail) {
+        // Find the logged-in user and their branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Fetch unresolved alerts for this branch from the database
+        List<KitchenAlert> alerts = kitchenAlertRepository.findByBranchIdAndIsResolvedFalseOrderByCreatedAtDesc(staff.getBranch().getId());
+
+        List<ActiveAlertDTO> activeAlertDTOs = new ArrayList<>();
+
+        for (KitchenAlert alert : alerts) {
+
+            // Calculate the time difference (in minutes) between alert creation and current time
+            long minutes = java.time.Duration.between(alert.getCreatedAt(), LocalDateTime.now()).toMinutes();
+
+            // If less than 60 minutes, show in minutes (e.g., 10m). Otherwise, show in hours (e.g., 2h).
+            String timeAgo = minutes < 60 ? minutes + "m" : (minutes / 60) + "h";
+
+            ActiveAlertDTO dto = new ActiveAlertDTO(
+                    alert.getId(),
+                    alert.getMessage(),
+                    alert.getType(),
+                    timeAgo
+            );
+
+            activeAlertDTOs.add(dto);
+        }
+        return activeAlertDTOs;
+    }
+
 }
