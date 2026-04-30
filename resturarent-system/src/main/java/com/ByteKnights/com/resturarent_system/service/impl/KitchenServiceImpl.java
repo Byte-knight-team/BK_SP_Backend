@@ -680,4 +680,29 @@ public class KitchenServiceImpl implements KitchenService {
         return activeAlertDTOs;
     }
 
+    @Override
+    @Transactional
+    public void resolveAlert(Long alertId, String userEmail) {
+        // Find the alert
+        KitchenAlert alert = kitchenAlertRepository.findById(alertId)
+                .orElseThrow(() -> new RuntimeException("Alert not found"));
+
+        // SAFETY CHECK: Ensure it's not already resolved
+        if (alert.isResolved()) {
+            throw new RuntimeException("This alert has already been resolved");
+        }
+
+        // Find the staff member who is resolving it
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Mark as resolved and save the audit data
+        alert.setResolved(true);
+        alert.setResolvedBy(staff);
+        alert.setResolvedAt(LocalDateTime.now());
+
+        kitchenAlertRepository.save(alert);
+    }
 }

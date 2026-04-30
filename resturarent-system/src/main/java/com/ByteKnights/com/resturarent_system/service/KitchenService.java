@@ -51,4 +51,6 @@ public interface KitchenService {
     void createKitchenAlert(@Valid CreateAlertRequestDTO requestDTO, String name);
 
     List<ActiveAlertDTO> getActiveAlerts(String name);
+
+    void resolveAlert(Long id, String name);
 }
