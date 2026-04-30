@@ -25,6 +25,11 @@ public class Review {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
+    // Optional: Only populated if this is an item-specific review
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_item_id")
+    private OrderItem orderItem;
+
     @Column(nullable = false)
     private Integer rating;
 

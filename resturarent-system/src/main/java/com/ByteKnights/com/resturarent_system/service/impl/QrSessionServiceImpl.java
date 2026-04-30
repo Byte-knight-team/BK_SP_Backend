@@ -24,8 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.Map;
 
@@ -86,11 +84,7 @@ public class QrSessionServiceImpl implements QrSessionService {
     String sessionToken = generateSessionToken(qrSession.getId(), branchId, tableId, qrId, expiry);
 
         return QrSessionStartResponseData.builder()
-                .sessionId(qrSession.getId())
                 .sessionToken(sessionToken)
-                .branchId(branchId)
-                .tableId(tableId)
-        .expiresAt(formatExpiresAt(expiry))
                 .build();
     }
 
@@ -164,10 +158,6 @@ public class QrSessionServiceImpl implements QrSessionService {
                 .expiration(Date.from(expiry))
                 .signWith(getSigningKey(), Jwts.SIG.HS256)
                 .compact();
-    }
-
-    private String formatExpiresAt(Instant expiry) {
-        return DateTimeFormatter.ISO_INSTANT.format(expiry.atOffset(ZoneOffset.UTC));
     }
 
     private SecretKey getSigningKey() {

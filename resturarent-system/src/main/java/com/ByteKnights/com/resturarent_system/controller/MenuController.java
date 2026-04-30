@@ -35,49 +35,49 @@ public class MenuController {
     }
 
     @GetMapping("/pending-chef-items")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<MenuItemResponse>> getPendingChefMenuItems() {
         List<MenuItemResponse> menuItems = menuService.getPendingChefMenuItems();
         return ResponseEntity.ok(menuItems);
     }
 
     @GetMapping("/categories/count")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Long> getCategoriesCount() {
         long count = menuService.getCategoryCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/subcategories/count")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Long> getSubCategoriesCount() {
         long count = menuService.getSubCategoryCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Long> getMenuItemsCount() {
         long count = menuService.getMenuItemCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/available/count")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Long> getAvailableItemsCount() {
         long count = menuService.getAvailableItemCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/categories")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<MenuCategoryResponse>> getMenuCategories() {
         List<MenuCategoryResponse> categories = menuCategoryService.getAllCategories();
         return ResponseEntity.ok(categories);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','CHEF')")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF')")
     public ResponseEntity<List<MenuItemResponse>> getAllMenuItems() {
         List<MenuItemResponse> menuItems = menuService.getAllMenuItems();
         return ResponseEntity.ok(menuItems);
@@ -90,7 +90,7 @@ public class MenuController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CHEF','ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('CHEF','ADMIN')")
     public ResponseEntity<MenuItemResponse> createMenuItem(@Valid @RequestBody CreateMenuItemRequest request) {
         MenuItemResponse created = menuService.createMenuItem(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
@@ -105,14 +105,14 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MenuItemActionResponse> approveMenuItem(@PathVariable Long id, @Valid @RequestBody ApproveMenuItemRequest request) {
         MenuItemActionResponse response = menuService.approveMenuItem(id, request);
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{id:\\d+}/reject")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MenuItemActionResponse> rejectMenuItem(@PathVariable Long id, @Valid @RequestBody RejectMenuItemRequest request) {
         MenuItemActionResponse response = menuService.rejectMenuItem(id, request);
         return ResponseEntity.ok(response);
