@@ -49,4 +49,6 @@ public interface KitchenService {
     void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus);
 
     void createKitchenAlert(@Valid CreateAlertRequestDTO requestDTO, String name);
+
+    List<ActiveAlertDTO> getActiveAlerts(String name);
 }
