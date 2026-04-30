@@ -622,6 +622,4 @@ public class KitchenServiceImpl implements KitchenService {
         // Return the status in the DTO
         return new MealCompletionResponseDTO(order.getStatus().toString());
     }
-
-
 }
