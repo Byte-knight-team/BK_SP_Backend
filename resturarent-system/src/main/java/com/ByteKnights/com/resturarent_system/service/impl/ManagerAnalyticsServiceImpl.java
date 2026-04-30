@@ -1,16 +1,8 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.AnalyticsSummaryDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.RevenueTrendDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.ChannelDistributionDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.PeakHourDTO;
-import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
-import com.ByteKnights.com.resturarent_system.entity.OrderType;
-import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
-import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
-import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
-import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
-import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.*;
+import com.ByteKnights.com.resturarent_system.entity.*;
+import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ManagerAnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,13 +12,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
-import java.util.Arrays;
-import java.util.Map;
-import java.util.TreeMap;
 @Service
 @RequiredArgsConstructor
 public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
@@ -34,6 +21,7 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
     private final OrderRepository orderRepository;
     private final InventoryItemRepository inventoryItemRepository;
     private final StaffRepository staffRepository;
+    private final OrderItemRepository orderItemRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -115,6 +103,33 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                         .build())
                 .collect(Collectors.toList());
 
+        // 8. Top Selling Items (Step 4.2)
+        List<Long> orderIds = orders.stream().map(com.ByteKnights.com.resturarent_system.entity.Order::getId).collect(Collectors.toList());
+        List<TopSellingItemDTO> topSellingItems = new ArrayList<>();
+        
+        if (!orderIds.isEmpty()) {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderIdIn(orderIds);
+            Map<String, TopSellingItemDTO> itemSummary = new HashMap<>();
+            
+            for (OrderItem oi : orderItems) {
+                String name = oi.getItemName();
+                TopSellingItemDTO dto = itemSummary.getOrDefault(name, TopSellingItemDTO.builder()
+                        .itemName(name)
+                        .quantity(0L)
+                        .revenue(BigDecimal.ZERO)
+                        .build());
+                
+                dto.setQuantity(dto.getQuantity() + (oi.getQuantity() != null ? oi.getQuantity() : 0));
+                dto.setRevenue(dto.getRevenue().add(oi.getSubtotal() != null ? oi.getSubtotal() : BigDecimal.ZERO));
+                itemSummary.put(name, dto);
+            }
+            
+            topSellingItems = itemSummary.values().stream()
+                    .sorted((a, b) -> b.getQuantity().compareTo(a.getQuantity()))
+                    .limit(5)
+                    .collect(Collectors.toList());
+        }
+
         return AnalyticsSummaryDTO.builder()
                 .netRevenue(netRevenue != null ? netRevenue : BigDecimal.ZERO)
                 .orderCount(orderCount)
@@ -123,6 +138,7 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                 .channelDistribution(channelDistribution)
                 .totalInventoryValue(totalInventoryValue)
                 .peakHours(peakHours)
+                .topSellingItems(topSellingItems)
                 .build();
     }
 }
