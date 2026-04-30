@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service;
 
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateAlertRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
@@ -46,4 +47,6 @@ public interface KitchenService {
     List<ChefDetailsDTO> getChefDetailsToday(String name);
 
     void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus);
+
+    void createKitchenAlert(@Valid CreateAlertRequestDTO requestDTO, String name);
 }
