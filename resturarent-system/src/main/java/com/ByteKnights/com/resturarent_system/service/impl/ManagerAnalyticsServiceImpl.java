@@ -3,9 +3,11 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.AnalyticsSummaryDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.RevenueTrendDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.ChannelDistributionDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.manager.analytics.PeakHourDTO;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderType;
 import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
+import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
@@ -22,7 +24,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
-
+import java.util.Arrays;
+import java.util.Map;
+import java.util.TreeMap;
 @Service
 @RequiredArgsConstructor
 public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
@@ -91,6 +95,26 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                 })
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
+        // 7. Peak Hours (Step 4.1)
+        List<com.ByteKnights.com.resturarent_system.entity.Order> orders = orderRepository.findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+                branchId, Arrays.asList(PaymentStatus.values()), start, end);
+        
+        Map<Integer, Long> hourCounts = new TreeMap<>(); // TreeMap for sorted hours
+        // Initialize all 24 hours
+        for (int i = 0; i < 24; i++) hourCounts.put(i, 0L);
+        
+        orders.forEach(order -> {
+            int hour = order.getCreatedAt().getHour();
+            hourCounts.put(hour, hourCounts.get(hour) + 1);
+        });
+
+        List<PeakHourDTO> peakHours = hourCounts.entrySet().stream()
+                .map(entry -> PeakHourDTO.builder()
+                        .hour(String.format("%02d:00", entry.getKey()))
+                        .orderCount(entry.getValue())
+                        .build())
+                .collect(Collectors.toList());
+
         return AnalyticsSummaryDTO.builder()
                 .netRevenue(netRevenue != null ? netRevenue : BigDecimal.ZERO)
                 .orderCount(orderCount)
@@ -98,6 +122,7 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                 .revenueTrends(revenueTrends)
                 .channelDistribution(channelDistribution)
                 .totalInventoryValue(totalInventoryValue)
+                .peakHours(peakHours)
                 .build();
     }
 }
