@@ -266,7 +266,20 @@ public class KitchenController {
         );
     }
 
+    // create a kitchen alert for the receptionist
+    @PostMapping("/alerts")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_CREATE')") // Or whatever authority you use
+    public ResponseEntity<StandardResponse> createKitchenAlert(
+            @Valid @RequestBody CreateAlertRequestDTO requestDTO,
+            Principal principal) {
 
+        kitchenService.createKitchenAlert(requestDTO, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(201, "Alert broadcasted successfully!", null),
+                HttpStatus.CREATED
+        );
+    }
 
 
 
