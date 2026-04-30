@@ -20,4 +20,5 @@ public class AnalyticsSummaryDTO {
     
     private List<RevenueTrendDTO> revenueTrends;
     private List<ChannelDistributionDTO> channelDistribution;
+    private List<PeakHourDTO> peakHours;
 }
