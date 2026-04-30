@@ -130,6 +130,27 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                     .collect(Collectors.toList());
         }
 
+        // 9. Inventory Health (Step 4.3)
+        Map<String, InventoryCategoryDTO> categorySummary = new HashMap<>();
+        for (InventoryItem item : items) {
+            String cat = item.getCategory() != null ? item.getCategory() : "Uncategorized";
+            InventoryCategoryDTO dto = categorySummary.getOrDefault(cat, InventoryCategoryDTO.builder()
+                    .category(cat)
+                    .value(BigDecimal.ZERO)
+                    .itemCount(0L)
+                    .build());
+            
+            BigDecimal qty = item.getQuantity() != null ? item.getQuantity() : BigDecimal.ZERO;
+            BigDecimal price = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+            BigDecimal val = qty.multiply(price);
+            
+            dto.setValue(dto.getValue().add(val));
+            dto.setItemCount(dto.getItemCount() + 1);
+            categorySummary.put(cat, dto);
+        }
+
+        List<InventoryCategoryDTO> inventoryByCategory = new ArrayList<>(categorySummary.values());
+
         return AnalyticsSummaryDTO.builder()
                 .netRevenue(netRevenue != null ? netRevenue : BigDecimal.ZERO)
                 .orderCount(orderCount)
@@ -139,6 +160,7 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                 .totalInventoryValue(totalInventoryValue)
                 .peakHours(peakHours)
                 .topSellingItems(topSellingItems)
+                .inventoryByCategory(inventoryByCategory)
                 .build();
     }
 }
