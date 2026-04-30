@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateAlertRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
@@ -511,6 +512,11 @@ public class KitchenServiceImpl implements KitchenService {
 
         // Save the change
         chefAttendanceRepository.save(attendance);
+    }
+
+    @Override
+    public void createKitchenAlert(CreateAlertRequestDTO requestDTO, String name) {
+
     }
 
 
