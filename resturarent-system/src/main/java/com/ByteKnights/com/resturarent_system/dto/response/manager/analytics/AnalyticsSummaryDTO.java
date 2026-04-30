@@ -22,4 +22,5 @@ public class AnalyticsSummaryDTO {
     private List<ChannelDistributionDTO> channelDistribution;
     private List<PeakHourDTO> peakHours;
     private List<TopSellingItemDTO> topSellingItems;
+    private List<InventoryCategoryDTO> inventoryByCategory;
 }
