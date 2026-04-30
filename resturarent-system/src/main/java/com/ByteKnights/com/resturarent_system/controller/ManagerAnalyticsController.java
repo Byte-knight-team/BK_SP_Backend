@@ -16,7 +16,6 @@ import java.time.LocalDate;
 @RestController
 @RequestMapping("/api/manager/analytics")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class ManagerAnalyticsController {
 
     /**
