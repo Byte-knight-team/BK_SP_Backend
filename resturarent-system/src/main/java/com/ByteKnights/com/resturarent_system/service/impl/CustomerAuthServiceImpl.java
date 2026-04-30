@@ -21,9 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Random;
@@ -62,7 +59,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     }
 
     //register function
-
     @Override
     @Transactional
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
@@ -82,7 +78,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Username already exists");
         }
 
-        // 3. THE GHOST ACCOUNT CHECK (Phone check)
+        // 3. THE GHOST ACCOUNT CHECK (Phone check) (restaurent mobile)
         Optional<User> existingUserOpt = userRepository.findByPhone(normalizedPhone);
         User user;
         boolean isGhostAccount = false;
@@ -116,7 +112,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         User savedUser = userRepository.save(user);
 
         // 5. If it's a brand new user, create the Customer profile. 
-        // (If it was a ghost account, the Customer profile already exists!)
+        // (If it was a ghost account (mean mobile used in restuarent), the Customer profile already exists!)
         if (!isGhostAccount) {
             Customer customer = Customer.builder()
                     .user(savedUser)
@@ -132,18 +128,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String normalizedRole = normalizeRole(customerRole.getName());
         String token = customerJwtService.generateToken(savedUser.getId(), savedUser.getEmail(), normalizedRole);
 
-        //getting time as it uneffected by zone
-        String createdAtUtc = savedUser.getCreatedAt()
-                .atZone(ZoneId.systemDefault())
-                .withZoneSameInstant(ZoneOffset.UTC)
-                .format(DateTimeFormatter.ISO_INSTANT);
-
         //returning response
         return CustomerRegisterResponseData.builder()
-                .userId(savedUser.getId())
-                .username(savedUser.getUsername())
                 .token(token)
-                .createdAt(createdAtUtc)
                 .build();
     }
 
@@ -176,7 +163,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         //return response
         return CustomerLoginResponseData.builder()
-                .userId(user.getId())
                 .token(token)
                 .build();
     }
@@ -260,10 +246,12 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         // 3. Issue JWT Token so they can place the order!
         String normalizedRole = normalizeRole(user.getRole().getName());
-        String token = customerJwtService.generateToken(user.getId(), user.getPhone(), normalizedRole); // Use phone as subject if email is missing
+        // Use email if available, otherwise use phone for JWT subject
+        // This ensures Principal.getName() returns a valid identifier for profile lookups
+        String tokenSubject = user.getEmail() != null ? user.getEmail() : user.getPhone();
+        String token = customerJwtService.generateToken(user.getId(), tokenSubject, normalizedRole);
 
         return CustomerLoginResponseData.builder()
-                .userId(user.getId())
                 .token(token)
                 .build();
     }

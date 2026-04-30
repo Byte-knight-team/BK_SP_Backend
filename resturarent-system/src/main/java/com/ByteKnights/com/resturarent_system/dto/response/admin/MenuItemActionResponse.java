@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -19,5 +20,6 @@ public class MenuItemActionResponse {
     private Long menuItemId;
     private String menuItemName;
     private String message;
+    private Map<String, Object> notificationPayload;
     private LocalDateTime timestamp;
 }

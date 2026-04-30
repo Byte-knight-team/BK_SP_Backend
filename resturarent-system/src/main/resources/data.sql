@@ -30,6 +30,6 @@ VALUES
 
 INSERT INTO menu_items (id, branch_id, category_id, sub_category, name, description, price, image_url, is_available, status, preparation_time, created_at)
 VALUES
-	(1, 1, 1, 'Rice', 'Chicken Biryani', 'Spiced basmati rice with chicken', 350.00, NULL, true, 'APPROVED', 20, '2026-02-14 06:45:00'),
-	(2, 1, 2, 'Cold Drinks', 'Lime Juice', 'Fresh lime with ice', 70.00, NULL, true, 'APPROVED', 5, '2026-02-14 06:45:00');
+	(1, 1, 1, 'Rice', 'Chicken Biryani', 'Spiced basmati rice with chicken', 350.00, NULL, true, 'ACTIVE', 20, '2026-02-14 06:45:00'),
+	(2, 1, 2, 'Cold Drinks', 'Lime Juice', 'Fresh lime with ice', 70.00, NULL, true, 'ACTIVE', 5, '2026-02-14 06:45:00');
 ;

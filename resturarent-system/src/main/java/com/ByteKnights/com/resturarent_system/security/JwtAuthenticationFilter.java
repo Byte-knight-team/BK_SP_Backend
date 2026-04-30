@@ -78,11 +78,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             "ROLE_SUPER_ADMIN".equals(roleName);
 
                     /*
-
-                    Non- super admin must have a Staff record and an assigned branch.*/
-
-                     
-                    if (!isSuperAdmin) {
+                     * CUSTOMER users do NOT have Staff records.
+                     * Only STAFF roles (ADMIN, MANAGER, CHEF, etc.) need branch validation.
+                     * Skip branch checks for both SUPER_ADMIN and CUSTOMER.
+                     */
+                    boolean isCustomer = "CUSTOMER".equalsIgnoreCase(roleName);
+                    
+                    if (!isSuperAdmin && !isCustomer) {
 
                         /*
                          * Use findByUserIdWithBranch instead of findByUserId.
