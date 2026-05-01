@@ -63,8 +63,10 @@ public class KitchenController {
     //get inventory alerts data
     @GetMapping("/inventory-alerts")
     @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_VIEW')")
-    public ResponseEntity<StandardResponse> getInventoryAlerts() {
-        List<InventoryDetailsDTO> alerts = kitchenService.getInventoryAlerts();
+    public ResponseEntity<StandardResponse> getInventoryAlerts(Principal principal) {
+
+        List<InventoryDetailsDTO> alerts = kitchenService.getInventoryAlerts(principal.getName()); // Pass email
+
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", alerts),
                 HttpStatus.OK
