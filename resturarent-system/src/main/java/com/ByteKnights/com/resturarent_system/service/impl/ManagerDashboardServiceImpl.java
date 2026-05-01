@@ -35,9 +35,9 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime endOfDay = LocalDate.now().atTime(LocalTime.MAX);
 
-        // 1. Revenue
-        BigDecimal revenue = orderRepository.sumFinalAmountByBranchIdAndStatusAndCreatedAtBetween(
-                finalBranchId, OrderStatus.COMPLETED, startOfDay, endOfDay);
+        // 1. Revenue (Everything that is PAID today)
+        BigDecimal revenue = orderRepository.sumFinalAmountByBranchIdAndPaidStatusAndCreatedAtBetween(
+                finalBranchId, startOfDay, endOfDay);
 
         // 2. Active Orders
         List<OrderStatus> activeStatuses = Arrays.asList(
