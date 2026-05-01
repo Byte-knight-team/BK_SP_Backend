@@ -604,10 +604,18 @@ public class KitchenServiceImpl implements KitchenService {
     // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
     @Override
     @Transactional
-    public void holdOrder(Long orderId, String holdReason) {
-        // Find the order
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+    public void holdOrder(Long orderId, String holdReason, String userEmail) {
+
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Find the order ONLY if it belongs to this branch
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
 
         // Update Order Status and Reason
         order.setStatus(OrderStatus.ON_HOLD);
@@ -622,6 +630,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Save the order (This will save the items too because of Cascade)
         orderRepository.save(order);
     }
+
 
     //update meal status, order status, and chef work status when start preparing a meal
     @Override
@@ -710,6 +719,7 @@ public class KitchenServiceImpl implements KitchenService {
         return new MealCompletionResponseDTO(order.getStatus().toString());
     }
 
+    //create a kitchen alert for the receptionist
     @Override
     @Transactional
     public void createKitchenAlert(CreateAlertRequestDTO dto, String userEmail) {
@@ -733,6 +743,7 @@ public class KitchenServiceImpl implements KitchenService {
         kitchenAlertRepository.save(alert);
     }
 
+    //display all unresolved kitchen alerts
     @Override
     public List<ActiveAlertDTO> getActiveAlerts(String userEmail) {
         // Find the logged-in user and their branch
@@ -766,6 +777,7 @@ public class KitchenServiceImpl implements KitchenService {
         return activeAlertDTOs;
     }
 
+    //resolve kitchen alerts
     @Override
     @Transactional
     public void resolveAlert(Long alertId, String userEmail) {
