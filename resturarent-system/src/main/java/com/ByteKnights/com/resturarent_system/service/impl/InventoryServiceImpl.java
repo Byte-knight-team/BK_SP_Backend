@@ -221,21 +221,37 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public InventoryItemDTO restockItem(Long id, RestockInventoryItemRequest request, Long userId) {
         InventoryItem item = getAndVerifyItem(id, userId);
-        BigDecimal previousQuantity = item.getQuantity();
+        BigDecimal previousQuantity = item.getQuantity() != null ? item.getQuantity() : BigDecimal.ZERO;
+        BigDecimal currentUnitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
 
         BigDecimal addedQuantity = request.getQuantity() != null ? request.getQuantity() : BigDecimal.ZERO;
-        item.setQuantity(item.getQuantity().add(addedQuantity));
+        BigDecimal newBatchUnitPrice = request.getUnitPrice() != null ? request.getUnitPrice() : currentUnitPrice;
 
-        if (request.getUnitPrice() != null) {
+        // 1. Calculate the New Total Quantity
+        BigDecimal newTotalQuantity = previousQuantity.add(addedQuantity);
+
+        // 2. Calculate the Weighted Average Cost (WAC)
+        // Formula: ((Old Qty * Old Price) + (New Qty * New Price)) / Total Qty
+        if (newTotalQuantity.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal currentTotalValue = previousQuantity.multiply(currentUnitPrice);
+            BigDecimal newBatchValue = addedQuantity.multiply(newBatchUnitPrice);
+            BigDecimal combinedValue = currentTotalValue.add(newBatchValue);
+
+            // Use 4 decimal places for precision during calculation, then round as needed
+            BigDecimal weightedAveragePrice = combinedValue.divide(newTotalQuantity, 2, java.math.RoundingMode.HALF_UP);
+            item.setUnitPrice(weightedAveragePrice);
+        } else if (request.getUnitPrice() != null) {
+            // If total quantity is still zero (unlikely for restock), just use the provided price
             item.setUnitPrice(request.getUnitPrice());
         }
 
+        item.setQuantity(newTotalQuantity);
         InventoryItem savedItem = inventoryItemRepository.save(item);
 
         // LOG TRANSACTION
         saveTransaction(savedItem, userId, InventoryTransactionType.RESTOCK,
                 addedQuantity, previousQuantity, savedItem.getQuantity(),
-                savedItem.getUnitPrice(), request.getNotes());
+                newBatchUnitPrice, request.getNotes());
 
         return toItemDTO(savedItem);
     }
