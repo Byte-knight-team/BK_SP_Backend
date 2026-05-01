@@ -26,7 +26,7 @@ public class LoyaltyTransaction {
     private Order order;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "transaction_type", nullable = false)
+    @Column(name = "transaction_type", nullable = false, length = 20)
     private LoyaltyTransactionType transactionType;
 
     @Column(nullable = false)
