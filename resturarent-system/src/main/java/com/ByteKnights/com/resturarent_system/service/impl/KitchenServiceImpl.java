@@ -432,10 +432,19 @@ public class KitchenServiceImpl implements KitchenService {
         Staff chef = staffRepository.findById(chefStaffId)
                 .orElseThrow(() -> new RuntimeException("Chef not found"));
 
+        // Security Check to prevent cross-branch assignment
+        Long orderBranchId = item.getOrder().getBranch().getId();
+        Long chefBranchId = chef.getBranch().getId();
+
+        if (!orderBranchId.equals(chefBranchId)) {
+            throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
+        }
+
         // Link the chef to the meal and save
         item.setAssignedChef(chef);
         orderItemRepository.save(item);
     }
+
 
     // Get all line chefs details
     @Override
