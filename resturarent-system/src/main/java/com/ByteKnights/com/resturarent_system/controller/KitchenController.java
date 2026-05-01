@@ -54,8 +54,10 @@ public class KitchenController {
     //get peak hours data
     @GetMapping("/peak-hours")
     @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
-    public ResponseEntity<StandardResponse> getPeakHours() {
-        List<PeakHourDTO> peakHours = kitchenService.getPeakHoursInLast7Days();
+    public ResponseEntity<StandardResponse> getPeakHours(Principal principal) {
+
+        List<PeakHourDTO> peakHours = kitchenService.getPeakHoursInLast7Days(principal.getName());
+
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", peakHours),
                 HttpStatus.OK

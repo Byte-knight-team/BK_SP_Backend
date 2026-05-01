@@ -109,7 +109,15 @@ public class KitchenServiceImpl implements KitchenService {
 
     // peak hours
     @Override
-    public List<PeakHourDTO> getPeakHoursInLast7Days() {
+    public List<PeakHourDTO> getPeakHoursInLast7Days(String userEmail) {
+
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
         // initialize the map with zero counts for all time slots
         Map<String, Integer> peakHourMap = new LinkedHashMap<>();
         peakHourMap.put("8AM-10AM", 0);
@@ -121,7 +129,7 @@ public class KitchenServiceImpl implements KitchenService {
         peakHourMap.put("8PM-10PM", 0);
 
         // fetch raw data from the database (Hour, Count)
-        List<Object[]> rawData = orderRepository.findOrderCountByHour();
+        List<Object[]> rawData = orderRepository.findOrderCountByHourByBranch(branchId);
 
         // map the count from the database to the corresponding time bucket (slot)
         for (Object[] row : rawData) {
@@ -148,6 +156,7 @@ public class KitchenServiceImpl implements KitchenService {
 
         return dtos;
     }
+
 
     // inventory alerts
     @Override
