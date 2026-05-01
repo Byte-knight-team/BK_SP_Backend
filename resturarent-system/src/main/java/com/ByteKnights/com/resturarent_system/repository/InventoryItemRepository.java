@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 
 import java.util.List;
 
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,6 +26,5 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, Lo
     @Query("SELECT COUNT(i) FROM InventoryItem i WHERE i.branch.id = :branchId AND i.quantity <= i.reorderLevel")
     long countLowStockByBranchId(@Param("branchId") Long branchId);
 
-    Optional<InventoryItem> findByName(String name);
-
+    Optional<InventoryItem> findByNameAndBranchId(String name, Long branchId);
 }

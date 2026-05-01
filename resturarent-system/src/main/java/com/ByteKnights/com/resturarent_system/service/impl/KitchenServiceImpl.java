@@ -321,19 +321,30 @@ public class KitchenServiceImpl implements KitchenService {
         chefRequestRepository.save(chefRequest);
     }
 
+
     //update item count in the inventory
     @Override
-    @Transactional // Important when updating the database!
-    public void updateInventoryStock(UpdateStockDTO updateDTO) {
+    @Transactional // Important when updating the database
+    public void updateInventoryStock(UpdateStockDTO updateDTO, String userEmail) {
 
-        // find the inventory item by its name
-        InventoryItem item = inventoryItemRepository.findByName(updateDTO.getItemName())
-                .orElseThrow(() -> new RuntimeException("Inventory item not found: " + updateDTO.getItemName()));
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // find the inventory item by its name AND branchId
+        InventoryItem item = inventoryItemRepository.findByNameAndBranchId(updateDTO.getItemName(), branchId)
+                .orElseThrow(() -> new RuntimeException("Inventory item not found in your branch: " + updateDTO.getItemName()));
+
         // update the quantity
         item.setQuantity(updateDTO.getNewQuantity());
-        // 3. save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
+
+        // save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
         inventoryItemRepository.save(item);
     }
+
 
     //get order details
     @Override

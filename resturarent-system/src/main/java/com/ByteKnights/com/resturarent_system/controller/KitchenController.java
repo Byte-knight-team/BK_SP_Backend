@@ -129,15 +129,17 @@ public class KitchenController {
     @PutMapping("/inventory/update")
     @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_UPDATE')")
     public ResponseEntity<StandardResponse> updateInventoryStock(
-            @Valid @RequestBody UpdateStockDTO updateDTO) {
+            @Valid @RequestBody UpdateStockDTO updateDTO,
+            Principal principal) { // Added Principal
 
-        kitchenService.updateInventoryStock(updateDTO);
+        kitchenService.updateInventoryStock(updateDTO, principal.getName());
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Stock updated successfully!", null),
                 HttpStatus.OK
         );
     }
+
 
     //get all details of a specific order by order id (display in the orders page)
     @GetMapping("/order-details/{id}")

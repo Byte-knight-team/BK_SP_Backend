@@ -26,7 +26,7 @@ public interface KitchenService {
 
     void createRequest(@Valid InventoryRequestDTO requestDTO, String userEmail);
 
-    void updateInventoryStock(@Valid UpdateStockDTO updateDTO);
+    void updateInventoryStock(UpdateStockDTO updateDTO, String userEmail);
 
     OrderDetailsDTO getOrderDetails(Long orderId, String userEmail);
 
