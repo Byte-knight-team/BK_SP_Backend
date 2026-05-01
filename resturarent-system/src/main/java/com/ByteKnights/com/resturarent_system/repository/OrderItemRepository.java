@@ -21,6 +21,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
             "FROM order_items oi " +
             "JOIN orders o ON oi.order_id = o.id " +
             "WHERE o.branch_id = :branchId " + // Branch Filter
+            "AND o.status = 'COMPLETED' " + // Only count completed orders
             "AND o.created_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY oi.item_name " +
             "ORDER BY mealCount DESC " +
@@ -30,6 +31,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     @Query(value = "SELECT SUM(oi.quantity) FROM order_items oi " +
             "JOIN orders o ON oi.order_id = o.id " +
             "WHERE o.branch_id = :branchId " + // Branch Filter
+            "AND o.status = 'COMPLETED' " + // Only count completed orders
             "AND o.created_at >= NOW() - INTERVAL 7 DAY", nativeQuery = true)
     Long getTotalItemsSoldInLast7DaysByBranch(@Param("branchId") Long branchId);
 
