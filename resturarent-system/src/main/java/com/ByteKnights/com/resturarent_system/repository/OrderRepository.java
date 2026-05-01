@@ -66,26 +66,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         @EntityGraph(attributePaths = "items")
         List<Order> findTop50ByBranchIdOrderByCreatedAtDesc(Long branchId);
 
-        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.status = :status AND o.createdAt BETWEEN :start AND :end")
-        BigDecimal sumFinalAmountByBranchIdAndStatusAndCreatedAtBetween(
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus = 'PAID' AND o.createdAt BETWEEN :start AND :end")
+        BigDecimal sumFinalAmountByBranchIdAndPaidStatusAndCreatedAtBetween(
                         @Param("branchId") Long branchId,
-                        @Param("status") OrderStatus status,
                         @Param("start") LocalDateTime start,
                         @Param("end") LocalDateTime end);
 
-        long countByBranchIdAndStatusAndCreatedAtBetween(Long branchId, OrderStatus status, LocalDateTime start,
-                        LocalDateTime end);
+        @Query("SELECT COUNT(o) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus = 'PAID' AND o.createdAt BETWEEN :start AND :end")
+        long countByBranchIdAndPaidStatusAndCreatedAtBetween(
+                        @Param("branchId") Long branchId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
 
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.status IN :statuses")
         BigDecimal sumFinalAmountByBranchIdAndStatusIn(
                         @Param("branchId") Long branchId,
                         @Param("statuses") Collection<OrderStatus> statuses);
 
-        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.orderType = :orderType AND o.status IN :statuses")
-        BigDecimal sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.orderType = :orderType AND o.paymentStatus IN :paymentStatuses")
+        BigDecimal sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
                         @Param("branchId") Long branchId,
                         @Param("orderType") com.ByteKnights.com.resturarent_system.entity.OrderType orderType,
-                        @Param("statuses") Collection<OrderStatus> statuses);
+                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
 
         long countByBranchIdAndOrderTypeAndCreatedAtBetween(
                         Long branchId,
@@ -121,7 +123,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @Query(value = "SELECT DATE(created_at) as day, SUM(final_amount) as revenue, COUNT(id) as orders " +
                         "FROM orders " +
-                        "WHERE branch_id = :branchId AND status = 'COMPLETED' AND created_at BETWEEN :start AND :end " +
+                        "WHERE branch_id = :branchId AND payment_status = 'PAID' AND created_at BETWEEN :start AND :end " +
                         "GROUP BY day ORDER BY day", nativeQuery = true)
         List<Object[]> findRevenueTrendByBranchAndDates(
                         @Param("branchId") Long branchId,
