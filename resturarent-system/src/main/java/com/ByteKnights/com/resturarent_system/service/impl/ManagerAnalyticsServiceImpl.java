@@ -31,13 +31,18 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
 
                 LocalDateTime end = endDate.atTime(LocalTime.MAX);
 
-                // 1. Calculate Net Revenue (Step 1.3)
-                BigDecimal netRevenue = orderRepository.sumFinalAmountByBranchIdAndStatusAndCreatedAtBetween(
-                                branchId, OrderStatus.COMPLETED, start, end);
+                // Fetch all relevant orders once to reuse for counts and peak hours
+                List<com.ByteKnights.com.resturarent_system.entity.Order> orders = orderRepository
+                                .findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+                                                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS), start, end);
 
-                // 2. Calculate Order Count (Step 1.3)
-                long orderCount = orderRepository.countByBranchIdAndStatusAndCreatedAtBetween(
-                                branchId, OrderStatus.COMPLETED, start, end);
+                // 1. Calculate Net Revenue (Everything that is PAID or SUCCESS)
+                BigDecimal netRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(
+                                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
+
+                // 2. Calculate Order Count (Everything that is PAID or SUCCESS)
+                long orderCount = orderRepository.findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+                                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS), start, end).size();
 
                 // 3. Average Prep Time (Step 1.3)
                 Double avgPrepTime = orderRepository.getAveragePreparationTime();
@@ -56,14 +61,15 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                                         .build();
                 }).collect(Collectors.toList());
 
-                // 5. Channel Distribution (Step 1.4) - Using EXISTING repository methods
+                // 5. Channel Distribution (Step 1.4) - Updated to use PAID and SUCCESS status
                 List<ChannelDistributionDTO> channelDistribution = new ArrayList<>();
                 for (OrderType type : OrderType.values()) {
-                        long typeCount = orderRepository.countByBranchIdAndOrderTypeAndCreatedAtBetween(
-                                        branchId, type, start, end);
+                        long typeCount = orders.stream()
+                                        .filter(o -> o.getOrderType() == type)
+                                        .count();
 
-                        BigDecimal typeRevenue = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
-                                        branchId, type, Collections.singletonList(OrderStatus.COMPLETED));
+                        BigDecimal typeRevenue = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
+                                        branchId, type, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
 
                         if (typeCount > 0 || (typeRevenue != null && typeRevenue.compareTo(BigDecimal.ZERO) > 0)) {
                                 channelDistribution.add(ChannelDistributionDTO.builder()
@@ -87,10 +93,6 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
                 // 7. Peak Hours (Step 4.1)
-                List<com.ByteKnights.com.resturarent_system.entity.Order> orders = orderRepository
-                                .findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
-                                                branchId, Arrays.asList(PaymentStatus.values()), start, end);
-
                 Map<Integer, Long> hourCounts = new TreeMap<>(); // TreeMap for sorted hours
                 // Initialize all 24 hours
                 for (int i = 0; i < 24; i++)
