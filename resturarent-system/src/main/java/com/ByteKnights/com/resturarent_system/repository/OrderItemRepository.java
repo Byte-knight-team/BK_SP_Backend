@@ -20,16 +20,18 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     @Query(value = "SELECT oi.item_name, SUM(oi.quantity) as mealCount " +
             "FROM order_items oi " +
             "JOIN orders o ON oi.order_id = o.id " +
-            "WHERE o.created_at >= NOW() - INTERVAL 7 DAY " +
+            "WHERE o.branch_id = :branchId " + // Branch Filter
+            "AND o.created_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY oi.item_name " +
             "ORDER BY mealCount DESC " +
             "LIMIT 5", nativeQuery = true)
-    List<Object[]> findTop5PopularMealsInLast7Days(); // Return type = Object array List
+    List<Object[]> findTop5PopularMealsInLast7DaysByBranch(@Param("branchId") Long branchId); // Return type = Object array List
 
     @Query(value = "SELECT SUM(oi.quantity) FROM order_items oi " +
             "JOIN orders o ON oi.order_id = o.id " +
-            "WHERE o.created_at >= NOW() - INTERVAL 7 DAY", nativeQuery = true)
-    Long getTotalItemsSoldInLast7Days();
+            "WHERE o.branch_id = :branchId " + // Branch Filter
+            "AND o.created_at >= NOW() - INTERVAL 7 DAY", nativeQuery = true)
+    Long getTotalItemsSoldInLast7DaysByBranch(@Param("branchId") Long branchId);
 
 
     // number of meals completed a chef today

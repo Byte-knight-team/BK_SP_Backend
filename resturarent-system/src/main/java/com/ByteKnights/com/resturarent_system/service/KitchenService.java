@@ -14,7 +14,7 @@ public interface KitchenService {
 
     KitchenDashboardStatsDTO getKitchenDashboardStats(String userEmail);
 
-    List<PopularMealDTO> getMostPopularMealsInLast7Days();
+    List<PopularMealDTO> getMostPopularMealsInLast7Days(String userEmail);
 
     List<PeakHourDTO> getPeakHoursInLast7Days();
 
