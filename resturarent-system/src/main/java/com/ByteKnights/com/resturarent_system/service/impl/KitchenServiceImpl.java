@@ -33,18 +33,25 @@ public class KitchenServiceImpl implements KitchenService {
 
     // kitchen dashboard stat
     @Override
-    public KitchenDashboardStatsDTO getKitchenDashboardStats() {
-        // 1. Define "Today" (Midnight of today)
+    public KitchenDashboardStatsDTO getKitchenDashboardStats(String userEmail) {
+
+        // Get Branch ID
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Define "Today" (Midnight of today)
         LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
 
-        // 2. Fetch counts ONLY for today
-        long pending = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.PENDING, startOfToday);
-        long preparing = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.PREPARING, startOfToday);
-        long completed = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.COMPLETED, startOfToday);
+        // Fetch counts ONLY for this branch and ONLY for today
+        long pending = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PENDING, startOfToday);
+        long preparing = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PREPARING, startOfToday);
+        long completed = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.COMPLETED, startOfToday);
 
-        // 3. Fetch Average Time ONLY for today
-        Double avgTime = orderRepository.getAveragePreparationTimeToday(startOfToday);
-
+        // Fetch Average Time ONLY for this branch and ONLY for today
+        Double avgTime = orderRepository.getAveragePreparationTimeTodayByBranch(branchId, startOfToday);
         return new KitchenDashboardStatsDTO(
                 pending,
                 preparing,
@@ -52,7 +59,6 @@ public class KitchenServiceImpl implements KitchenService {
                 avgTime != null ? Math.round(avgTime * 100.0) / 100.0 : 0.0
         );
     }
-
 
     // most popular meals
     @Override
