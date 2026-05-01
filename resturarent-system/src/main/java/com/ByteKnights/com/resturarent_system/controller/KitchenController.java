@@ -27,14 +27,16 @@ public class KitchenController {
     //get kitchen dashboard stat data
     @GetMapping("/stats")
     @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
-    public ResponseEntity<StandardResponse> getKitchenDashboardStats() {
-        KitchenDashboardStatsDTO stats = kitchenService.getKitchenDashboardStats();
+    public ResponseEntity<StandardResponse> getKitchenDashboardStats(Principal principal) {
+        // Pass the email!
+        KitchenDashboardStatsDTO stats = kitchenService.getKitchenDashboardStats(principal.getName());
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", stats),
                 HttpStatus.OK
         );
     }
+
 
     //get most popular meals data
     @GetMapping("/popular-meals")
