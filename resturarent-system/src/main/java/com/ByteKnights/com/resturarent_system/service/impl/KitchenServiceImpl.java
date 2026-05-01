@@ -183,7 +183,14 @@ public class KitchenServiceImpl implements KitchenService {
 
     //get orderCard details
     @Override
-    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status) {
+    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) { // Added email parameter
+
+        // Added logic to identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
 
         // Define the time range: Only fetch orders starting from today's midnight
         LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
@@ -194,7 +201,7 @@ public class KitchenServiceImpl implements KitchenService {
                 : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
         // Retrieve sorted orders from today
-        List<Order> orders = orderRepository.findByStatusAndStatusUpdatedAtAfter(status, startOfToday, sort);
+        List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(branchId, status, startOfToday, sort);
 
         // Initialize a list to hold the DTOs for the frontend
         List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
@@ -223,6 +230,7 @@ public class KitchenServiceImpl implements KitchenService {
         }
         return orderCardDetailsDTOS;
     }
+
 
     //get all inventory details
     @Override

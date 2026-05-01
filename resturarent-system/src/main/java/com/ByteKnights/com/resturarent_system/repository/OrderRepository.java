@@ -92,7 +92,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByStatus(OrderStatus status, Sort sort);
 
-    List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
+    List<Order> findByBranchIdAndStatusAndStatusUpdatedAtAfter(Long branchId, OrderStatus status, LocalDateTime startOfToday, Sort sort);
 
     long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus, LocalDateTime startOfToday);
 

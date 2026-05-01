@@ -20,7 +20,7 @@ public interface KitchenService {
 
     List<InventoryDetailsDTO> getInventoryAlerts(String userEmail);
 
-    List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status);
+    List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail);
 
     List<InventoryDetailsDTO> getAllInventoryItems(String userEmail);
 
