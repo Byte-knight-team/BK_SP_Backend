@@ -206,6 +206,8 @@ public class OrderServiceImpl implements OrderService {
 
         //helper method to convert order entity to response
         private OrderResponse mapToOrderResponse(Order order) {
+                Payment payment = paymentRepository.findByOrder(order).orElse(null);
+
                 java.util.List<OrderResponse.OrderItemResponse> itemResponses = order.getItems().stream()
                                 .map(item -> OrderResponse.OrderItemResponse.builder()
                                                 .orderItemId(item.getId())
@@ -224,12 +226,15 @@ public class OrderServiceImpl implements OrderService {
                                 .orderStatus(order.getStatus().name())
                                 .orderType(order.getOrderType() != null ? order.getOrderType().name() : null)
                                 .paymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name() : PaymentStatus.PENDING.name())
+                                .paymentMethod(payment != null && payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null)
                                 .cancellationReason(order.getCancelReason())
                                 .isReviewed(order.getReviews().stream().anyMatch(r -> r.getOrderItem() == null))
                                 .contactName(order.getContactName())
                                 .contactPhone(order.getContactPhone())
                                 .deliveryAddress(order.getDeliveryAddress())
                                 .kitchenNotes(order.getKitchenNotes())
+                                .tableId(order.getTable() != null ? order.getTable().getId() : null)
+                                .tableNumber(order.getTable() != null ? order.getTable().getTableNumber() : null)
                                 // Financials
                                 .subtotal(order.getTotalAmount())
                                 .taxAmount(order.getTaxAmount())
