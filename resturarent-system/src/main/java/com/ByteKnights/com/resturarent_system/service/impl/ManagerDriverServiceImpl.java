@@ -33,9 +33,9 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         // 1. Fetch all Riders for the branch
         List<Staff> riders = staffRepository.findByBranchIdAndUserRoleName(finalBranchId, "DELIVERY");
 
-        // 2. Fetch Dispatchable Orders (READY for pickup)
+        // 2. Fetch Dispatchable Orders (COMPLETED by kitchen, ready for dispatch)
         List<Order> dispatchableOrders = orderRepository.findByBranchIdAndOrderTypeAndStatus(
-                finalBranchId, OrderType.ONLINE_DELIVERY, OrderStatus.READY);
+                finalBranchId, OrderType.ONLINE_DELIVERY, OrderStatus.COMPLETED);
 
         // 3. Map Riders and calculate metrics
         List<DeliveryStatus> activeStatuses = Arrays.asList(DeliveryStatus.ASSIGNED, DeliveryStatus.OUT_FOR_DELIVERY);
