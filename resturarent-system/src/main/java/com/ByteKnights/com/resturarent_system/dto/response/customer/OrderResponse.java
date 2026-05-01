@@ -14,6 +14,7 @@ public class OrderResponse {
     private String orderStatus;
     private String orderType;
     private String paymentStatus;
+    private String paymentMethod;
     private String cancellationReason;
     private Boolean isReviewed;
     
@@ -22,6 +23,8 @@ public class OrderResponse {
     private String contactPhone;
     private String deliveryAddress;
     private String kitchenNotes;
+    private Long tableId;
+    private Integer tableNumber;
     
     // --- Detailed Receipt Breakdown ---
     private BigDecimal subtotal;
