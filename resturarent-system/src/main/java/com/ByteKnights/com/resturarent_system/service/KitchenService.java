@@ -28,7 +28,7 @@ public interface KitchenService {
 
     void updateInventoryStock(@Valid UpdateStockDTO updateDTO);
 
-    OrderDetailsDTO getOrderDetails(Long id);
+    OrderDetailsDTO getOrderDetails(Long orderId, String userEmail);
 
     List<ChefAssignDTO> getAvailableChefsForAssignment(String userEmail);
 

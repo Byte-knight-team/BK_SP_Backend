@@ -96,6 +96,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus, LocalDateTime startOfToday);
 
+    Optional<Order> findByIdAndBranchId(Long orderId, Long branchId);
+
 
 
     // --- Kitchen Queries START ---
@@ -123,7 +125,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "AND approved_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY hr", nativeQuery = true)
     List<Object[]> findOrderCountByHourByBranch(@Param("branchId") Long branchId);
-
 
 
     // --- Kitchen Queries END ---

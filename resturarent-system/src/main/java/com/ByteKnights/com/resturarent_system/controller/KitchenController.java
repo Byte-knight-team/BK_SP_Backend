@@ -129,7 +129,6 @@ public class KitchenController {
     @PutMapping("/inventory/update")
     @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_UPDATE')")
     public ResponseEntity<StandardResponse> updateInventoryStock(
-
             @Valid @RequestBody UpdateStockDTO updateDTO) {
 
         kitchenService.updateInventoryStock(updateDTO);
@@ -143,10 +142,12 @@ public class KitchenController {
     //get all details of a specific order by order id (display in the orders page)
     @GetMapping("/order-details/{id}")
     @PreAuthorize("hasAuthority('KITCHEN_ORDER_VIEW')")
-    public ResponseEntity<StandardResponse> getOrderDetails(@PathVariable Long id) {
+    public ResponseEntity<StandardResponse> getOrderDetails(
+            @PathVariable Long id,
+            Principal principal) {
 
         // call the service to get the specific order details
-        OrderDetailsDTO orderDetails = kitchenService.getOrderDetails(id);
+        OrderDetailsDTO orderDetails = kitchenService.getOrderDetails(id, principal.getName());
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", orderDetails),
