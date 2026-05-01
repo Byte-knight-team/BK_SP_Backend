@@ -94,19 +94,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
 
-    long countByStatusAndCreatedAtAfter(OrderStatus orderStatus, LocalDateTime startOfToday);
+    long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus, LocalDateTime startOfToday);
+
 
 
     // --- Kitchen Queries START ---
 
+
     // 1.kitchen dashboard stats
 
     @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
-            "FROM orders WHERE status = 'COMPLETED' " +
+            "FROM orders WHERE branch_id = :branchId " + //breach filter
+            "AND status = 'COMPLETED' " +
             "AND created_at >= :startOfToday " +
             "AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL",
             nativeQuery = true)
-    Double getAveragePreparationTimeToday(@Param("startOfToday") LocalDateTime startOfToday);
+    Double getAveragePreparationTimeTodayByBranch(
+            @Param("branchId") Long branchId,
+            @Param("startOfToday") LocalDateTime startOfToday
+    );
+
 
 
     // 2.Peak hours graph data based on order approval time

@@ -12,7 +12,7 @@ import java.util.List;
 
 public interface KitchenService {
 
-    KitchenDashboardStatsDTO getKitchenDashboardStats();
+    KitchenDashboardStatsDTO getKitchenDashboardStats(String userEmail);
 
     List<PopularMealDTO> getMostPopularMealsInLast7Days();
 
