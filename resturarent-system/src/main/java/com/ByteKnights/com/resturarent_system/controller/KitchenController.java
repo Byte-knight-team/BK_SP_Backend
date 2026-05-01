@@ -83,8 +83,10 @@ public class KitchenController {
     //get all inventory details
     @GetMapping("/inventory/all")
     @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_VIEW')")
-    public ResponseEntity<StandardResponse> getAllInventory() {
-        List<InventoryDetailsDTO> items = kitchenService.getAllInventoryItems();
+    public ResponseEntity<StandardResponse> getAllInventory(Principal principal) {
+        // Pass principal.getName() (which is the email) to the service
+        List<InventoryDetailsDTO> items = kitchenService.getAllInventoryItems(principal.getName());
+
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", items),
                 HttpStatus.OK
