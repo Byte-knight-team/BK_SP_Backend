@@ -142,8 +142,17 @@ public class KitchenServiceImpl implements KitchenService {
 
     // inventory alerts
     @Override
-    public List<InventoryDetailsDTO> getInventoryAlerts() {
-        List<InventoryItem> items = inventoryItemRepository.findAll(); //no need to write native query
+    public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
+
+        // identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);  //no need to write native query
+
         List<InventoryDetailsDTO> alerts = new ArrayList<>();
 
         for (InventoryItem item : items) {
@@ -154,7 +163,6 @@ public class KitchenServiceImpl implements KitchenService {
             // send to the dashboard if only current amount <= Reorder level
             if (current <= reorder) {
                 String level = (current <= reorder / 2) ? "CRITICAL" : "LOW";
-
                 // Percentage calculation
                 double percentage = (max > 0) ? (current / max) * 100 : 0;
 
@@ -171,6 +179,7 @@ public class KitchenServiceImpl implements KitchenService {
         }
         return alerts;
     }
+
 
     //get orderCard details
     @Override
