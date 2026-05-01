@@ -31,23 +31,28 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
         // 1. Fetch all staff members for this branch
         List<Staff> staffList = staffRepository.findByBranchId(finalBranchId);
 
-        // 2. Map members to DTOs
+        // 2. Map members to DTOs (Exclude Managers and Admins)
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyy/MM/dd");
         List<ManagerStaffMemberDTO> memberDTOs = staffList.stream()
+                .filter(s -> s.getUser() != null && s.getUser().getRole() != null)
+                .filter(s -> {
+                    String role = s.getUser().getRole().getName().toUpperCase();
+                    return !role.equals("MANAGER") && !role.equals("ADMIN") && !role.equals("SUPER_ADMIN");
+                })
                 .map(s -> ManagerStaffMemberDTO.builder()
-                        .userId(s.getUser() != null ? s.getUser().getId() : null)
-                        .name(s.getFirstName() + " " + (s.getLastName() != null ? s.getLastName() : ""))
-                        .role(s.getUser() != null && s.getUser().getRole() != null ? formatRole(s.getUser().getRole().getName()) : "Unknown")
+                        .userId(s.getUser().getId())
+                        .name(s.getUser().getUsername())
+                        .role(formatRole(s.getUser().getRole().getName()))
                         .hireDate(s.getHireDate() != null ? s.getHireDate().format(dateFormatter) : "N/A")
-                        .contactNumber(s.getUser() != null ? s.getUser().getPhone() : "N/A")
+                        .contactNumber(s.getUser().getPhone())
                         .salary(s.getSalary())
                         .status(s.getEmploymentStatus() != null ? s.getEmploymentStatus().name() : "ACTIVE")
                         .build())
                 .collect(Collectors.toList());
 
         // 3. Aggregate counts for summary cards (ACTIVE only as per design "Active Kitchen Staff")
-        int kitchenCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
-                finalBranchId, "CHEF", EmploymentStatus.ACTIVE);
+        int kitchenCount = (int) staffRepository.countByBranchIdAndUserRoleNameInAndEmploymentStatus(
+                finalBranchId, java.util.Arrays.asList("CHEF", "LINE_CHEF"), EmploymentStatus.ACTIVE);
         
         int deliveryCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
                 finalBranchId, "DELIVERY", EmploymentStatus.ACTIVE);
@@ -67,7 +72,8 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
     private String formatRole(String roleName) {
         if (roleName == null) return "Unknown";
         switch (roleName.toUpperCase()) {
-            case "CHEF": return "Kitchen Staff";
+            case "CHEF":
+            case "LINE_CHEF": return "Kitchen Staff";
             case "DELIVERY": return "Delivery Driver";
             case "RECEPTIONIST": return "Receptionist";
             case "MANAGER": return "Manager";
