@@ -337,18 +337,33 @@ public class KitchenServiceImpl implements KitchenService {
 
     //get order details
     @Override
-    public OrderDetailsDTO getOrderDetails(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+    public OrderDetailsDTO getOrderDetails(Long orderId, String userEmail) {
 
-        List<OrderItemDetailsDTO> itemDTOs = order.getItems().stream()
-                .map(item -> new OrderItemDetailsDTO(
-                        item.getId(),
-                        item.getItemName(),
-                        item.getQuantity(),
-                        item.getStatus().toString(),
-                        item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
-                )).toList();
+        // Identify the branch of the logged-in user
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Find the order ONLY if it belongs to this branch
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
+
+        List<OrderItemDetailsDTO> itemDTOs = new ArrayList<>(); // Create a new list
+
+        for (OrderItem item : order.getItems()) { // Loop through each item in the order
+            // Create the DTO manually for each item
+            OrderItemDetailsDTO dto = new OrderItemDetailsDTO(
+                    item.getId(),
+                    item.getItemName(),
+                    item.getQuantity(),
+                    item.getStatus().toString(),
+                    item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
+            );
+            itemDTOs.add(dto); // Add it to our list
+        }
 
         return new OrderDetailsDTO(
                 order.getId(),
@@ -360,6 +375,7 @@ public class KitchenServiceImpl implements KitchenService {
                 itemDTOs //list of items
         );
     }
+
 
     //get all available Line chefs from the same branch of the logged-in Chief Chef to assign them to prepare meals
     @Override
