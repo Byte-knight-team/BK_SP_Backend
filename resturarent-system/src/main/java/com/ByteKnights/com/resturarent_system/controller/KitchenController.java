@@ -310,6 +310,7 @@ public class KitchenController {
         );
     }
 
+    //resole kitchen alerts
     @PutMapping("/alerts/{id}/resolve")
     @PreAuthorize("hasAuthority('KITCHEN_ALERT_RESOLVE')")
     public ResponseEntity<StandardResponse> resolveAlert(
