@@ -119,9 +119,11 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     // 2.Peak hours graph data based on order approval time
     @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
             "FROM orders " +
-            "WHERE approved_at >= NOW() - INTERVAL 7 DAY " +
+            "WHERE branch_id = :branchId " + // Branch Filter
+            "AND approved_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY hr", nativeQuery = true)
-    List<Object[]> findOrderCountByHour();
+    List<Object[]> findOrderCountByHourByBranch(@Param("branchId") Long branchId);
+
 
 
     // --- Kitchen Queries END ---
