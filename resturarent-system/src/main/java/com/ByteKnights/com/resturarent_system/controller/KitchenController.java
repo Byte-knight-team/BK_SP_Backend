@@ -41,8 +41,10 @@ public class KitchenController {
     //get most popular meals data
     @GetMapping("/popular-meals")
     @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
-    public ResponseEntity<StandardResponse> getMostPopularMeals() {
-        List<PopularMealDTO> popularMeals = kitchenService.getMostPopularMealsInLast7Days();
+    public ResponseEntity<StandardResponse> getMostPopularMeals(Principal principal) {
+
+        List<PopularMealDTO> popularMeals = kitchenService.getMostPopularMealsInLast7Days(principal.getName());
+
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", popularMeals),
                 HttpStatus.OK

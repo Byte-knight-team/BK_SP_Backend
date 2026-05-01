@@ -59,7 +59,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = "items")
     List<Order> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
 
-    //retrive orders without type filter
+    //retrieve orders without type filter
     @EntityGraph(attributePaths = "items")
     @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
            "AND (o.orderType  IS NOT NULL) " +
@@ -69,7 +69,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
            ") ORDER BY o.createdAt DESC")
     List<Order> findFilteredOrdersWithoutType(@Param("customerId") Long customerId, 
                                               @Param("isActive") Boolean isActive);
-    //retive orders with type filter  
+    //retrieve orders with type filter
     @EntityGraph(attributePaths = "items")
     @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
            "AND (o.orderType = :type) " +

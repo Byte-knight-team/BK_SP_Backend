@@ -62,9 +62,18 @@ public class KitchenServiceImpl implements KitchenService {
 
     // most popular meals
     @Override
-    public List<PopularMealDTO> getMostPopularMealsInLast7Days() {
-        List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7Days();
-        Long totalSold = orderItemRepository.getTotalItemsSoldInLast7Days();
+    public List<PopularMealDTO> getMostPopularMealsInLast7Days(String userEmail) {
+
+        // identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7DaysByBranch(branchId);
+        Long totalSold = orderItemRepository.getTotalItemsSoldInLast7DaysByBranch(branchId);
 
         // avoid division by zero
         // return empty list if no meals sold in last 7 days
