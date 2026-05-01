@@ -247,15 +247,17 @@ public class KitchenController {
     @PreAuthorize("hasAuthority('KITCHEN_ORDER_UPDATE')")
     public ResponseEntity<StandardResponse> holdOrder(
             @PathVariable Long orderId,
-            @RequestBody HoldOrderRequestDTO requestDTO) {
+            @RequestBody HoldOrderRequestDTO requestDTO,
+            Principal principal) { // Added Principal
 
-        kitchenService.holdOrder(orderId, requestDTO.getHoldReason());
+        kitchenService.holdOrder(orderId, requestDTO.getHoldReason(), principal.getName());
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Order put on hold successfully", null),
                 HttpStatus.OK
         );
     }
+
 
     // update the status of a specific meal item to "PREPARING" when the chef starts preparing it
     // at the same time the order status will update as PREPARING and chef working status becomes COOKING

@@ -38,7 +38,7 @@ public interface KitchenService {
 
     void checkOutChef(Long chefId);
 
-    void holdOrder(Long orderId, String holdReason);
+    void holdOrder(Long orderId, String holdReason, String userEmail);
 
     void startMeal(Long itemId);
 
