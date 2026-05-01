@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.manager.ManagerSalesS
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderType;
 import com.ByteKnights.com.resturarent_system.entity.PaymentMethod;
+import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.PaymentRepository;
@@ -31,12 +32,11 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
     public ManagerSalesSummaryDTO getSalesSummary(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
         
-        // 1. Gross Sales (COMPLETED + REFUNDED)
-        List<OrderStatus> grossStatuses = Arrays.asList(OrderStatus.COMPLETED, OrderStatus.REFUNDED);
-        BigDecimal grossSales = orderRepository.sumFinalAmountByBranchIdAndStatusIn(finalBranchId, grossStatuses);
+        // 1. Gross Sales (Everything that is PAID)
+        BigDecimal grossSales = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(finalBranchId, List.of(PaymentStatus.PAID));
         grossSales = (grossSales != null) ? grossSales : BigDecimal.ZERO;
 
-        // 2. Total Refunds
+        // 2. Total Refunds (Based on Order Status as payments don't have a REFUNDED status usually)
         BigDecimal totalRefunds = orderRepository.sumFinalAmountByBranchIdAndStatusIn(finalBranchId, List.of(OrderStatus.REFUNDED));
         totalRefunds = (totalRefunds != null) ? totalRefunds : BigDecimal.ZERO;
 
@@ -50,13 +50,17 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
         BigDecimal cashPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethod(finalBranchId, PaymentMethod.CASH);
         cashPayments = (cashPayments != null) ? cashPayments : BigDecimal.ZERO;
 
-        // 5. Source Breakdown
-        BigDecimal dineIn = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
-                finalBranchId, OrderType.QR, List.of(OrderStatus.COMPLETED, OrderStatus.REFUNDED));
+        // 5. Source Breakdown (Using PAID status for accuracy)
+        // We'll calculate these using a custom query or filtering logic if needed, but for now we'll stick to OrderType + PAID
+        // Since we don't have a specific method for OrderType + PaymentStatus in the repo, I'll use a manual check if needed
+        // But for simplicity, I'll update the logic to reflect PAID status orders.
+        
+        BigDecimal dineIn = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
+                finalBranchId, OrderType.QR, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
         dineIn = (dineIn != null) ? dineIn : BigDecimal.ZERO;
         
-        BigDecimal delivery = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndStatusIn(
-                finalBranchId, OrderType.ONLINE_DELIVERY, List.of(OrderStatus.COMPLETED, OrderStatus.REFUNDED));
+        BigDecimal delivery = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
+                finalBranchId, OrderType.ONLINE_DELIVERY, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
         delivery = (delivery != null) ? delivery : BigDecimal.ZERO;
 
         // 6. Recent Transactions
