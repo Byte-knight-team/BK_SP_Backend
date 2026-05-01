@@ -381,14 +381,46 @@ public class InventoryServiceImpl implements InventoryService {
 
     /**
      * Private helper to convert an InventoryTransaction entity to a DTO.
+     * Populates all detail fields for the Log Detail popup modal.
      */
     private InventoryLogDTO toLogDTO(InventoryTransaction transaction) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a");
 
+        // Resolve the staff member's display name
+        String performedBy = "Unknown";
+        if (transaction.getStaff() != null) {
+            String first = transaction.getStaff().getFirstName();
+            String last = transaction.getStaff().getLastName();
+            if (first != null && last != null) {
+                performedBy = first + " " + last;
+            } else if (transaction.getStaff().getUser() != null
+                    && transaction.getStaff().getUser().getFullName() != null) {
+                performedBy = transaction.getStaff().getUser().getFullName();
+            }
+        }
+
+        // Resolve item metadata
+        String category = "";
+        String unit = "";
+        if (transaction.getInventoryItem() != null) {
+            category = transaction.getInventoryItem().getCategory() != null
+                    ? transaction.getInventoryItem().getCategory() : "";
+            unit = transaction.getInventoryItem().getUnit() != null
+                    ? transaction.getInventoryItem().getUnit() : "";
+        }
+
         return InventoryLogDTO.builder()
+                .id(transaction.getId())
                 .itemName(transaction.getInventoryItem().getName())
+                .category(category)
+                .unit(unit)
                 .updatedAt(transaction.getCreatedAt().format(formatter))
                 .updateType(transaction.getTransactionType().name())
+                .quantityChange(transaction.getQuantityChange())
+                .previousQuantity(transaction.getPreviousQuantity())
+                .newQuantity(transaction.getNewQuantity())
+                .unitPrice(transaction.getUnitPrice())
+                .performedBy(performedBy)
                 .notes(transaction.getNotes())
                 .build();
     }
