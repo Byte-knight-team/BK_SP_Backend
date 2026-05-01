@@ -211,8 +211,17 @@ public class KitchenServiceImpl implements KitchenService {
 
     //get all inventory details
     @Override
-    public List<InventoryDetailsDTO> getAllInventoryItems() {
-        List<InventoryItem> items = inventoryItemRepository.findAll();
+    public List<InventoryDetailsDTO> getAllInventoryItems(String userEmail) {
+
+        // Find the logged-in user and their branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Fetch ONLY items for this specific branch
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(staff.getBranch().getId());
+
         // can be used same InventoryDetailsDTO for this
         List<InventoryDetailsDTO> dtoList = new ArrayList<>();
 

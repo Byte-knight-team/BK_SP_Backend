@@ -22,7 +22,7 @@ public interface KitchenService {
 
     List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status);
 
-    List<InventoryDetailsDTO> getAllInventoryItems();
+    List<InventoryDetailsDTO> getAllInventoryItems(String userEmail);
 
     void createRequest(@Valid InventoryRequestDTO requestDTO, String userEmail);
 
