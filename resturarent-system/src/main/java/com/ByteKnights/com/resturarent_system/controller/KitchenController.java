@@ -76,13 +76,18 @@ public class KitchenController {
     //get orderCard details(display all order cards - PENDING,PREPARING,COMPLETED,ON_HOLD)
     @GetMapping("/order-cards")
     @PreAuthorize("hasAuthority('KITCHEN_ORDER_VIEW')")
-    public ResponseEntity<StandardResponse> getOrdersByStatus(@RequestParam OrderStatus status) {
-        List<OrderCardDetailsDTO> orders = kitchenService.getOrdersByStatus(status);
+    public ResponseEntity<StandardResponse> getOrdersByStatus(
+            @RequestParam OrderStatus status,
+            Principal principal) {
+
+        List<OrderCardDetailsDTO> orders = kitchenService.getOrdersByStatus(status, principal.getName()); // Pass email
+
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", orders),
                 HttpStatus.OK
         );
     }
+
 
     //get all inventory details
     @GetMapping("/inventory/all")
