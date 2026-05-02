@@ -1,13 +1,13 @@
-// 2. CreateReservationRequest.java
 package com.ByteKnights.com.resturarent_system.dto.request.receptionist;
 
 import jakarta.validation.constraints.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
+
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Data
 public class CreateReservationRequest {
     @NotNull(message = "Table ID is required")
     private Long tableId;
