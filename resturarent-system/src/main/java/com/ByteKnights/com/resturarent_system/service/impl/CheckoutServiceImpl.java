@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CheckoutCalculateRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CheckoutCalculateResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.BranchDetailResponse;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.exception.CustomerAuthException;
 import com.ByteKnights.com.resturarent_system.repository.*;
@@ -22,19 +23,22 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final CouponRepository couponRepository;
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
+    private final BranchRepository branchRepository;
 
     public CheckoutServiceImpl(MenuItemRepository menuItemRepository,
             BranchConfigRepository branchConfigRepository,
             SystemConfigRepository systemConfigRepository,
             CouponRepository couponRepository,
             CustomerRepository customerRepository,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            BranchRepository branchRepository) {
         this.menuItemRepository = menuItemRepository;
         this.branchConfigRepository = branchConfigRepository;
         this.systemConfigRepository = systemConfigRepository;
         this.couponRepository = couponRepository;
         this.customerRepository = customerRepository;
         this.userRepository = userRepository;
+        this.branchRepository = branchRepository;
     }
 
     @Override
@@ -176,7 +180,21 @@ public class CheckoutServiceImpl implements CheckoutService {
             maxRedeemable = Math.max(0, Math.min(availablePoints, maxPointsByValue));
         }
 
-        // 9. Return the Receipt DTO
+        // 9. Fetch Branch Details for Pickup
+        BranchDetailResponse branchDetails = null;
+        if ("ONLINE_PICKUP".equalsIgnoreCase(request.getOrderType())) {
+            Branch branch = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch details not found"));
+            
+            branchDetails = BranchDetailResponse.builder()
+                    .name(branch.getName())
+                    .address(branch.getAddress())
+                    .contactNumber(branch.getContactNumber())
+                    .email(branch.getEmail())
+                    .build();
+        }
+
+        // 10. Return the Receipt DTO
         return CheckoutCalculateResponse.builder()
                 .subtotal(subtotal)
                 .taxAmount(taxAmount)
@@ -192,6 +210,7 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .loyaltyPointsEarnedThisOrder(pointsEarned)
                 .minPointsToRedeem(sysConfig.getMinPointsToRedeem())
                 .maxRedeemablePoints(maxRedeemable)
+                .branchDetails(branchDetails)
                 .build();
     }
 

@@ -36,6 +36,11 @@ build/
 ../.env
 .env.properties
 
+# Log files
+*.log
+spring-boot-log.txt
+spring-output.txt
+logs/
 # junk files
 build.log
 compile_errors.txt
