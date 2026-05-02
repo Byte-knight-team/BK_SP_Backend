@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.TableActionRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
@@ -92,4 +93,21 @@ public class ReceptionistTableController {
                 HttpStatus.OK
         );
     }
+
+    // cancel a reservation
+    @PutMapping("/{id}/cancel-reservation")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_RESERVATION_UPDATE')")
+    public ResponseEntity<StandardResponse> cancelReservation(
+            @PathVariable Long id,
+            @RequestBody CancelReservationRequest request,
+            Principal principal) {
+
+        receptionistTableService.cancelReservation(id, request.getReason(), principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Reservation cancelled successfully", null),
+                HttpStatus.OK
+        );
+    }
+
 }
