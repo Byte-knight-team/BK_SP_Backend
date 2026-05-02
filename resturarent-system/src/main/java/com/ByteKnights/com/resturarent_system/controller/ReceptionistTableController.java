@@ -80,5 +80,16 @@ public class ReceptionistTableController {
         );
     }
 
-
+    // check-in a reserved guest
+    @PutMapping("/{id}/check-in")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> checkInGuest(
+            @PathVariable Long id,
+            Principal principal) {
+        receptionistTableService.checkInGuest(id, principal.getName());
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Guest checked in successfully", null),
+                HttpStatus.OK
+        );
+    }
 }

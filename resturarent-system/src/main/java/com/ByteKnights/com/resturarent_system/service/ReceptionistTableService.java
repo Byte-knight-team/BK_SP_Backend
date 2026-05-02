@@ -15,4 +15,6 @@ public interface ReceptionistTableService {
     void clearTable(Long tableId, String userEmail);
 
     void createReservation(CreateReservationRequest request, String userEmail);
+
+    void checkInGuest(Long tableId, String userEmail);
 }
