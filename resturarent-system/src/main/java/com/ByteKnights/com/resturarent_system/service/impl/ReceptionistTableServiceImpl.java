@@ -92,5 +92,35 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         tableRepository.save(table);
     }
 
+    // mark a table as AVAILABLE and reset guest count
+    @Override
+    @Transactional
+    public void clearTable(Long tableId, String userEmail) {
+
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Find the table with a Lock
+        RestaurantTable table = tableRepository.findByIdForUpdate(tableId)
+                .orElseThrow(() -> new RuntimeException("Table not found"));
+
+        // Security Check: Ensure table belongs to the same branch
+        if (!table.getBranch().getId().equals(branchId)) {
+            throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
+        }
+
+        // Reset table data
+        table.setState(TableStatus.AVAILABLE);
+        table.setCurrentGuestCount(0);
+        table.setStatusUpdatedAt(LocalDateTime.now());
+
+        // Save
+        tableRepository.save(table);
+    }
 
 }
