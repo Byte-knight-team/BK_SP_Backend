@@ -49,5 +49,20 @@ public class ReceptionistTableController {
         );
     }
 
+    // clear a table when guests leave
+    @PutMapping("/{id}/clear")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> clearTable(
+            @PathVariable Long id,
+            Principal principal) {
+
+        receptionistTableService.clearTable(id, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Table #" + id + " is now available", null),
+                HttpStatus.OK
+        );
+    }
+
 
 }
