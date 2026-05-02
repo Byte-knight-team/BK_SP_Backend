@@ -1,16 +1,15 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.TableActionRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistTableService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 import java.util.List;
@@ -33,4 +32,22 @@ public class ReceptionistTableController {
                 HttpStatus.OK
         );
     }
+
+    // mark a table as occupied when guests are seated
+    @PutMapping("/{id}/occupy")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> occupyTable(
+            @PathVariable Long id,
+            @Valid @RequestBody TableActionRequest request,
+            Principal principal) {
+
+        receptionistTableService.occupyTable(id, request.getGuestCount(), principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Table #" + id + " is now occupied", null),
+                HttpStatus.OK
+        );
+    }
+
+
 }
