@@ -23,7 +23,6 @@ import java.math.BigDecimal;
 @Builder
 public class CreateMenuItemRequest {
 
-    @NotNull(message = "Branch ID is required")
     private Long branchId;
 
     @NotNull(message = "Category ID is required")
@@ -50,6 +49,7 @@ public class CreateMenuItemRequest {
 
     private String status;
 
+    @NotNull(message = "Preparation time is required")
     @Positive(message = "Preparation time must be greater than zero")
     @Max(value = 240, message = "Preparation time must be less than or equal to 240 minutes")
     private Integer preparationTime;

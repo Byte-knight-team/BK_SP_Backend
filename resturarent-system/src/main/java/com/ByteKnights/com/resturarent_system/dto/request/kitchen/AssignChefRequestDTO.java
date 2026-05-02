@@ -4,5 +4,5 @@ import lombok.Data;
 
 @Data
 public class AssignChefRequestDTO {
-    private Long chefId;
+    private Long chefStaffId;
 }

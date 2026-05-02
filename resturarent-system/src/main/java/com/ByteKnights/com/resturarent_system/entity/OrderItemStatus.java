@@ -3,5 +3,6 @@ package com.ByteKnights.com.resturarent_system.entity;
 public enum OrderItemStatus {
     PENDING,
     PREPARING,
-    READY
+    READY,
+    ON_HOLD
 }

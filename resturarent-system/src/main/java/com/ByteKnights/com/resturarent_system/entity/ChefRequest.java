@@ -68,7 +68,6 @@ public class ChefRequest {
     @Column(name = "request_type", nullable = false)
     private ChefRequestType requestType;
 
-
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
