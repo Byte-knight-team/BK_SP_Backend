@@ -38,6 +38,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Get Branch ID
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
         Long branchId = staff.getBranch().getId();
