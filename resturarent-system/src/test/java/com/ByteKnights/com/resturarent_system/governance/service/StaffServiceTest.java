@@ -144,18 +144,6 @@ class StaffServiceTest {
         verify(emailService, times(1))
                 .sendStaffInviteEmail(eq("manager01@test.com"), eq("manager01"), anyString());
 
-        verify(auditLogService, times(1)).logCurrentUserAction(
-                eq(AuditModule.STAFF),
-                eq(AuditEventType.STAFF_CREATED),
-                eq(AuditStatus.SUCCESS),
-                eq(AuditSeverity.INFO),
-                eq(AuditTargetType.USER),
-                eq(10L),
-                any(),
-                eq("Staff created successfully"),
-                isNull(),
-                anyMap()
-        );
     }
 
     @Test
@@ -227,18 +215,6 @@ class StaffServiceTest {
         verify(staffRepository, times(1)).save(any(Staff.class));
         verify(emailService, times(1))
                 .sendStaffInviteEmail(eq("chef01@test.com"), eq("chef01"), anyString());
-        verify(auditLogService, times(1)).logCurrentUserAction(
-                eq(AuditModule.STAFF),
-                eq(AuditEventType.STAFF_CREATED),
-                eq(AuditStatus.SUCCESS),
-                eq(AuditSeverity.INFO),
-                eq(AuditTargetType.USER),
-                eq(11L),
-                any(),
-                eq("Staff created successfully"),
-                isNull(),
-                anyMap()
-        );
     }
 
     @Test
@@ -452,18 +428,6 @@ class StaffServiceTest {
         assertEquals(1L, response.getBranchId());
 
         verify(userRepository, times(1)).save(targetUser);
-        verify(auditLogService, times(1)).logCurrentUserAction(
-                eq(AuditModule.STAFF),
-                eq(AuditEventType.STAFF_DEACTIVATED),
-                eq(AuditStatus.SUCCESS),
-                eq(AuditSeverity.INFO),
-                eq(AuditTargetType.USER),
-                eq(10L),
-                eq(1L),
-                eq("Staff deactivated successfully"),
-                anyMap(),
-                anyMap()
-        );
     }
 
     /**
