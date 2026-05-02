@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.TableActionRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistTableService;
@@ -61,6 +62,21 @@ public class ReceptionistTableController {
         return new ResponseEntity<>(
                 new StandardResponse(200, "Table #" + id + " is now available", null),
                 HttpStatus.OK
+        );
+    }
+
+    // book a table for a guest
+    @PostMapping("/reservations")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_RESERVATION_CREATE')")
+    public ResponseEntity<StandardResponse> createReservation(
+            @Valid @RequestBody CreateReservationRequest request,
+            Principal principal) {
+
+        receptionistTableService.createReservation(request, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(201, "Reservation created successfully", null),
+                HttpStatus.CREATED
         );
     }
 

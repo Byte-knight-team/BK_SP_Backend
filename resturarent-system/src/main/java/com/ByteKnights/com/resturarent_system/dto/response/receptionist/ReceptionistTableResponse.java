@@ -4,11 +4,10 @@ import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import lombok.*;
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@Data
 public class ReceptionistTableResponse {
     private Long id;
     private Integer tableNumber;
