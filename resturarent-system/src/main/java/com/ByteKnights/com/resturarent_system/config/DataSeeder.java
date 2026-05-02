@@ -162,8 +162,7 @@ public class DataSeeder implements CommandLineRunner {
                                 kitchenChefManage,
                                 kitchenAlertCreate,
                                 kitchenAlertView,
-                                kitchenAlertResolve
-                );
+                                kitchenAlertResolve);
 
                 /*
                  * For normal roles, default permissions are added ONLY when the role is first
@@ -202,19 +201,18 @@ public class DataSeeder implements CommandLineRunner {
                                 viewCustomer));
 
                 createRoleWithDefaultPermissions("CHEF", Set.of(
-                        manageMenu,
-                        kitchenViewStats,
-                        kitchenOrderView,
-                        kitchenOrderUpdate,
-                        kitchenOrderAssign,
-                        kitchenInventoryView,
-                        kitchenInventoryRequest,
-                        kitchenInventoryUpdate,
-                        kitchenChefManage,
-                        kitchenAlertCreate,
-                        kitchenAlertView,
-                        kitchenAlertResolve
-                ));
+                                manageMenu,
+                                kitchenViewStats,
+                                kitchenOrderView,
+                                kitchenOrderUpdate,
+                                kitchenOrderAssign,
+                                kitchenInventoryView,
+                                kitchenInventoryRequest,
+                                kitchenInventoryUpdate,
+                                kitchenChefManage,
+                                kitchenAlertCreate,
+                                kitchenAlertView,
+                                kitchenAlertResolve));
 
                 createRoleWithDefaultPermissions("RECEPTIONIST", Set.of(
                                 createOrders,

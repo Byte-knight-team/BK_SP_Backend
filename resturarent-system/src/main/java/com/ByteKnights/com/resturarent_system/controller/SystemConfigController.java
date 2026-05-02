@@ -2,11 +2,9 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateBranchConfigRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateGlobalConfigRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateOperatingHoursRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.BranchConfigResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.EffectiveBranchConfigResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.GlobalConfigResponse;
-import com.ByteKnights.com.resturarent_system.dto.response.superadmin.OperatingHourItemResponse;
 import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -52,21 +50,6 @@ public class SystemConfigController {
             @Valid @RequestBody UpdateBranchConfigRequest request
     ) {
         return ResponseEntity.ok(systemConfigService.updateBranchConfig(branchId, request));
-    }
-
-    @GetMapping("/branches/{branchId}/operating-hours")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<List<OperatingHourItemResponse>> getOperatingHours(@PathVariable Long branchId) {
-        return ResponseEntity.ok(systemConfigService.getOperatingHours(branchId));
-    }
-
-    @PutMapping("/branches/{branchId}/operating-hours")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<List<OperatingHourItemResponse>> updateOperatingHours(
-            @PathVariable Long branchId,
-            @Valid @RequestBody UpdateOperatingHoursRequest request
-    ) {
-        return ResponseEntity.ok(systemConfigService.updateOperatingHours(branchId, request));
     }
 
     @GetMapping("/branches/{branchId}/effective")
