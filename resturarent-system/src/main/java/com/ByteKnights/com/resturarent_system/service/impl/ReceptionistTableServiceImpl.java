@@ -210,5 +210,43 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         reservationRepository.save(reservation);
     }
 
+    // cancel a reservation and free up the table
+    @Override
+    @Transactional
+    public void cancelReservation(Long tableId, String reason, String userEmail) {
+
+        // Identify branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        // Find and Lock the table
+        RestaurantTable table = tableRepository.findByIdForUpdate(tableId)
+                .orElseThrow(() -> new RuntimeException("Table not found"));
+
+        // Security Check
+        if (!table.getBranch().getId().equals(branchId)) {
+            throw new RuntimeException("Security Alert: Access Denied! Table belongs to a different branch.");
+        }
+        // Find the active reservation
+        Reservation reservation = reservationRepository.findActiveReservationByTableId(tableId)
+                .orElseThrow(() -> new RuntimeException("No active reservation found for this table"));
+
+        // Update Table: RESERVED -> AVAILABLE
+        table.setState(TableStatus.AVAILABLE);
+        table.setCurrentGuestCount(0);
+        table.setStatusUpdatedAt(LocalDateTime.now());
+        tableRepository.save(table);
+
+        // Update Reservation: Mark as CANCELLED
+        reservation.setStatus(ReservationStatus.CANCELLED);
+        reservation.setCancelReason(reason);
+        reservationRepository.save(reservation);
+    }
+
 
 }
