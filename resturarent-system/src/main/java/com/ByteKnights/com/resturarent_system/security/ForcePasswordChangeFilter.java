@@ -59,10 +59,8 @@
 
                 if (freshUser != null) {
                     String role = freshUser.getRole().getName();
-                    if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role) || "CUSTOMER".equalsIgnoreCase(role)) {
-                        filterChain.doFilter(request, response);
-                        return;
-                    }
+
+                    // Always enforce first password change for users with passwordChanged == false
 
                     if (!Boolean.TRUE.equals(freshUser.getPasswordChanged())) {
                         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -74,7 +72,7 @@
                     }
                 }
             }
-
+            // Continue normally for users who already changed their password
             filterChain.doFilter(request, response);
         }
     }
