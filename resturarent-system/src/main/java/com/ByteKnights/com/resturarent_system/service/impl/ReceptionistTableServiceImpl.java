@@ -1,10 +1,9 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
-import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
-import com.ByteKnights.com.resturarent_system.entity.Staff;
-import com.ByteKnights.com.resturarent_system.entity.TableStatus;
-import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.entity.*;
+import com.ByteKnights.com.resturarent_system.repository.ReservationRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
@@ -24,6 +23,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
     final RestaurantTableRepository tableRepository;
     final UserRepository userRepository;
     final StaffRepository staffRepository;
+    final ReservationRepository reservationRepository;
 
     // fetch all tables belonging to the receptionist's branch
     @Override
@@ -117,6 +117,56 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         // Reset table data
         table.setState(TableStatus.AVAILABLE);
         table.setCurrentGuestCount(0);
+        table.setStatusUpdatedAt(LocalDateTime.now());
+
+        // Save
+        tableRepository.save(table);
+    }
+
+    // create a new reservation and update table status to RESERVED
+    @Override
+    @Transactional
+    public void createReservation(CreateReservationRequest request, String userEmail) {
+
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        // Find the target table and use a write lock for safety
+        RestaurantTable table = tableRepository.findByIdForUpdate(request.getTableId())
+                .orElseThrow(() -> new RuntimeException("Table not found"));
+
+        // Security Check: Ensure table belongs to the receptionist's branch
+        if (!table.getBranch().getId().equals(branchId)) {
+            throw new RuntimeException("Security Alert: Access Denied! Table belongs to a different branch.");
+        }
+        // Status Check: Cannot reserve if table is already OCCUPIED or RESERVED
+        if (table.getState() == TableStatus.OCCUPIED) {
+            throw new RuntimeException("Cannot reserve: Table is currently occupied by guests.");
+        }
+        if (table.getState() == TableStatus.RESERVED) {
+            throw new RuntimeException("Cannot reserve: Table is already reserved for another customer.");
+        }
+
+        // Create the new Reservation entity using builder
+        Reservation reservation = Reservation.builder()
+                .table(table)
+                .customerName(request.getCustomerName())
+                .customerPhone(request.getCustomerPhone())
+                .reservationTime(request.getReservationTime())
+                .guestCount(request.getGuestCount())
+                .status(ReservationStatus.CONFIRMED)
+                .build();
+        // Save the booking record
+        reservationRepository.save(reservation);
+
+        // Update the physical Table state to RESERVED
+        table.setState(TableStatus.RESERVED);
         table.setStatusUpdatedAt(LocalDateTime.now());
 
         // Save
