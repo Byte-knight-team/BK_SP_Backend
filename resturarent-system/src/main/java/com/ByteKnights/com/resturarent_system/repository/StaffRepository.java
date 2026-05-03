@@ -20,7 +20,8 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     /*
      * Loads Staff together with Branch.
      * This is needed in JwtAuthenticationFilter because branch is lazy-loaded.
-     * Without JOIN FETCH, staff.getBranch().getStatus() can cause LazyInitializationException.
+     * Without JOIN FETCH, staff.getBranch().getStatus() can cause
+     * LazyInitializationException.
      */
     @Query("SELECT s FROM Staff s LEFT JOIN FETCH s.branch WHERE s.user.id = :userId")
     Optional<Staff> findByUserIdWithBranch(@Param("userId") Long userId);
@@ -39,8 +40,6 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     // get all the chef in a branch
     @Query("SELECT s FROM Staff s WHERE s.branch.id = :branchId AND s.user.role.name = 'LINE_CHEF'")
     List<Staff> findAllLineChefsByBranch(@Param("branchId") Long branchId);
-
-
 
     // --- Kitchen Queries END ---
 }
