@@ -3,9 +3,12 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+
+import com.ByteKnights.com.resturarent_system.exception.CustomerAuthException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -55,7 +58,7 @@ public class SmsService {
 
         } catch (Exception e) {
             System.err.println("Failed to send SMS: " + e.getMessage());
-            // Depending on your requirements, you might want to throw a custom exception here
+            throw new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "SMS Service Error");
         }
     }
 }
