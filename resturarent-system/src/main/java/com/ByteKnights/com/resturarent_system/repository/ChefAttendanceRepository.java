@@ -39,5 +39,20 @@ public interface ChefAttendanceRepository extends JpaRepository<ChefAttendance, 
                         @Param("attendanceStatus") ChefAttendanceStatus attendanceStatus,
                         @Param("workStatuses") List<ChefWorkStatus> workStatuses);
 
+        // count chefs by attendance status
+        @Query("SELECT COUNT(ca) FROM ChefAttendance ca " +
+                "WHERE ca.attendanceDate = :date " +
+                "AND ca.staff.branch.id = :branchId " +
+                "AND ca.attendanceStatus = :status")
+        long countChefsByAttendanceStatusToday(
+                @Param("date") LocalDate date,
+                @Param("branchId") Long branchId,
+                @Param("status") ChefAttendanceStatus status
+        );
+
+        // count chefs by work status
+        @Query("SELECT COUNT(ca) FROM ChefAttendance ca WHERE ca.attendanceDate = :date AND ca.staff.branch.id = :branchId AND ca.workStatus = :status")
+        long countChefsByWorkStatusToday(@Param("date") LocalDate date, @Param("branchId") Long branchId, @Param("status") ChefWorkStatus status);
+
         // --- Kitchen Queries END ---
 }

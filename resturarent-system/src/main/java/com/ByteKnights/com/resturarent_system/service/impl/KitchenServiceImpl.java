@@ -805,6 +805,7 @@ public class KitchenServiceImpl implements KitchenService {
         kitchenAlertRepository.save(alert);
     }
 
+    // get details for chef dashboard stats (total chefs, on-duty, off-duty, available)
     @Override
     public ChefDashboardStatsDTO getChefDashboardStats(String userEmail) {
 
@@ -821,8 +822,8 @@ public class KitchenServiceImpl implements KitchenService {
 
         // Fetch Counts
         long total = staffRepository.countActiveLineChefsByBranch(branchId);
-        long onDuty = chefAttendanceRepository.countOnDutyChefsToday(today, branchId, ChefAttendanceStatus.ON_DUTY);
-        long offDuty = chefAttendanceRepository.countOnDutyChefsToday(today, branchId, ChefAttendanceStatus.OFF_DUTY);
+        long onDuty = chefAttendanceRepository.countChefsByAttendanceStatusToday(today, branchId, ChefAttendanceStatus.ON_DUTY);
+        long offDuty = chefAttendanceRepository.countChefsByAttendanceStatusToday(today, branchId, ChefAttendanceStatus.OFF_DUTY);
         long available = chefAttendanceRepository.countChefsByWorkStatusToday(today, branchId, ChefWorkStatus.AVAILABLE);
 
         return new ChefDashboardStatsDTO(total, onDuty, offDuty, available);
