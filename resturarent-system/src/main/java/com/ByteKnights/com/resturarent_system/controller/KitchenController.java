@@ -188,6 +188,20 @@ public class KitchenController {
         );
     }
 
+    // get chef stat details
+    @GetMapping("/chefs/stats")
+    @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
+    public ResponseEntity<StandardResponse> getChefDashboardStats(Principal principal) {
+
+        ChefDashboardStatsDTO stats = kitchenService.getChefDashboardStats(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", stats),
+                HttpStatus.OK
+        );
+    }
+
+
     // check in a chef
     @PostMapping("/chefs/{chefId}/check-in")
     @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")

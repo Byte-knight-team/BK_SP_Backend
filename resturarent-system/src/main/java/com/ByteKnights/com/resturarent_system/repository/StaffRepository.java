@@ -38,8 +38,12 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     List<Staff> findLineChefsNotCheckedInToday(@Param("branchId") Long branchId, @Param("date") LocalDate date);
 
     // get all the chef in a branch
-    @Query("SELECT s FROM Staff s WHERE s.branch.id = :branchId AND s.user.role.name = 'LINE_CHEF'")
-    List<Staff> findAllLineChefsByBranch(@Param("branchId") Long branchId);
+    @Query("SELECT s FROM Staff s WHERE s.branch.id = :branchId AND s.user.role.name = 'LINE_CHEF' AND s.employmentStatus = 'ACTIVE'")
+    List<Staff> findAllActiveLineChefsByBranch(@Param("branchId") Long branchId);
+
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.branch.id = :branchId AND s.user.role.name = 'LINE_CHEF' AND s.employmentStatus = 'ACTIVE'")
+    long countActiveLineChefsByBranch(@Param("branchId") Long branchId);
+
 
     // --- Kitchen Queries END ---
 }
