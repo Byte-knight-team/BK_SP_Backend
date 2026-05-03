@@ -105,8 +105,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         delivery.setDeliveryStatus(status);
         if (status == DeliveryStatus.DELIVERED) {
             delivery.setDeliveredAt(LocalDateTime.now());
-            // Also update the main Order status
-            delivery.getOrder().updateStatus(OrderStatus.COMPLETED);
+            // Set order to SERVED once the customer has received it
+            delivery.getOrder().updateStatus(OrderStatus.SERVED);
         }
         
         deliveryRepository.save(delivery);
