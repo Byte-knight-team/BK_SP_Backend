@@ -44,13 +44,16 @@ public interface KitchenService {
 
     MealCompletionResponseDTO completeMeal(Long itemId);
 
-    List<ChefDetailsDTO> getChefDetailsToday(String name);
+    List<ChefDetailsDTO> getChefDetailsToday(String userEmail);
 
     void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus);
 
-    void createKitchenAlert(@Valid CreateAlertRequestDTO requestDTO, String name);
+    void createKitchenAlert(CreateAlertRequestDTO requestDTO, String userEmail);
 
-    List<ActiveAlertDTO> getActiveAlerts(String name);
+    List<ActiveAlertDTO> getActiveAlerts(String userEmail);
 
-    void resolveAlert(Long id, String name);
+    void resolveAlert(Long id, String userEmail);
+
+    ChefDashboardStatsDTO getChefDashboardStats(String userEmail);
+
 }

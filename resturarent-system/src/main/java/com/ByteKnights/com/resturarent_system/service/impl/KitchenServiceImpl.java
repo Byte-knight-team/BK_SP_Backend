@@ -461,7 +461,7 @@ public class KitchenServiceImpl implements KitchenService {
         Long branchId = currentStaff.getBranch().getId();
 
         // Fetch all line chefs registered at this branch
-        List<Staff> lineChefs = staffRepository.findAllLineChefsByBranch(branchId);
+        List<Staff> lineChefs = staffRepository.findAllActiveLineChefsByBranch(branchId);
 
         List<ChefDetailsDTO> dtoList = new ArrayList<>();
         LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
@@ -804,4 +804,28 @@ public class KitchenServiceImpl implements KitchenService {
 
         kitchenAlertRepository.save(alert);
     }
+
+    @Override
+    public ChefDashboardStatsDTO getChefDashboardStats(String userEmail) {
+
+        // Identify Branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        LocalDate today = LocalDate.now();
+
+        // Fetch Counts
+        long total = staffRepository.countActiveLineChefsByBranch(branchId);
+        long onDuty = chefAttendanceRepository.countOnDutyChefsToday(today, branchId, ChefAttendanceStatus.ON_DUTY);
+        long offDuty = chefAttendanceRepository.countOnDutyChefsToday(today, branchId, ChefAttendanceStatus.OFF_DUTY);
+        long available = chefAttendanceRepository.countChefsByWorkStatusToday(today, branchId, ChefWorkStatus.AVAILABLE);
+
+        return new ChefDashboardStatsDTO(total, onDuty, offDuty, available);
+    }
+
 }
