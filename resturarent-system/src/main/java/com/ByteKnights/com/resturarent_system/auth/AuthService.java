@@ -132,7 +132,8 @@ public class AuthService {
                 user.getEmail(),
                 user.getRole().getName(),
                 branchId,
-                branchName);
+                branchName,
+                user.getFullName());
 
         Map<String, Object> loginDetails = new LinkedHashMap<>();
         loginDetails.put("userId", user.getId());
