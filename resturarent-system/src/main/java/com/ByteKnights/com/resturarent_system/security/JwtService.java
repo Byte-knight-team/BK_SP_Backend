@@ -29,7 +29,7 @@ public class JwtService {
      * it will still work and branch values will be null.
      */
     public String generateToken(Long userId, String email, String role) {
-        return generateToken(userId, email, role, null, null);
+        return generateToken(userId, email, role, null, null, null);
     }
 
     /*
@@ -54,12 +54,29 @@ public class JwtService {
             Long branchId,
             String branchName
     ) {
+        return generateToken(userId, email, role, branchId, branchName, null);
+    }
+
+    /*
+     * Full token generator with fullName support.
+     */
+    public String generateToken(
+            Long userId,
+            String email,
+            String role,
+            Long branchId,
+            String branchName,
+            String fullName
+    ) {
         Map<String, Object> claims = new HashMap<>();
 
         claims.put("role", role);
         claims.put("userId", userId);
         claims.put("branchId", branchId);
         claims.put("branchName", branchName);
+        if (fullName != null) {
+            claims.put("fullName", fullName);
+        }
 
         return Jwts.builder()
                 .claims(claims)
