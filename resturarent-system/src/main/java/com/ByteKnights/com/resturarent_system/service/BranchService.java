@@ -14,6 +14,7 @@ import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +28,7 @@ public class BranchService {
     private final BranchRepository branchRepository;
     private final AuditLogService auditLogService;
 
+    @Auditable(module = AuditModule.BRANCH, eventType = AuditEventType.BRANCH_CREATED, targetType = AuditTargetType.BRANCH, description = "Branch created successfully", captureResultAsNewValue = false)
     @Transactional
     public BranchResponse createBranch(CreateBranchRequest request) {
         StringBuilder validationErrors = new StringBuilder();
@@ -72,19 +74,6 @@ public class BranchService {
                 .build();
 
         Branch savedBranch = branchRepository.save(branch);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.BRANCH,
-                AuditEventType.BRANCH_CREATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.BRANCH,
-                savedBranch.getId(),
-                savedBranch.getId(),
-                "Branch created successfully",
-                null,
-                buildBranchAuditSnapshot(savedBranch)
-        );
 
         return mapToResponse(savedBranch, "Branch created successfully");
     }
@@ -173,62 +162,33 @@ public class BranchService {
                 updatedBranch.getId(),
                 "Branch updated successfully",
                 oldValues,
-                buildBranchAuditSnapshot(updatedBranch)
-        );
+                buildBranchAuditSnapshot(updatedBranch));
 
         return mapToResponse(updatedBranch, "Branch updated successfully");
     }
 
+    @Auditable(module = AuditModule.BRANCH, eventType = AuditEventType.BRANCH_ACTIVATED, targetType = AuditTargetType.BRANCH, description = "Branch activated successfully", captureResultAsNewValue = false)
     @Transactional
     public BranchResponse activateBranch(Long id) {
         Branch branch = branchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
 
-        Map<String, Object> oldValues = buildBranchAuditSnapshot(branch);
-
         branch.setStatus(BranchStatus.ACTIVE);
 
         Branch updatedBranch = branchRepository.save(branch);
 
-        auditLogService.logCurrentUserAction(
-                AuditModule.BRANCH,
-                AuditEventType.BRANCH_ACTIVATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.BRANCH,
-                updatedBranch.getId(),
-                updatedBranch.getId(),
-                "Branch activated successfully",
-                oldValues,
-                buildBranchAuditSnapshot(updatedBranch)
-        );
-
         return mapToResponse(updatedBranch, "Branch activated successfully");
     }
 
+    @Auditable(module = AuditModule.BRANCH, eventType = AuditEventType.BRANCH_DEACTIVATED, targetType = AuditTargetType.BRANCH, description = "Branch deactivated successfully", captureResultAsNewValue = false)
     @Transactional
     public BranchResponse deactivateBranch(Long id) {
         Branch branch = branchRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
 
-        Map<String, Object> oldValues = buildBranchAuditSnapshot(branch);
-
         branch.setStatus(BranchStatus.INACTIVE);
 
         Branch updatedBranch = branchRepository.save(branch);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.BRANCH,
-                AuditEventType.BRANCH_DEACTIVATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.BRANCH,
-                updatedBranch.getId(),
-                updatedBranch.getId(),
-                "Branch deactivated successfully",
-                oldValues,
-                buildBranchAuditSnapshot(updatedBranch)
-        );
 
         return mapToResponse(updatedBranch, "Branch deactivated successfully");
     }

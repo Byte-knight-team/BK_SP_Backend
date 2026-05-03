@@ -1,8 +1,8 @@
 package com.ByteKnights.com.resturarent_system.service;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.RoleSummaryResponse;
 import com.ByteKnights.com.resturarent_system.dto.UpdateRoleRequest;
-import org.springframework.security.access.AccessDeniedException;
 import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
 import com.ByteKnights.com.resturarent_system.entity.AuditModule;
 import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
@@ -15,21 +15,21 @@ import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.GrantedAuthority;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 
 @Service
 public class RoleService {
@@ -39,6 +39,10 @@ public class RoleService {
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
 
+    /*
+     * Core roles are protected system roles.
+     * They cannot be deleted, and their names cannot be changed.
+     */
     private static final Set<String> CORE_ROLES = Set.of(
             "SUPER_ADMIN",
             "ADMIN",
@@ -47,6 +51,15 @@ public class RoleService {
             "RECEPTIONIST",
             "DELIVERY",
             "CUSTOMER");
+
+    /*
+     * Roles that ADMIN should not receive from GET /api/admin/roles.
+     * ADMIN only needs lower branch-level roles for staff create/edit.
+     */
+    private static final Set<String> ADMIN_HIDDEN_ROLE_NAMES = Set.of(
+            "CUSTOMER",
+            "SUPER_ADMIN",
+            "ADMIN");
 
     @Autowired
     public RoleService(RoleRepository roleRepository,
@@ -59,6 +72,10 @@ public class RoleService {
         this.auditLogService = auditLogService;
     }
 
+    /*
+     * Updates the permissions assigned to a role.
+     * Manual audit is used because old and new permission lists are important.
+     */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Role assignPermissionsToRole(Long roleId, Set<String> permissionNames) {
         Role role = roleRepository.findById(roleId)
@@ -117,6 +134,11 @@ public class RoleService {
         return perms;
     }
 
+    /*
+     * Creates a new custom role.
+     * AOP handles the basic audit log because this is a simple create action.
+     */
+    @Auditable(module = AuditModule.RBAC, eventType = AuditEventType.ROLE_CREATED, targetType = AuditTargetType.ROLE, description = "Role created successfully", captureResultAsNewValue = false)
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Role createRole(String name, String description, BigDecimal baseSalary) {
         String normalizedName = normalizeRoleName(name);
@@ -128,41 +150,16 @@ public class RoleService {
         Role role = Role.builder()
                 .name(normalizedName)
                 .description(description == null ? null : description.trim())
-
-                /*
-                 * New roles can have a default salary.
-                 * If no salary is provided, it becomes 0.00.
-                 */
-                .baseSalary(normalizeSalary(baseSalary))
+                .baseSalary(normalizeSalary(baseSalary)) // Default salary for future staff with this role.
                 .build();
 
-        Role savedRole = roleRepository.save(role);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.RBAC,
-                AuditEventType.ROLE_CREATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.ROLE,
-                savedRole.getId(),
-                null,
-                "Role created successfully",
-                null,
-                buildRoleAuditSnapshot(savedRole));
-
-        return savedRole;
+        return roleRepository.save(role);
     }
 
     /*
      * Returns role summaries.
-     * 
-     * SUPER_ADMIN:
-     * - Can see all roles because SUPER_ADMIN manages RBAC.
-     * 
-     * ADMIN:
-     * - Can only see branch-level assignable roles.
-     * - ADMIN should not receive CUSTOMER, SUPER_ADMIN, or ADMIN.
-     * - This is used by Create Staff / Edit Staff dropdown.
+     * SUPER_ADMIN can see all roles.
+     * ADMIN can only see branch-level assignable roles.
      */
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public List<RoleSummaryResponse> getAllRoleSummaries() {
@@ -173,17 +170,10 @@ public class RoleService {
                 .filter(role -> {
                     String roleName = normalizeRoleNameForAccessCheck(role.getName());
 
-                    /*
-                     * ADMIN can only see lower branch-level roles.
-                     * This keeps SUPER_ADMIN, ADMIN, and CUSTOMER hidden from ADMIN response.
-                     */
                     if ("ADMIN".equals(currentUserRole)) {
                         return !ADMIN_HIDDEN_ROLE_NAMES.contains(roleName);
                     }
 
-                    /*
-                     * SUPER_ADMIN can see all roles.
-                     */
                     return true;
                 })
                 .sorted((role1, role2) -> role1.getName().compareToIgnoreCase(role2.getName()))
@@ -196,9 +186,6 @@ public class RoleService {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
-        /*
-         * ADMIN cannot access SUPER_ADMIN, ADMIN, CUSTOMER
-         */
         String currentUserRole = getCurrentAuthenticatedRoleName();
         String requestedRoleName = normalizeRoleNameForAccessCheck(role.getName());
 
@@ -209,6 +196,10 @@ public class RoleService {
         return mapToRoleSummary(role);
     }
 
+    /*
+     * Updates role details.
+     * Manual audit is used because before/after values are useful here.
+     */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Role updateRole(Long roleId, UpdateRoleRequest request) {
         Role role = roleRepository.findById(roleId)
@@ -219,6 +210,10 @@ public class RoleService {
         String currentRoleName = role.getName();
         boolean isCoreRole = CORE_ROLES.contains(currentRoleName);
 
+        /*
+         * Update role name only if a new value is provided.
+         * Core roles can be edited, but they cannot be renamed.
+         */
         if (request.getName() != null && !request.getName().trim().isEmpty()) {
             String normalizedNewName = normalizeRoleName(request.getName());
 
@@ -241,10 +236,7 @@ public class RoleService {
 
         /*
          * Update the default salary for this role.
-         * 
-         * Important:
          * This does not automatically update existing staff salaries.
-         * Existing staff keep their current Staff.salary unless edited manually.
          */
         if (request.getBaseSalary() != null) {
             role.setBaseSalary(normalizeSalary(request.getBaseSalary()));
@@ -267,6 +259,12 @@ public class RoleService {
         return savedRole;
     }
 
+    /*
+     * Deletes a custom role only if it is not a core role
+     * and is not assigned to any users.
+     * Manual audit is kept because this method returns void,
+     * so AOP cannot capture targetId from the result.
+     */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public void deleteRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
@@ -298,21 +296,8 @@ public class RoleService {
     }
 
     /*
-     * Roles that ADMIN should not receive from GET /api/admin/roles.
-     * 
-     * ADMIN only needs lower branch-level roles for staff create/edit.
-     */
-    private static final Set<String> ADMIN_HIDDEN_ROLE_NAMES = Set.of(
-            "CUSTOMER",
-            "SUPER_ADMIN",
-            "ADMIN");
-
-    /*
-     * Reads the current logged-in user's role from Spring Security.
-     * 
-     * We use authorities because @PreAuthorize already works from authorities like:
-     * ROLE_SUPER_ADMIN
-     * ROLE_ADMIN
+     * Reads the current logged-in user's role from Spring Security authorities.
+     * Example authority: ROLE_SUPER_ADMIN.
      */
     private String getCurrentAuthenticatedRoleName() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -332,8 +317,6 @@ public class RoleService {
 
     /*
      * Normalizes role names for safe comparison.
-     * 
-     * Example:
      * " admin " -> "ADMIN"
      */
     private String normalizeRoleNameForAccessCheck(String roleName) {
@@ -354,11 +337,7 @@ public class RoleService {
                 .description(role.getDescription())
                 .permissionCount(permissionCount)
                 .activeUserCount(activeUserCount)
-
-                /*
-                 * Return salary to frontend so Roles page can show/edit it.
-                 */
-                .baseSalary(role.getBaseSalary())
+                .baseSalary(role.getBaseSalary()) // Returned so frontend can show/edit role default salary.
                 .build();
     }
 
@@ -366,9 +345,13 @@ public class RoleService {
         if (name == null || name.trim().isEmpty()) {
             throw new RuntimeException("Role name is required");
         }
+
         return name.trim().toUpperCase();
     }
 
+    /*
+     * Snapshot is used by manual audit logs to store old/new role state.
+     */
     private Map<String, Object> buildRoleAuditSnapshot(Role role) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("roleId", role.getId());
@@ -396,11 +379,8 @@ public class RoleService {
 
     /*
      * Salary validation helper.
-     * 
-     * Rules:
-     * - Null salary becomes 0.00.
-     * - Negative salary is not allowed.
-     * - Salary is stored with 2 decimal places.
+     * Null salary becomes 0.00, negative salary is rejected,
+     * and valid salary is stored with 2 decimal places.
      */
     private BigDecimal normalizeSalary(BigDecimal salary) {
         if (salary == null) {

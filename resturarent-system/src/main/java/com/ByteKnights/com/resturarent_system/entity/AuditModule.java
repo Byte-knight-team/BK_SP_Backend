@@ -5,5 +5,15 @@ public enum AuditModule {
     STAFF,
     RBAC,
     BRANCH,
-    CONFIG
+    CONFIG,
+    MENU,
+    TABLE,
+    QR,
+    QR_SESSION,
+    ORDER,
+    PAYMENT,
+    KITCHEN,
+    INVENTORY,
+    DELIVERY,
+    REPORT
 }
