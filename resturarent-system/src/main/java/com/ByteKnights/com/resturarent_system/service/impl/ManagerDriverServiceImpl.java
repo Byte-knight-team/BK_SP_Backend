@@ -34,8 +34,16 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         List<Staff> riders = staffRepository.findByBranchIdAndUserRoleName(finalBranchId, "DELIVERY");
 
         // 2. Fetch Dispatchable Orders (COMPLETED by kitchen, ready for dispatch)
-        List<Order> dispatchableOrders = orderRepository.findByBranchIdAndOrderTypeAndStatus(
+        List<Order> allCompleted = orderRepository.findByBranchIdAndOrderTypeAndStatus(
                 finalBranchId, OrderType.ONLINE_DELIVERY, OrderStatus.COMPLETED);
+
+        // Filter out orders that already have a delivery assignment
+        List<Order> dispatchableOrders = allCompleted.stream()
+                .filter(order -> {
+                    java.util.Optional<Delivery> existing = deliveryRepository.findByOrder(order);
+                    return existing.isEmpty();
+                })
+                .collect(Collectors.toList());
 
         // 3. Map Riders and calculate metrics
         List<DeliveryStatus> activeStatuses = Arrays.asList(DeliveryStatus.ASSIGNED, DeliveryStatus.OUT_FOR_DELIVERY);
@@ -101,6 +109,20 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                         .build())
                 .collect(Collectors.toList());
 
+        // 5. Delivery History (DELIVERED and CANCELLED)
+        java.time.format.DateTimeFormatter historyFormatter = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm");
+        List<Delivery> historyDeliveries = deliveryRepository.findDeliveryHistoryByBranchId(
+                finalBranchId, Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED));
+        
+        List<ManagerDriverSummaryDTO.DeliveryHistoryDTO> historyDTOs = historyDeliveries.stream()
+                .map(d -> ManagerDriverSummaryDTO.DeliveryHistoryDTO.builder()
+                        .orderId(d.getOrder().getOrderNumber() != null ? d.getOrder().getOrderNumber() : "ORD-" + d.getOrder().getId())
+                        .deliveryStatus(d.getDeliveryStatus().name())
+                        .driverName(d.getDeliveryStaff().getFirstName() + " " + d.getDeliveryStaff().getLastName())
+                        .completedAt(d.getDeliveredAt() != null ? d.getDeliveredAt().format(historyFormatter) : "N/A")
+                        .build())
+                .collect(Collectors.toList());
+
         return ManagerDriverSummaryDTO.builder()
                 .driversOnline(driversOnline)
                 .available(available)
@@ -108,6 +130,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 .pendingDispatch(orderDTOs.size())
                 .dispatchOrders(orderDTOs)
                 .drivers(driverDTOs)
+                .deliveryHistory(historyDTOs)
                 .build();
     }
 
