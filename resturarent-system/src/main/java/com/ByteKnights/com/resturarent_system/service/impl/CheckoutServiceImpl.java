@@ -45,10 +45,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutCalculateResponse calculateOrderTotals(String userIdentifier, CheckoutCalculateRequest request) {
         return buildReceiptMath(userIdentifier, request);
     }
-
-    // ========================================================================
     // THE CORE MATH ENGINE (THE HELPER)
-    // ========================================================================
     private CheckoutCalculateResponse buildReceiptMath(String userIdentifier, CheckoutCalculateRequest request) {
 
         // 1. Fetch Configs (500 Internal Server Error if these are missing, as the
