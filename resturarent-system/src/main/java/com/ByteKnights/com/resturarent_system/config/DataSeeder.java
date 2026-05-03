@@ -102,6 +102,21 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege updateRestaurantTable = createPrivilege("UPDATE_RESTAURANT_TABLE");
                 Privilege deleteRestaurantTable = createPrivilege("DELETE_RESTAURANT_TABLE");
 
+                // Kitchen
+                Privilege kitchenViewStats = createPrivilege("KITCHEN_VIEW_STATS");
+                Privilege kitchenOrderView = createPrivilege("KITCHEN_ORDER_VIEW");
+                Privilege kitchenOrderUpdate = createPrivilege("KITCHEN_ORDER_UPDATE");
+                Privilege kitchenOrderAssign = createPrivilege("KITCHEN_ORDER_ASSIGN");
+                Privilege kitchenInventoryView = createPrivilege("KITCHEN_INVENTORY_VIEW");
+                Privilege kitchenInventoryRequest = createPrivilege("KITCHEN_INVENTORY_REQUEST");
+                Privilege kitchenInventoryUpdate = createPrivilege("KITCHEN_INVENTORY_UPDATE");
+                Privilege kitchenChefManage = createPrivilege("KITCHEN_CHEF_MANAGE");
+                Privilege kitchenAlertCreate = createPrivilege("KITCHEN_ALERT_CREATE");
+                Privilege kitchenAlertView = createPrivilege("KITCHEN_ALERT_VIEW");
+                Privilege kitchenAlertResolve = createPrivilege("KITCHEN_ALERT_RESOLVE");
+
+                // RECEPTIONIST
+
                 /*
                  * All known system privileges.
                  *
@@ -136,7 +151,18 @@ public class DataSeeder implements CommandLineRunner {
                                 viewRestaurantTable,
                                 viewRestaurantTableById,
                                 updateRestaurantTable,
-                                deleteRestaurantTable);
+                                deleteRestaurantTable,
+                                kitchenViewStats,
+                                kitchenOrderView,
+                                kitchenOrderUpdate,
+                                kitchenOrderAssign,
+                                kitchenInventoryView,
+                                kitchenInventoryRequest,
+                                kitchenInventoryUpdate,
+                                kitchenChefManage,
+                                kitchenAlertCreate,
+                                kitchenAlertView,
+                                kitchenAlertResolve);
 
                 /*
                  * For normal roles, default permissions are added ONLY when the role is first
@@ -176,8 +202,17 @@ public class DataSeeder implements CommandLineRunner {
 
                 createRoleWithDefaultPermissions("CHEF", Set.of(
                                 manageMenu,
-                                updateOrderStatus,
-                                viewOrders));
+                                kitchenViewStats,
+                                kitchenOrderView,
+                                kitchenOrderUpdate,
+                                kitchenOrderAssign,
+                                kitchenInventoryView,
+                                kitchenInventoryRequest,
+                                kitchenInventoryUpdate,
+                                kitchenChefManage,
+                                kitchenAlertCreate,
+                                kitchenAlertView,
+                                kitchenAlertResolve));
 
                 createRoleWithDefaultPermissions("RECEPTIONIST", Set.of(
                                 createOrders,

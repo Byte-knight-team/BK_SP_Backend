@@ -1,8 +1,10 @@
 package com.ByteKnights.com.resturarent_system.service;
 
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateAlertRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
+import com.ByteKnights.com.resturarent_system.entity.ChefWorkStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import jakarta.validation.Valid;
 
@@ -32,8 +34,6 @@ public interface KitchenService {
 
     void assignChefToMeal(Long itemId, Long chefId);
 
-    List<ChefCheckInDTO> getLineChefsForCheckIn(String name);
-
     void checkInChef(Long chefId);
 
     void checkOutChef(Long chefId);
@@ -43,4 +43,14 @@ public interface KitchenService {
     void startMeal(Long itemId);
 
     MealCompletionResponseDTO completeMeal(Long itemId);
+
+    List<ChefDetailsDTO> getChefDetailsToday(String name);
+
+    void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus);
+
+    void createKitchenAlert(@Valid CreateAlertRequestDTO requestDTO, String name);
+
+    List<ActiveAlertDTO> getActiveAlerts(String name);
+
+    void resolveAlert(Long id, String name);
 }

@@ -1,10 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.AssignChefRequestDTO;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.HoldOrderRequestDTO;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
-import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.*;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.service.KitchenService;
@@ -29,7 +26,7 @@ public class KitchenController {
 
     //get kitchen dashboard stat data
     @GetMapping("/stats")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
     public ResponseEntity<StandardResponse> getKitchenDashboardStats() {
         KitchenDashboardStatsDTO stats = kitchenService.getKitchenDashboardStats();
 
@@ -41,7 +38,7 @@ public class KitchenController {
 
     //get most popular meals data
     @GetMapping("/popular-meals")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
     public ResponseEntity<StandardResponse> getMostPopularMeals() {
         List<PopularMealDTO> popularMeals = kitchenService.getMostPopularMealsInLast7Days();
         return new ResponseEntity<>(
@@ -52,7 +49,7 @@ public class KitchenController {
 
     //get peak hours data
     @GetMapping("/peak-hours")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
     public ResponseEntity<StandardResponse> getPeakHours() {
         List<PeakHourDTO> peakHours = kitchenService.getPeakHoursInLast7Days();
         return new ResponseEntity<>(
@@ -63,7 +60,7 @@ public class KitchenController {
 
     //get inventory alerts data
     @GetMapping("/inventory-alerts")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_VIEW')")
     public ResponseEntity<StandardResponse> getInventoryAlerts() {
         List<InventoryDetailsDTO> alerts = kitchenService.getInventoryAlerts();
         return new ResponseEntity<>(
@@ -74,7 +71,7 @@ public class KitchenController {
 
     //get orderCard details(display all order cards - PENDING,PREPARING,COMPLETED,ON_HOLD)
     @GetMapping("/order-cards")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_VIEW')")
     public ResponseEntity<StandardResponse> getOrdersByStatus(@RequestParam OrderStatus status) {
         List<OrderCardDetailsDTO> orders = kitchenService.getOrdersByStatus(status);
         return new ResponseEntity<>(
@@ -85,7 +82,7 @@ public class KitchenController {
 
     //get all inventory details
     @GetMapping("/inventory/all")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_VIEW')")
     public ResponseEntity<StandardResponse> getAllInventory() {
         List<InventoryDetailsDTO> items = kitchenService.getAllInventoryItems();
         return new ResponseEntity<>(
@@ -97,7 +94,7 @@ public class KitchenController {
     // inventory requests submitted by Chefs.
     // one endpoint for both request types ("REFILL_STOCK", "ADD_NEW_ITEM")
     @PostMapping("/inventory/request")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_REQUEST')")
     public ResponseEntity<StandardResponse> createRequest(
             @Valid @RequestBody InventoryRequestDTO requestDTO,
             Principal principal) {
@@ -115,7 +112,7 @@ public class KitchenController {
 
     //update current item count in the inventory
     @PutMapping("/inventory/update")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_UPDATE')")
     public ResponseEntity<StandardResponse> updateInventoryStock(
 
             @Valid @RequestBody UpdateStockDTO updateDTO) {
@@ -130,7 +127,7 @@ public class KitchenController {
 
     //get all details of a specific order by order id (display in the orders page)
     @GetMapping("/order-details/{id}")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_VIEW')")
     public ResponseEntity<StandardResponse> getOrderDetails(@PathVariable Long id) {
 
         // call the service to get the specific order details
@@ -144,7 +141,7 @@ public class KitchenController {
 
     // Get Line Chefs for assign them to prepare meals
     @GetMapping("/available-chefs")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
     public ResponseEntity<StandardResponse> getAvailableChefsForAssignment(Principal principal) {
 
         // Extract email from the JWT token
@@ -160,7 +157,7 @@ public class KitchenController {
 
     // Assign a chef to a specific meal
     @PutMapping("/order-items/{itemId}/assign")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_ASSIGN')")
     public ResponseEntity<StandardResponse> assignChefToMeal(
             @PathVariable Long itemId,
             @RequestBody AssignChefRequestDTO requestDTO) {
@@ -173,23 +170,9 @@ public class KitchenController {
         );
     }
 
-    // get all the Line Chefs Who is not checked in yet for the day and display them in the check-in list of the kitchen dashboard
-    // then the chef can check in from there
-    @GetMapping("/chefs/check-in-list")
-    @PreAuthorize("hasRole('CHEF')")
-    public ResponseEntity<StandardResponse> getChefsForCheckIn(Principal principal) {
-
-        List<ChefCheckInDTO> chefList = kitchenService.getLineChefsForCheckIn(principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(200, "success", chefList),
-                HttpStatus.OK
-        );
-    }
-
-    // create an attendance record for the chef when they check in for the day from the kitchen dashboard
+    // check in a chef
     @PostMapping("/chefs/{chefId}/check-in")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
     public ResponseEntity<StandardResponse> checkInChef(@PathVariable Long chefId) {
 
         kitchenService.checkInChef(chefId);
@@ -202,7 +185,7 @@ public class KitchenController {
 
     // check out a chef
     @PostMapping("/chefs/{chefId}/check-out")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
     public ResponseEntity<StandardResponse> checkOutChef(@PathVariable Long chefId) {
 
         kitchenService.checkOutChef(chefId);
@@ -213,9 +196,37 @@ public class KitchenController {
         );
     }
 
+    // get all details of all line chefs in the branch
+    @GetMapping("/chefs/today-details")
+    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
+    public ResponseEntity<StandardResponse> getChefDetailsToday(Principal principal) {
+
+        List<ChefDetailsDTO> chefs = kitchenService.getChefDetailsToday(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", chefs),
+                HttpStatus.OK
+        );
+    }
+
+    // update the work status
+    @PutMapping("/chefs/{chefId}/work-status")
+    @PreAuthorize("hasAuthority('KITCHEN_CHEF_MANAGE')")
+    public ResponseEntity<StandardResponse> updateChefWorkStatus(
+            @PathVariable Long chefId,
+            @RequestBody UpdateWorkStatusDTO request) {
+
+        kitchenService.updateChefWorkStatus(chefId, request.getNewStatus());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Chef status updated to " + request.getNewStatus(), null),
+                HttpStatus.OK
+        );
+    }
+
     // hold a pending order.
     @PutMapping("/orders/{orderId}/hold")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_UPDATE')")
     public ResponseEntity<StandardResponse> holdOrder(
             @PathVariable Long orderId,
             @RequestBody HoldOrderRequestDTO requestDTO) {
@@ -231,7 +242,7 @@ public class KitchenController {
     // update the status of a specific meal item to "PREPARING" when the chef starts preparing it
     // at the same time the order status will update as PREPARING and chef working status becomes COOKING
     @PutMapping("/order-items/{itemId}/start")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_UPDATE')")
     public ResponseEntity<StandardResponse> startMeal(@PathVariable Long itemId) {
 
         kitchenService.startMeal(itemId);
@@ -244,7 +255,7 @@ public class KitchenController {
 
     // update meal status as completed and return current order status
     @PutMapping("/order-items/{itemId}/complete")
-    @PreAuthorize("hasRole('CHEF')")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_UPDATE')")
     public ResponseEntity<StandardResponse> completeMeal(@PathVariable Long itemId) {
 
         MealCompletionResponseDTO orderStats = kitchenService.completeMeal(itemId);
@@ -254,4 +265,49 @@ public class KitchenController {
                 HttpStatus.OK
         );
     }
+
+    // create a kitchen alert for the receptionist
+    @PostMapping("/alerts")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_CREATE')") // Or whatever authority you use
+    public ResponseEntity<StandardResponse> createKitchenAlert(
+            @Valid @RequestBody CreateAlertRequestDTO requestDTO,
+            Principal principal) {
+
+        kitchenService.createKitchenAlert(requestDTO, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(201, "Alert broadcasted successfully!", null),
+                HttpStatus.CREATED
+        );
+    }
+
+    // get all active kitchen alerts
+    @GetMapping("/alerts")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_VIEW')")
+    public ResponseEntity<StandardResponse> getActiveAlerts(Principal principal) {
+
+        List<ActiveAlertDTO> alerts = kitchenService.getActiveAlerts(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", alerts),
+                HttpStatus.OK
+        );
+    }
+
+    @PutMapping("/alerts/{id}/resolve")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_RESOLVE')")
+    public ResponseEntity<StandardResponse> resolveAlert(
+            @PathVariable Long id,
+            Principal principal) {
+
+        kitchenService.resolveAlert(id, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Alert marked as resolved", null),
+                HttpStatus.OK
+        );
+    }
+
+
+
 }
