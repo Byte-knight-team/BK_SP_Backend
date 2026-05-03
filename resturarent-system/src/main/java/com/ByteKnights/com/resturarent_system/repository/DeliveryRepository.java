@@ -26,4 +26,9 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     List<Delivery> findByBranchIdAndStatusIn(
             @Param("branchId") Long branchId, 
             @Param("statuses") Collection<DeliveryStatus> statuses);
+
+    @Query("SELECT d FROM Delivery d JOIN FETCH d.order JOIN FETCH d.deliveryStaff WHERE d.order.branch.id = :branchId AND d.deliveryStatus IN :statuses ORDER BY d.deliveredAt DESC")
+    List<Delivery> findDeliveryHistoryByBranchId(
+            @Param("branchId") Long branchId,
+            @Param("statuses") Collection<DeliveryStatus> statuses);
 }
