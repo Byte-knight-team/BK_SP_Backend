@@ -19,6 +19,7 @@ public class ManagerDriverSummaryDTO {
     
     private List<DispatchOrderDTO> dispatchOrders;
     private List<DriverStatusDTO> drivers;
+    private List<DeliveryHistoryDTO> deliveryHistory;
 
     @Data
     @Builder
@@ -54,5 +55,16 @@ public class ManagerDriverSummaryDTO {
         private String orderId;
         private String eta;
         private String assignedTime;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeliveryHistoryDTO {
+        private String orderId;
+        private String deliveryStatus;
+        private String driverName;
+        private String completedAt;
     }
 }
