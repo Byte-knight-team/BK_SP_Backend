@@ -47,11 +47,17 @@ public class RestaurantTable {
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
+    @Builder.Default
+    @Column(name = "status_updated_at")
+    private LocalDateTime statusUpdatedAt = LocalDateTime.now();
+
+
     /**
      * Sets creation timestamp when a row is first persisted.
      */
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+        this.statusUpdatedAt = LocalDateTime.now(); // Set initial status time
     }
 }
