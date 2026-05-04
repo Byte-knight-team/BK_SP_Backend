@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.entity.Delivery;
 import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
+import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
     private final DeliveryRepository deliveryRepository;
+    private final OrderRepository orderRepository;
     private final StaffRepository staffRepository;
 
     @Override
@@ -105,8 +107,10 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         delivery.setDeliveryStatus(status);
         if (status == DeliveryStatus.DELIVERED) {
             delivery.setDeliveredAt(LocalDateTime.now());
-            // Set order to SERVED once the customer has received it
-            delivery.getOrder().updateStatus(OrderStatus.SERVED);
+            // Explicitly save the Order status to SERVED via OrderRepository,
+            // because the Delivery -> Order relationship has no cascade.
+            delivery.getOrder().setStatus(OrderStatus.SERVED);
+            orderRepository.save(delivery.getOrder());
         }
         
         deliveryRepository.save(delivery);
