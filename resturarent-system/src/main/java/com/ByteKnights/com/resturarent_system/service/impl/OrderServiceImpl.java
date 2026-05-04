@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.customer.PaymentUpdate
 import com.ByteKnights.com.resturarent_system.dto.request.customer.PlaceOrderRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CheckoutCalculateResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.BranchDetailResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerOrdersPageResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderPlacementResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderResponse;
 import com.ByteKnights.com.resturarent_system.entity.*;
@@ -17,6 +18,9 @@ import com.ByteKnights.com.resturarent_system.service.QrSessionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -295,6 +299,11 @@ public class OrderServiceImpl implements OrderService {
 
         @Override
         public List<OrderResponse> getCustomerOrders(String userIdentifier, String orderTypeFilter, Boolean isActive) {
+                return getCustomerOrdersPage(userIdentifier, orderTypeFilter, isActive, 0, Integer.MAX_VALUE).getOrders();
+        }
+
+        @Override
+        public CustomerOrdersPageResponse getCustomerOrdersPage(String userIdentifier, String orderTypeFilter, Boolean isActive, int page, int size) {
                 Customer customer = customerRepository.findByUserPhone(userIdentifier)
                         .orElseGet(() -> customerRepository.findByUserEmail(userIdentifier)
                                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found")));
@@ -307,19 +316,35 @@ public class OrderServiceImpl implements OrderService {
                                 // Ignore invalid type
                         }
                 }
+
+                int safePage = Math.max(page, 0);
+                int safeSize = Math.max(size, 1);
+                PageRequest pageRequest = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
                 //get orders without type filter
                 if (parsedType == null) {
-                        return orderRepository.findFilteredOrdersWithoutType(customer.getId(), isActive)
-                                .stream()
-                                .map(this::mapToOrderResponse)
-                                .collect(Collectors.toList());
+                        Page<Order> orderPage = orderRepository.findFilteredOrdersWithoutType(customer.getId(), isActive, pageRequest);
+                        return buildCustomerOrdersPage(orderPage, safePage, safeSize);
                 //get orders with type filter
                 } else {
-                        return orderRepository.findFilteredOrders(customer.getId(), parsedType, isActive)
-                                .stream()
-                                .map(this::mapToOrderResponse)
-                                .collect(Collectors.toList());
+                        Page<Order> orderPage = orderRepository.findFilteredOrders(customer.getId(), parsedType, isActive, pageRequest);
+                        return buildCustomerOrdersPage(orderPage, safePage, safeSize);
                 }
+        }
+
+        private CustomerOrdersPageResponse buildCustomerOrdersPage(Page<Order> orderPage, int page, int size) {
+                List<OrderResponse> orders = orderPage.getContent().stream()
+                        .map(this::mapToOrderResponse)
+                        .collect(Collectors.toList());
+
+                return CustomerOrdersPageResponse.builder()
+                        .orders(orders)
+                        .page(page)
+                        .size(size)
+                        .totalElements(orderPage.getTotalElements())
+                        .totalPages(orderPage.getTotalPages())
+                        .last(orderPage.isLast())
+                        .build();
         }
 
         @Override
