@@ -110,29 +110,42 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     List<Order> findByStatus(OrderStatus status, Sort sort);
 
-    List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
+    List<Order> findByBranchIdAndStatusAndStatusUpdatedAtAfter(Long branchId, OrderStatus status, LocalDateTime startOfToday, Sort sort);
 
-    long countByStatusAndCreatedAtAfter(OrderStatus orderStatus, LocalDateTime startOfToday);
+    long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus, LocalDateTime startOfToday);
 
+    Optional<Order> findByIdAndBranchId(Long orderId, Long branchId);
+
+    List<Order> findByTableIdAndStatusNotIn(Long id, List<OrderStatus> cancelled);
 
     // --- Kitchen Queries START ---
+
 
     // 1.kitchen dashboard stats
 
     @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
-            "FROM orders WHERE status = 'COMPLETED' " +
+            "FROM orders WHERE branch_id = :branchId " + //breach filter
+            "AND status = 'COMPLETED' " +
             "AND created_at >= :startOfToday " +
             "AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL",
             nativeQuery = true)
-    Double getAveragePreparationTimeToday(@Param("startOfToday") LocalDateTime startOfToday);
+    Double getAveragePreparationTimeTodayByBranch(
+            @Param("branchId") Long branchId,
+            @Param("startOfToday") LocalDateTime startOfToday
+    );
+
 
 
     // 2.Peak hours graph data based on order approval time
+    // Just adding the NOT IN line to your existing code!
     @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
             "FROM orders " +
-            "WHERE approved_at >= NOW() - INTERVAL 7 DAY " +
+            "WHERE branch_id = :branchId " +
+            "AND status NOT IN ('CANCELLED', 'REJECTED') " + // Exclude cancelled and rejected orders(extra safe)
+            "AND approved_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY hr", nativeQuery = true)
-    List<Object[]> findOrderCountByHour();
+    List<Object[]> findOrderCountByHourByBranch(@Param("branchId") Long branchId);
+
 
 
     // --- Kitchen Queries END ---

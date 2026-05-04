@@ -33,18 +33,26 @@ public class KitchenServiceImpl implements KitchenService {
 
     // kitchen dashboard stat
     @Override
-    public KitchenDashboardStatsDTO getKitchenDashboardStats() {
-        // 1. Define "Today" (Midnight of today)
+    public KitchenDashboardStatsDTO getKitchenDashboardStats(String userEmail) {
+
+        // Get Branch ID
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Define "Today" (Midnight of today)
         LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
 
-        // 2. Fetch counts ONLY for today
-        long pending = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.PENDING, startOfToday);
-        long preparing = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.PREPARING, startOfToday);
-        long completed = orderRepository.countByStatusAndCreatedAtAfter(OrderStatus.COMPLETED, startOfToday);
+        // Fetch counts ONLY for this branch and ONLY for today
+        long pending = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PENDING, startOfToday);
+        long preparing = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PREPARING, startOfToday);
+        long completed = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.COMPLETED, startOfToday);
 
-        // 3. Fetch Average Time ONLY for today
-        Double avgTime = orderRepository.getAveragePreparationTimeToday(startOfToday);
-
+        // Fetch Average Time ONLY for this branch and ONLY for today
+        Double avgTime = orderRepository.getAveragePreparationTimeTodayByBranch(branchId, startOfToday);
         return new KitchenDashboardStatsDTO(
                 pending,
                 preparing,
@@ -53,12 +61,20 @@ public class KitchenServiceImpl implements KitchenService {
         );
     }
 
-
     // most popular meals
     @Override
-    public List<PopularMealDTO> getMostPopularMealsInLast7Days() {
-        List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7Days();
-        Long totalSold = orderItemRepository.getTotalItemsSoldInLast7Days();
+    public List<PopularMealDTO> getMostPopularMealsInLast7Days(String userEmail) {
+
+        // identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7DaysByBranch(branchId);
+        Long totalSold = orderItemRepository.getTotalItemsSoldInLast7DaysByBranch(branchId);
 
         // avoid division by zero
         // return empty list if no meals sold in last 7 days
@@ -94,7 +110,15 @@ public class KitchenServiceImpl implements KitchenService {
 
     // peak hours
     @Override
-    public List<PeakHourDTO> getPeakHoursInLast7Days() {
+    public List<PeakHourDTO> getPeakHoursInLast7Days(String userEmail) {
+
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
         // initialize the map with zero counts for all time slots
         Map<String, Integer> peakHourMap = new LinkedHashMap<>();
         peakHourMap.put("8AM-10AM", 0);
@@ -106,7 +130,7 @@ public class KitchenServiceImpl implements KitchenService {
         peakHourMap.put("8PM-10PM", 0);
 
         // fetch raw data from the database (Hour, Count)
-        List<Object[]> rawData = orderRepository.findOrderCountByHour();
+        List<Object[]> rawData = orderRepository.findOrderCountByHourByBranch(branchId);
 
         // map the count from the database to the corresponding time bucket (slot)
         for (Object[] row : rawData) {
@@ -134,10 +158,20 @@ public class KitchenServiceImpl implements KitchenService {
         return dtos;
     }
 
+
     // inventory alerts
     @Override
-    public List<InventoryDetailsDTO> getInventoryAlerts() {
-        List<InventoryItem> items = inventoryItemRepository.findAll(); //no need to write native query
+    public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
+
+        // identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);  //no need to write native query
+
         List<InventoryDetailsDTO> alerts = new ArrayList<>();
 
         for (InventoryItem item : items) {
@@ -148,7 +182,6 @@ public class KitchenServiceImpl implements KitchenService {
             // send to the dashboard if only current amount <= Reorder level
             if (current <= reorder) {
                 String level = (current <= reorder / 2) ? "CRITICAL" : "LOW";
-
                 // Percentage calculation
                 double percentage = (max > 0) ? (current / max) * 100 : 0;
 
@@ -166,9 +199,17 @@ public class KitchenServiceImpl implements KitchenService {
         return alerts;
     }
 
+
     //get orderCard details
     @Override
-    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status) {
+    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) { // Added email parameter
+
+        // Added logic to identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
 
         // Define the time range: Only fetch orders starting from today's midnight
         LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
@@ -179,7 +220,7 @@ public class KitchenServiceImpl implements KitchenService {
                 : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
         // Retrieve sorted orders from today
-        List<Order> orders = orderRepository.findByStatusAndStatusUpdatedAtAfter(status, startOfToday, sort);
+        List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(branchId, status, startOfToday, sort);
 
         // Initialize a list to hold the DTOs for the frontend
         List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
@@ -209,10 +250,20 @@ public class KitchenServiceImpl implements KitchenService {
         return orderCardDetailsDTOS;
     }
 
+
     //get all inventory details
     @Override
-    public List<InventoryDetailsDTO> getAllInventoryItems() {
-        List<InventoryItem> items = inventoryItemRepository.findAll();
+    public List<InventoryDetailsDTO> getAllInventoryItems(String userEmail) {
+
+        // Find the logged-in user and their branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Fetch ONLY items for this specific branch
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(staff.getBranch().getId());
+
         // can be used same InventoryDetailsDTO for this
         List<InventoryDetailsDTO> dtoList = new ArrayList<>();
 
@@ -271,34 +322,60 @@ public class KitchenServiceImpl implements KitchenService {
         chefRequestRepository.save(chefRequest);
     }
 
+
     //update item count in the inventory
     @Override
-    @Transactional // Important when updating the database!
-    public void updateInventoryStock(UpdateStockDTO updateDTO) {
+    @Transactional // Important when updating the database
+    public void updateInventoryStock(UpdateStockDTO updateDTO, String userEmail) {
 
-        // find the inventory item by its name
-        InventoryItem item = inventoryItemRepository.findByName(updateDTO.getItemName())
-                .orElseThrow(() -> new RuntimeException("Inventory item not found: " + updateDTO.getItemName()));
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // find the inventory item by its name AND branchId
+        InventoryItem item = inventoryItemRepository.findByNameAndBranchId(updateDTO.getItemName(), branchId)
+                .orElseThrow(() -> new RuntimeException("Inventory item not found in your branch: " + updateDTO.getItemName()));
+
         // update the quantity
         item.setQuantity(updateDTO.getNewQuantity());
-        // 3. save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
+
+        // save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
         inventoryItemRepository.save(item);
     }
 
+
     //get order details
     @Override
-    public OrderDetailsDTO getOrderDetails(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+    public OrderDetailsDTO getOrderDetails(Long orderId, String userEmail) {
 
-        List<OrderItemDetailsDTO> itemDTOs = order.getItems().stream()
-                .map(item -> new OrderItemDetailsDTO(
-                        item.getId(),
-                        item.getItemName(),
-                        item.getQuantity(),
-                        item.getStatus().toString(),
-                        item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
-                )).toList();
+        // Identify the branch of the logged-in user
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Find the order ONLY if it belongs to this branch
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
+
+        List<OrderItemDetailsDTO> itemDTOs = new ArrayList<>(); // Create a new list
+
+        for (OrderItem item : order.getItems()) { // Loop through each item in the order
+            // Create the DTO manually for each item
+            OrderItemDetailsDTO dto = new OrderItemDetailsDTO(
+                    item.getId(),
+                    item.getItemName(),
+                    item.getQuantity(),
+                    item.getStatus().toString(),
+                    item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
+            );
+            itemDTOs.add(dto); // Add it to our list
+        }
 
         return new OrderDetailsDTO(
                 order.getId(),
@@ -310,6 +387,7 @@ public class KitchenServiceImpl implements KitchenService {
                 itemDTOs //list of items
         );
     }
+
 
     //get all available Line chefs from the same branch of the logged-in Chief Chef to assign them to prepare meals
     @Override
@@ -355,10 +433,19 @@ public class KitchenServiceImpl implements KitchenService {
         Staff chef = staffRepository.findById(chefStaffId)
                 .orElseThrow(() -> new RuntimeException("Chef not found"));
 
+        // Security Check to prevent cross-branch assignment
+        Long orderBranchId = item.getOrder().getBranch().getId();
+        Long chefBranchId = chef.getBranch().getId();
+
+        if (!orderBranchId.equals(chefBranchId)) {
+            throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
+        }
+
         // Link the chef to the meal and save
         item.setAssignedChef(chef);
         orderItemRepository.save(item);
     }
+
 
     // Get all line chefs details
     @Override
@@ -374,7 +461,7 @@ public class KitchenServiceImpl implements KitchenService {
         Long branchId = currentStaff.getBranch().getId();
 
         // Fetch all line chefs registered at this branch
-        List<Staff> lineChefs = staffRepository.findAllLineChefsByBranch(branchId);
+        List<Staff> lineChefs = staffRepository.findAllActiveLineChefsByBranch(branchId);
 
         List<ChefDetailsDTO> dtoList = new ArrayList<>();
         LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
@@ -518,10 +605,18 @@ public class KitchenServiceImpl implements KitchenService {
     // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
     @Override
     @Transactional
-    public void holdOrder(Long orderId, String holdReason) {
-        // Find the order
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+    public void holdOrder(Long orderId, String holdReason, String userEmail) {
+
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Find the order ONLY if it belongs to this branch
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
 
         // Update Order Status and Reason
         order.setStatus(OrderStatus.ON_HOLD);
@@ -536,6 +631,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Save the order (This will save the items too because of Cascade)
         orderRepository.save(order);
     }
+
 
     //update meal status, order status, and chef work status when start preparing a meal
     @Override
@@ -624,6 +720,7 @@ public class KitchenServiceImpl implements KitchenService {
         return new MealCompletionResponseDTO(order.getStatus().toString());
     }
 
+    //create a kitchen alert for the receptionist
     @Override
     @Transactional
     public void createKitchenAlert(CreateAlertRequestDTO dto, String userEmail) {
@@ -647,6 +744,7 @@ public class KitchenServiceImpl implements KitchenService {
         kitchenAlertRepository.save(alert);
     }
 
+    //display all unresolved kitchen alerts
     @Override
     public List<ActiveAlertDTO> getActiveAlerts(String userEmail) {
         // Find the logged-in user and their branch
@@ -680,6 +778,7 @@ public class KitchenServiceImpl implements KitchenService {
         return activeAlertDTOs;
     }
 
+    //resolve kitchen alerts
     @Override
     @Transactional
     public void resolveAlert(Long alertId, String userEmail) {
@@ -705,4 +804,29 @@ public class KitchenServiceImpl implements KitchenService {
 
         kitchenAlertRepository.save(alert);
     }
+
+    // get details for chef dashboard stats (total chefs, on-duty, off-duty, available)
+    @Override
+    public ChefDashboardStatsDTO getChefDashboardStats(String userEmail) {
+
+        // Identify Branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        LocalDate today = LocalDate.now();
+
+        // Fetch Counts
+        long total = staffRepository.countActiveLineChefsByBranch(branchId);
+        long onDuty = chefAttendanceRepository.countChefsByAttendanceStatusToday(today, branchId, ChefAttendanceStatus.ON_DUTY);
+        long offDuty = chefAttendanceRepository.countChefsByAttendanceStatusToday(today, branchId, ChefAttendanceStatus.OFF_DUTY);
+        long available = chefAttendanceRepository.countChefsByWorkStatusToday(today, branchId, ChefWorkStatus.AVAILABLE);
+
+        return new ChefDashboardStatsDTO(total, onDuty, offDuty, available);
+    }
+
 }

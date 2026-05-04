@@ -116,6 +116,10 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege kitchenAlertResolve = createPrivilege("KITCHEN_ALERT_RESOLVE");
 
                 // RECEPTIONIST
+                Privilege receptionistTableView = createPrivilege("RECEPTIONIST_TABLE_VIEW");
+                Privilege receptionistTableUpdate = createPrivilege("RECEPTIONIST_TABLE_UPDATE");
+                Privilege receptionistReservationCreate = createPrivilege("RECEPTIONIST_RESERVATION_CREATE");
+                Privilege receptionistReservationUpdate = createPrivilege("RECEPTIONIST_RESERVATION_UPDATE");
 
                 /*
                  * All known system privileges.
@@ -162,7 +166,12 @@ public class DataSeeder implements CommandLineRunner {
                                 kitchenChefManage,
                                 kitchenAlertCreate,
                                 kitchenAlertView,
-                                kitchenAlertResolve);
+                                kitchenAlertResolve,
+                                receptionistTableView,
+                                receptionistTableUpdate,
+                                receptionistReservationCreate,
+                                receptionistReservationUpdate
+                );
 
                 /*
                  * For normal roles, default permissions are added ONLY when the role is first
@@ -215,9 +224,11 @@ public class DataSeeder implements CommandLineRunner {
                                 kitchenAlertResolve));
 
                 createRoleWithDefaultPermissions("RECEPTIONIST", Set.of(
-                                createOrders,
-                                manageReservations,
-                                viewCustomer));
+                                viewCustomer,
+                                receptionistTableView,
+                                receptionistTableUpdate,
+                                receptionistReservationCreate,
+                                receptionistReservationUpdate));
 
                 createRoleWithDefaultPermissions("DELIVERY", Set.of(
                                 updateDeliveryStatus,
