@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.DeliveryStatusService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -40,6 +41,7 @@ public class DeliveryStatusController {
      * @return 200 OK with a map containing "isOnline" boolean.
      */
     @GetMapping
+    @PreAuthorize("hasAuthority('MANAGE_DELIVERY_STATUS')")
     public ResponseEntity<?> getStatus(@AuthenticationPrincipal JwtUserPrincipal principal) {
         boolean isOnline = deliveryStatusService.getOnlineStatus(principal.getUser().getId());
         return ResponseEntity.ok(Map.of("isOnline", isOnline));
@@ -55,6 +57,7 @@ public class DeliveryStatusController {
      * @return 200 OK with the updated status.
      */
     @PostMapping("/toggle")
+    @PreAuthorize("hasAuthority('MANAGE_DELIVERY_STATUS')")
     public ResponseEntity<?> toggleStatus(
             @AuthenticationPrincipal JwtUserPrincipal principal,
             @RequestBody Map<String, Boolean> request) {

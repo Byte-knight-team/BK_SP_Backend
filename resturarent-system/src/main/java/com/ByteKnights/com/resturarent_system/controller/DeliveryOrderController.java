@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
 import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,6 +45,7 @@ public class DeliveryOrderController {
      * @return 200 OK with a list of assigned DeliveryOrderDTOs.
      */
     @GetMapping("/assigned")
+    @PreAuthorize("hasAuthority('VIEW_DELIVERY')")
     public ResponseEntity<ApiResponse<List<DeliveryOrderDTO>>> getAssignedOrders(
             @AuthenticationPrincipal JwtUserPrincipal principal) {
         
@@ -60,6 +62,7 @@ public class DeliveryOrderController {
      * @return 200 OK with the active DeliveryOrderDTO, or null if no active task exists.
      */
     @GetMapping("/active")
+    @PreAuthorize("hasAuthority('VIEW_DELIVERY')")
     public ResponseEntity<ApiResponse<DeliveryOrderDTO>> getActiveOrder(
             @AuthenticationPrincipal JwtUserPrincipal principal) {
         
@@ -78,6 +81,7 @@ public class DeliveryOrderController {
      * @return 200 OK on successful acceptance.
      */
     @PostMapping("/{orderId}/accept")
+    @PreAuthorize("hasAuthority('UPDATE_DELIVERY_STATUS')")
     public ResponseEntity<ApiResponse<Void>> acceptOrder(
             @PathVariable Long orderId,
             @AuthenticationPrincipal JwtUserPrincipal principal) {
@@ -97,6 +101,7 @@ public class DeliveryOrderController {
      * @return 200 OK on successful rejection.
      */
     @PostMapping("/{orderId}/reject")
+    @PreAuthorize("hasAuthority('UPDATE_DELIVERY_STATUS')")
     public ResponseEntity<ApiResponse<Void>> rejectOrder(
             @PathVariable Long orderId,
             @RequestBody Map<String, String> request,
@@ -118,6 +123,7 @@ public class DeliveryOrderController {
      * @return 200 OK on successful status update.
      */
     @PostMapping("/{orderId}/status")
+    @PreAuthorize("hasAuthority('UPDATE_DELIVERY_STATUS')")
     public ResponseEntity<ApiResponse<Void>> updateStatus(
             @PathVariable Long orderId,
             @RequestBody Map<String, String> request,

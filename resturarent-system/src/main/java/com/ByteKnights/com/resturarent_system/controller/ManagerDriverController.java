@@ -22,7 +22,7 @@ public class ManagerDriverController {
     private final ManagerDriverService managerDriverService;
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('MANAGE_DRIVERS')")
     public ResponseEntity<ApiResponse<ManagerDriverSummaryDTO>> getDriverSummary(
             @RequestParam(required = false) Long branchId,
             @AuthenticationPrincipal JwtUserPrincipal userDetails) {
@@ -32,7 +32,7 @@ public class ManagerDriverController {
     }
 
     @PostMapping("/assign")
-    @PreAuthorize("hasAnyRole('MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('MANAGE_DRIVERS')")
     public ResponseEntity<ApiResponse<Void>> assignDriver(
             @RequestParam Long orderId,
             @RequestParam Long driverId) {
