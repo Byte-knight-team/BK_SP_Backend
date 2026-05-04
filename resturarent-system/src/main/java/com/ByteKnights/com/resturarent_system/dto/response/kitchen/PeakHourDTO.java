@@ -9,5 +9,5 @@ import lombok.NoArgsConstructor;
 @Data
 public class PeakHourDTO {
     private String time;
-    private int mealsCount;
+    private int ordersCount;
 }

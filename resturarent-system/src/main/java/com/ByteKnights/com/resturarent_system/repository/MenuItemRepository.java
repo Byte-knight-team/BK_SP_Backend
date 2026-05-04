@@ -22,6 +22,8 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     List<MenuItem> findByStatusAndIsAvailableTrue(MenuItemStatus status);
 
+    List<MenuItem> findByBranchId(Long branchId);
+
     // Fetches items by Branch ID, ensures they are APPROVED, and currently AVAILABLE
     List<MenuItem> findByBranchIdAndStatusAndIsAvailableTrue(Long branchId, MenuItemStatus status);
 
@@ -29,6 +31,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     void deleteByBranchIdAndNameIn(Long branchId, List<String> names);
 
+    List<MenuItem> findByBranchIdAndStatus(Long targetBranchId, MenuItemStatus active);
     boolean existsByCategoryIdAndIsAvailableTrue(Long categoryId);
 
     boolean existsByCategoryId(Long categoryId);

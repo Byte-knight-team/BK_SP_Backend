@@ -52,8 +52,7 @@ public class JwtService {
             String email,
             String role,
             Long branchId,
-            String branchName
-    ) {
+            String branchName) {
         return generateToken(userId, email, role, branchId, branchName, null);
     }
 
@@ -66,8 +65,7 @@ public class JwtService {
             String role,
             Long branchId,
             String branchName,
-            String fullName
-    ) {
+            String fullName) {
         Map<String, Object> claims = new HashMap<>();
 
         claims.put("role", role);

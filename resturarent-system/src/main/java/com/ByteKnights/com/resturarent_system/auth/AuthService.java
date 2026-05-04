@@ -106,13 +106,47 @@ public class AuthService {
 
         String roleName = user.getRole() != null ? user.getRole().getName() : null;
 
+        /*
+         * Non-super-admin staff must be connected to an active branch.
+         * These failures are audited because they directly affect login access.
+         */
         if (!"SUPER_ADMIN".equals(roleName)) {
 
             if (staff == null || staff.getBranch() == null) {
+                auditLogService.logActionAsUser(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getRole() != null ? user.getRole().getName() : null,
+                        null,
+                        AuditModule.AUTH,
+                        AuditEventType.LOGIN_FAILED,
+                        AuditStatus.FAILURE,
+                        AuditSeverity.WARN,
+                        AuditTargetType.AUTH,
+                        user.getId(),
+                        "Staff login failed: branch not assigned",
+                        null,
+                        null);
+
                 throw new RuntimeException("Staff branch is not assigned");
             }
 
             if (!"ACTIVE".equals(String.valueOf(staff.getBranch().getStatus()))) {
+                auditLogService.logActionAsUser(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getRole() != null ? user.getRole().getName() : null,
+                        branchId,
+                        AuditModule.AUTH,
+                        AuditEventType.LOGIN_FAILED,
+                        AuditStatus.FAILURE,
+                        AuditSeverity.WARN,
+                        AuditTargetType.AUTH,
+                        user.getId(),
+                        "Staff login failed: branch inactive",
+                        null,
+                        null);
+
                 throw new RuntimeException("Your branch is inactive. Please contact the system administrator.");
             }
         }
@@ -127,6 +161,11 @@ public class AuthService {
             branchName = staff.getBranch().getName();
         }
 
+        /*
+         * We generate a jwt token for the user using the generateToken method of
+         * JwtService.
+         * The token is valid for 08 hours.
+         */
         String token = jwtService.generateToken(
                 user.getId(),
                 user.getEmail(),
@@ -170,6 +209,11 @@ public class AuthService {
                 .build();
     }
 
+    /*
+     * Changes password for the currently authenticated staff user.
+     * Manual audit is used so we can track passwordChanged before/after.
+     * The actual password value is never stored in audit logs.
+     */
     @Transactional
     public String changePassword(ChangePasswordRequest request) {
         Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();

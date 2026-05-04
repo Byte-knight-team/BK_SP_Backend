@@ -23,96 +23,105 @@ import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 @RequiredArgsConstructor
 public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
-    private final DeliveryRepository deliveryRepository;
-    private final OrderRepository orderRepository;
-    private final StaffRepository staffRepository;
+        private final DeliveryRepository deliveryRepository;
+        private final OrderRepository orderRepository;
+        private final StaffRepository staffRepository;
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<DeliveryOrderDTO> getAssignedOrders(Long userId) {
-        Staff staff = staffRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
+        @Override
+        @Transactional(readOnly = true)
+        public List<DeliveryOrderDTO> getAssignedOrders(Long userId) {
+                Staff staff = staffRepository.findByUserId(userId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Staff member not found for user ID: " + userId));
 
-        List<Delivery> assignments = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatus(staff.getId(), DeliveryStatus.ASSIGNED);
+                List<Delivery> assignments = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatus(staff.getId(),
+                                DeliveryStatus.ASSIGNED);
 
-        return assignments.stream().map(d -> mapToDTO(d)).collect(Collectors.toList());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<DeliveryOrderDTO> getActiveOrder(Long userId) {
-        Staff staff = staffRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
-
-        List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
-                staff.getId(), 
-                Arrays.asList(DeliveryStatus.ACCEPTED, DeliveryStatus.OUT_FOR_DELIVERY)
-        );
-
-        if (activeDeliveries.isEmpty()) {
-            return Optional.empty();
+                return assignments.stream().map(d -> mapToDTO(d)).collect(Collectors.toList());
         }
 
-        // Return the first one (assuming one active delivery at a time)
-        return Optional.of(mapToDTO(activeDeliveries.get(0)));
-    }
+        @Override
+        @Transactional(readOnly = true)
+        public Optional<DeliveryOrderDTO> getActiveOrder(Long userId) {
+                Staff staff = staffRepository.findByUserId(userId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Staff member not found for user ID: " + userId));
 
-    private DeliveryOrderDTO mapToDTO(Delivery d) {
-        return DeliveryOrderDTO.builder()
-                .id(d.getOrder().getId())
-                .orderNumber(d.getOrder().getOrderNumber() != null ? d.getOrder().getOrderNumber() : "ORD-" + d.getOrder().getId())
-                .location(d.getOrder().getDeliveryAddress())
-                .paymentType("CASH ON DELIVERY")
-                .amount(d.getOrder().getFinalAmount())
-                .status(d.getDeliveryStatus().name())
-                .build();
-    }
+                List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+                                staff.getId(),
+                                Arrays.asList(DeliveryStatus.ACCEPTED, DeliveryStatus.OUT_FOR_DELIVERY));
 
-    @Override
-    @Transactional
-    public void acceptOrder(Long orderId, Long userId) {
-        Staff staff = staffRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
+                if (activeDeliveries.isEmpty()) {
+                        return Optional.empty();
+                }
 
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Assignment not found for order ID: " + orderId));
-
-        delivery.setDeliveryStatus(DeliveryStatus.ACCEPTED);
-        deliveryRepository.save(delivery);
-    }
-
-    @Override
-    @Transactional
-    public void rejectOrder(Long orderId, Long userId, String reason) {
-        Staff staff = staffRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
-
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Assignment not found for order ID: " + orderId));
-
-        delivery.setDeliveryStatus(DeliveryStatus.CANCELLED);
-        delivery.setCancelledReason(reason);
-        deliveryRepository.save(delivery);
-    }
-
-    @Override
-    @Transactional
-    public void updateStatus(Long orderId, Long userId, DeliveryStatus status) {
-        Staff staff = staffRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Staff member not found for user ID: " + userId));
-
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Assignment not found for order ID: " + orderId));
-
-        delivery.setDeliveryStatus(status);
-        if (status == DeliveryStatus.DELIVERED) {
-            delivery.setDeliveredAt(LocalDateTime.now());
-            // Explicitly save the Order status to SERVED via OrderRepository,
-            // because the Delivery -> Order relationship has no cascade.
-            delivery.getOrder().setStatus(OrderStatus.SERVED);
-            orderRepository.save(delivery.getOrder());
+                // Return the first one (assuming one active delivery at a time)
+                return Optional.of(mapToDTO(activeDeliveries.get(0)));
         }
-        
-        deliveryRepository.save(delivery);
-    }
+
+        private DeliveryOrderDTO mapToDTO(Delivery d) {
+                return DeliveryOrderDTO.builder()
+                                .id(d.getOrder().getId())
+                                .orderNumber(d.getOrder().getOrderNumber() != null ? d.getOrder().getOrderNumber()
+                                                : "ORD-" + d.getOrder().getId())
+                                .location(d.getOrder().getDeliveryAddress())
+                                .paymentType("CASH ON DELIVERY")
+                                .amount(d.getOrder().getFinalAmount())
+                                .status(d.getDeliveryStatus().name())
+                                .build();
+        }
+
+        @Override
+        @Transactional
+        public void acceptOrder(Long orderId, Long userId) {
+                Staff staff = staffRepository.findByUserId(userId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Staff member not found for user ID: " + userId));
+
+                Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Assignment not found for order ID: " + orderId));
+
+                delivery.setDeliveryStatus(DeliveryStatus.ACCEPTED);
+                deliveryRepository.save(delivery);
+        }
+
+        @Override
+        @Transactional
+        public void rejectOrder(Long orderId, Long userId, String reason) {
+                Staff staff = staffRepository.findByUserId(userId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Staff member not found for user ID: " + userId));
+
+                Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Assignment not found for order ID: " + orderId));
+
+                delivery.setDeliveryStatus(DeliveryStatus.CANCELLED);
+                delivery.setCancelledReason(reason);
+                deliveryRepository.save(delivery);
+        }
+
+        @Override
+        @Transactional
+        public void updateStatus(Long orderId, Long userId, DeliveryStatus status) {
+                Staff staff = staffRepository.findByUserId(userId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Staff member not found for user ID: " + userId));
+
+                Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Assignment not found for order ID: " + orderId));
+
+                delivery.setDeliveryStatus(status);
+                if (status == DeliveryStatus.DELIVERED) {
+                        delivery.setDeliveredAt(LocalDateTime.now());
+                        // Explicitly save the Order status to SERVED via OrderRepository,
+                        // because the Delivery -> Order relationship has no cascade.
+                        delivery.getOrder().setStatus(OrderStatus.SERVED);
+                        orderRepository.save(delivery.getOrder());
+                }
+
+                deliveryRepository.save(delivery);
+        }
 }

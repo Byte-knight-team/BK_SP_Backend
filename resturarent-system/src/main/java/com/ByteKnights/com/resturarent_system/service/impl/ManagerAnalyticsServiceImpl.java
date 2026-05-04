@@ -34,7 +34,8 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                 // Fetch all relevant orders once to reuse for counts and peak hours
                 List<com.ByteKnights.com.resturarent_system.entity.Order> orders = orderRepository
                                 .findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
-                                                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS), start, end);
+                                                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS),
+                                                start, end);
 
                 // 1. Calculate Net Revenue (Everything that is PAID or SUCCESS)
                 BigDecimal netRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(
