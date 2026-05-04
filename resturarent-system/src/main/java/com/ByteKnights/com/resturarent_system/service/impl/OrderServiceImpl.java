@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.*;
 
@@ -288,16 +289,16 @@ public class OrderServiceImpl implements OrderService {
         }
 
         @Override
-        public java.util.List<OrderResponse> getCustomerOrders(String userIdentifier) {
+        public List<OrderResponse> getCustomerOrders(String userIdentifier) {
                 return getCustomerOrders(userIdentifier, null, null);
         }
 
         @Override
-        public java.util.List<OrderResponse> getCustomerOrders(String userIdentifier, String orderTypeFilter, Boolean isActive) {
+        public List<OrderResponse> getCustomerOrders(String userIdentifier, String orderTypeFilter, Boolean isActive) {
                 Customer customer = customerRepository.findByUserPhone(userIdentifier)
                         .orElseGet(() -> customerRepository.findByUserEmail(userIdentifier)
                                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found")));
-                
+                //check if valid type assigned
                 OrderType parsedType = null;
                 if (orderTypeFilter != null && !orderTypeFilter.isEmpty() && !orderTypeFilter.equals("ALL")) {
                         try {
@@ -306,12 +307,13 @@ public class OrderServiceImpl implements OrderService {
                                 // Ignore invalid type
                         }
                 }
-                
+                //get orders without type filter
                 if (parsedType == null) {
                         return orderRepository.findFilteredOrdersWithoutType(customer.getId(), isActive)
                                 .stream()
                                 .map(this::mapToOrderResponse)
                                 .collect(Collectors.toList());
+                //get orders with type filter
                 } else {
                         return orderRepository.findFilteredOrders(customer.getId(), parsedType, isActive)
                                 .stream()
