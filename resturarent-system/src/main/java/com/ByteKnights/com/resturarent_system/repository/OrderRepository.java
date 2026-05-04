@@ -2,13 +2,14 @@ package com.ByteKnights.com.resturarent_system.repository;
 
 import com.ByteKnights.com.resturarent_system.entity.Order;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
+import com.ByteKnights.com.resturarent_system.entity.OrderType;
+import org.springframework.data.domain.Sort;
 import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -52,10 +53,38 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         List<Order> findTop5ByOrderByCreatedAtDesc();
 
         @EntityGraph(attributePaths = "items")
-        List<Order> findAllByOrderByCreatedAtDesc();
+        List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
 
         @EntityGraph(attributePaths = "items")
-        List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
+        List<Order> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
+
+        // retrieve orders without type filter
+        @EntityGraph(attributePaths = "items")
+        @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
+                        "AND (o.orderType  IS NOT NULL) " +
+                        "AND (:isActive IS NULL OR " +
+                        "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR "
+                        +
+                        "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
+                        ") ORDER BY o.createdAt DESC")
+        List<Order> findFilteredOrdersWithoutType(@Param("customerId") Long customerId,
+                        @Param("isActive") Boolean isActive);
+
+        // retrieve orders with type filter
+        @EntityGraph(attributePaths = "items")
+        @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
+                        "AND (o.orderType = :type) " +
+                        "AND (:isActive IS NULL OR " +
+                        "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR "
+                        +
+                        "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
+                        ") ORDER BY o.createdAt DESC")
+        List<Order> findFilteredOrders(@Param("customerId") Long customerId,
+                        @Param("type") OrderType type,
+                        @Param("isActive") Boolean isActive);
+
+        @EntityGraph(attributePaths = "items")
+        Optional<Order> findByIdAndCustomerId(Long id, Long customerId);
 
         @EntityGraph(attributePaths = "items")
         Optional<Order> findOrderById(Long id);
@@ -71,6 +100,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("branchId") Long branchId,
                         @Param("start") LocalDateTime start,
                         @Param("end") LocalDateTime end);
+
+        List<Order> findByBranchIdAndStatusAndStatusUpdatedAtAfter(Long branchId, OrderStatus status,
+                        LocalDateTime startOfToday, Sort sort);
+
+        long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus,
+                        LocalDateTime startOfToday);
+
+        Optional<Order> findByIdAndBranchId(Long orderId, Long branchId);
+
+        List<Order> findByTableIdAndStatusNotIn(Long id, List<OrderStatus> cancelled);
 
         @Query("SELECT COUNT(o) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus = 'PAID' AND o.createdAt BETWEEN :start AND :end")
         long countByBranchIdAndPaidStatusAndCreatedAtBetween(
@@ -94,6 +133,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         com.ByteKnights.com.resturarent_system.entity.OrderType orderType,
                         LocalDateTime start,
                         LocalDateTime end);
+
+        // 1.kitchen dashboard stats
+
+        @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
+                        "FROM orders WHERE branch_id = :branchId " + // breach filter
+                        "AND status = 'COMPLETED' " +
+                        "AND created_at >= :startOfToday " +
+                        "AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL", nativeQuery = true)
+        Double getAveragePreparationTimeTodayByBranch(
+                        @Param("branchId") Long branchId,
+                        @Param("startOfToday") LocalDateTime startOfToday);
+
+        // 2.Peak hours graph data based on order approval time
+        // Just adding the NOT IN line to your existing code!
+        @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
+                        "FROM orders " +
+                        "WHERE branch_id = :branchId " +
+                        "AND status NOT IN ('CANCELLED', 'REJECTED') " + // Exclude cancelled and rejected orders(extra
+                                                                         // safe)
+                        "AND approved_at >= NOW() - INTERVAL 7 DAY " +
+                        "GROUP BY hr", nativeQuery = true)
+        List<Object[]> findOrderCountByHourByBranch(@Param("branchId") Long branchId);
 
         List<Order> findByBranchIdAndOrderTypeAndStatus(
                         Long branchId,
@@ -123,7 +184,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @Query(value = "SELECT DATE(created_at) as day, SUM(final_amount) as revenue, COUNT(id) as orders " +
                         "FROM orders " +
-                        "WHERE branch_id = :branchId AND payment_status = 'PAID' AND created_at BETWEEN :start AND :end " +
+                        "WHERE branch_id = :branchId AND payment_status = 'PAID' AND created_at BETWEEN :start AND :end "
+                        +
                         "GROUP BY day ORDER BY day", nativeQuery = true)
         List<Object[]> findRevenueTrendByBranchAndDates(
                         @Param("branchId") Long branchId,

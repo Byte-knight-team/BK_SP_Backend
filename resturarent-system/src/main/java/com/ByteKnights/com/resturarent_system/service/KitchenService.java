@@ -1,8 +1,10 @@
 package com.ByteKnights.com.resturarent_system.service;
 
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateAlertRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
+import com.ByteKnights.com.resturarent_system.entity.ChefWorkStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import jakarta.validation.Valid;
 
@@ -10,25 +12,48 @@ import java.util.List;
 
 public interface KitchenService {
 
-    KitchenDashboardStatsDTO getKitchenDashboardStats();
+    KitchenDashboardStatsDTO getKitchenDashboardStats(String userEmail);
 
-    List<PopularMealDTO> getMostPopularMealsInLast7Days();
+    List<PopularMealDTO> getMostPopularMealsInLast7Days(String userEmail);
 
-    List<PeakHourDTO> getPeakHoursInLast7Days();
+    List<PeakHourDTO> getPeakHoursInLast7Days(String userEmail);
 
-    List<InventoryDetailsDTO> getInventoryAlerts();
+    List<InventoryDetailsDTO> getInventoryAlerts(String userEmail);
 
-    List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status);
+    List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail);
 
-    List<InventoryDetailsDTO> getAllInventoryItems();
+    List<InventoryDetailsDTO> getAllInventoryItems(String userEmail);
 
     void createRequest(@Valid InventoryRequestDTO requestDTO, String userEmail);
 
-    void updateInventoryStock(@Valid UpdateStockDTO updateDTO);
+    void updateInventoryStock(UpdateStockDTO updateDTO, String userEmail);
 
-    OrderDetailsDTO getOrderDetails(Long id);
+    OrderDetailsDTO getOrderDetails(Long orderId, String userEmail);
 
     List<ChefAssignDTO> getAvailableChefsForAssignment(String userEmail);
 
     void assignChefToMeal(Long itemId, Long chefId);
+
+    void checkInChef(Long chefId);
+
+    void checkOutChef(Long chefId);
+
+    void holdOrder(Long orderId, String holdReason, String userEmail);
+
+    void startMeal(Long itemId);
+
+    MealCompletionResponseDTO completeMeal(Long itemId);
+
+    List<ChefDetailsDTO> getChefDetailsToday(String userEmail);
+
+    void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus);
+
+    void createKitchenAlert(CreateAlertRequestDTO requestDTO, String userEmail);
+
+    List<ActiveAlertDTO> getActiveAlerts(String userEmail);
+
+    void resolveAlert(Long id, String userEmail);
+
+    ChefDashboardStatsDTO getChefDashboardStats(String userEmail);
+
 }

@@ -58,11 +58,20 @@
                 User freshUser = userRepository.findByEmail(email).orElse(null);
 
                 if (freshUser != null) {
-                    String role = freshUser.getRole().getName();
-                    if ("ADMIN".equalsIgnoreCase(role) || "SUPER_ADMIN".equalsIgnoreCase(role) || "CUSTOMER".equalsIgnoreCase(role)) {
+                    String role = freshUser.getRole() != null ? freshUser.getRole().getName() : null;
+
+                    // This filter is for staff onboarding only.
+                    // Customer accounts should not be blocked from browsing checkout/orders.
+                    boolean isCustomer = role != null && (
+                            "CUSTOMER".equalsIgnoreCase(role) ||
+                            "ROLE_CUSTOMER".equalsIgnoreCase(role));
+
+                    if (isCustomer) {
                         filterChain.doFilter(request, response);
                         return;
                     }
+
+                    // Always enforce first password change for users with passwordChanged == false
 
                     if (!Boolean.TRUE.equals(freshUser.getPasswordChanged())) {
                         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -74,7 +83,7 @@
                     }
                 }
             }
-
+            // Continue normally for users who already changed their password
             filterChain.doFilter(request, response);
         }
     }

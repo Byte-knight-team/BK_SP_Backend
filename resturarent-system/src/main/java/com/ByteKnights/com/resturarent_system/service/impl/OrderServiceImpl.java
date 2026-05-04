@@ -4,6 +4,8 @@ import com.ByteKnights.com.resturarent_system.dto.request.customer.CheckoutCalcu
 import com.ByteKnights.com.resturarent_system.dto.request.customer.PaymentUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.PlaceOrderRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CheckoutCalculateResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.BranchDetailResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderPlacementResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderResponse;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.exception.CheckoutException;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.stream.*;
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -59,7 +62,7 @@ public class OrderServiceImpl implements OrderService {
 
         @Override
         @Transactional
-        public OrderResponse placeCustomerOrder(String userIdentifier, PlaceOrderRequest request) {
+        public OrderPlacementResponse placeCustomerOrder(String userIdentifier, PlaceOrderRequest request) {
 
                 // 1. Resolve Customer
                 User user = userRepository.findByEmail(userIdentifier)
@@ -87,7 +90,7 @@ public class OrderServiceImpl implements OrderService {
                         qrSessionService.validateActiveSession(request.getQrSessionId());
                 }
 
-                // 3. ZERO-TRUST MATH: Call the CheckoutService to calculate the exact totals!
+                // 3. Call the CheckoutService to calculate the exact totals!
                 CheckoutCalculateRequest calcRequest = new CheckoutCalculateRequest();
                 calcRequest.setOrderType(request.getOrderType());
                 calcRequest.setBranchId(request.getBranchId());
@@ -113,7 +116,7 @@ public class OrderServiceImpl implements OrderService {
                 order.setDeliveryAddress(request.getDeliveryAddress());
                 order.setKitchenNotes(request.getKitchenNotes());
 
-                // Apply Trusted Math to Order
+                // Apply Math to Order
                 order.setTaxAmount(trustedMath.getTaxAmount());
                 order.setDeliveryFee(trustedMath.getDeliveryFee());
                 order.setServiceCharge(trustedMath.getServiceCharge());
@@ -194,33 +197,69 @@ public class OrderServiceImpl implements OrderService {
                 paymentRepository.save(payment);
 
                 // 10. Map Items and Return Detailed Response
-                java.util.List<OrderResponse.OrderItemResponse> itemResponses = savedOrder.getItems().stream()
+                return OrderPlacementResponse.builder()
+                                .orderId(savedOrder.getId())
+                                .orderNumber(savedOrder.getOrderNumber())
+                                .finalAmount(savedOrder.getFinalAmount())
+                                .build();
+        }
+
+        // helper method to convert order entity to response
+        private OrderResponse mapToOrderResponse(Order order) {
+                Payment payment = paymentRepository.findByOrder(order).orElse(null);
+
+                java.util.List<OrderResponse.OrderItemResponse> itemResponses = order.getItems().stream()
                                 .map(item -> OrderResponse.OrderItemResponse.builder()
+                                                .orderItemId(item.getId())
+                                                .menuItemId(item.getMenuItem() != null ? item.getMenuItem().getId()
+                                                                : null)
                                                 .itemName(item.getItemName())
                                                 .quantity(item.getQuantity())
                                                 .unitPrice(item.getUnitPrice())
                                                 .subtotal(item.getSubtotal())
+                                                .isReviewed(order.getReviews().stream().anyMatch(
+                                                                r -> r.getOrderItem() != null && r.getOrderItem()
+                                                                                .getId().equals(item.getId())))
                                                 .build())
-                                .collect(java.util.stream.Collectors.toList());
+                                .collect(Collectors.toList());
 
                 return OrderResponse.builder()
-                                .orderId(savedOrder.getId())
-                                .orderNumber(savedOrder.getOrderNumber())
-                                .orderStatus(savedOrder.getStatus().name())
-                                .paymentStatus(payment.getPaymentStatus().name())
+                                .orderId(order.getId())
+                                .orderNumber(order.getOrderNumber())
+                                .orderStatus(order.getStatus().name())
+                                .orderType(order.getOrderType() != null ? order.getOrderType().name() : null)
+                                .paymentStatus(order.getPaymentStatus() != null ? order.getPaymentStatus().name()
+                                                : PaymentStatus.PENDING.name())
+                                .paymentMethod(payment != null && payment.getPaymentMethod() != null
+                                                ? payment.getPaymentMethod().name()
+                                                : null)
+                                .cancellationReason(order.getCancelReason())
+                                .isReviewed(order.getReviews().stream().anyMatch(r -> r.getOrderItem() == null))
+                                .contactName(order.getContactName())
+                                .contactPhone(order.getContactPhone())
+                                .deliveryAddress(order.getDeliveryAddress())
+                                .kitchenNotes(order.getKitchenNotes())
+                                .tableId(order.getTable() != null ? order.getTable().getId() : null)
+                                .tableNumber(order.getTable() != null ? order.getTable().getTableNumber() : null)
                                 // Financials
-                                .subtotal(savedOrder.getTotalAmount())
-                                .taxAmount(savedOrder.getTaxAmount())
-                                .deliveryFee(savedOrder.getDeliveryFee())
-                                .serviceCharge(savedOrder.getServiceCharge())
-                                .totalDiscountAmount(savedOrder.getDiscountAmount())
-                                .finalTotal(savedOrder.getFinalAmount())
+                                .subtotal(order.getTotalAmount())
+                                .taxAmount(order.getTaxAmount())
+                                .deliveryFee(order.getDeliveryFee())
+                                .serviceCharge(order.getServiceCharge())
+                                .totalDiscountAmount(order.getDiscountAmount())
+                                .finalTotal(order.getFinalAmount())
                                 // Rewards & Coupons
-                                .appliedCouponCode(savedOrder.getAppliedCouponCode())
-                                .rewardPointsRedeemed(savedOrder.getRewardPointsRedeemed())
-                                .rewardPointsEarned(savedOrder.getRewardPointsEarned())
+                                .appliedCouponCode(order.getAppliedCouponCode())
+                                .rewardPointsRedeemed(order.getRewardPointsRedeemed())
+                                .rewardPointsEarned(order.getRewardPointsEarned())
                                 // Metadata & Items
-                                .createdAt(savedOrder.getCreatedAt())
+                                .createdAt(order.getCreatedAt())
+                                .branchDetails(order.getBranch() != null ? BranchDetailResponse.builder()
+                                                .name(order.getBranch().getName())
+                                                .address(order.getBranch().getAddress())
+                                                .contactNumber(order.getBranch().getContactNumber())
+                                                .email(order.getBranch().getEmail())
+                                                .build() : null)
                                 .items(itemResponses)
                                 .build();
         }
@@ -251,6 +290,135 @@ public class OrderServiceImpl implements OrderService {
 
                 // 5. Save both the payment AND the order back to the database
                 paymentRepository.save(payment);
+                orderRepository.save(order);
+        }
+
+        @Override
+        public java.util.List<OrderResponse> getCustomerOrders(String userIdentifier) {
+                return getCustomerOrders(userIdentifier, null, null);
+        }
+
+        @Override
+        public java.util.List<OrderResponse> getCustomerOrders(String userIdentifier, String orderTypeFilter,
+                        Boolean isActive) {
+                Customer customer = customerRepository.findByUserPhone(userIdentifier)
+                                .orElseGet(() -> customerRepository.findByUserEmail(userIdentifier)
+                                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                                "Customer not found")));
+
+                OrderType parsedType = null;
+                if (orderTypeFilter != null && !orderTypeFilter.isEmpty() && !orderTypeFilter.equals("ALL")) {
+                        try {
+                                parsedType = OrderType.valueOf(orderTypeFilter.toUpperCase());
+                        } catch (IllegalArgumentException e) {
+                                // Ignore invalid type
+                        }
+                }
+
+                if (parsedType == null) {
+                        return orderRepository.findFilteredOrdersWithoutType(customer.getId(), isActive)
+                                        .stream()
+                                        .map(this::mapToOrderResponse)
+                                        .collect(Collectors.toList());
+                } else {
+                        return orderRepository.findFilteredOrders(customer.getId(), parsedType, isActive)
+                                        .stream()
+                                        .map(this::mapToOrderResponse)
+                                        .collect(Collectors.toList());
+                }
+        }
+
+        @Override
+        public OrderResponse getCustomerOrderById(String userIdentifier, Long orderId) {
+                Customer customer = customerRepository.findByUserPhone(userIdentifier)
+                                .orElseGet(() -> customerRepository.findByUserEmail(userIdentifier)
+                                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                                "Customer not found")));
+
+                Order order = orderRepository.findByIdAndCustomerId(orderId, customer.getId())
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Order not found or does not belong to user"));
+
+                return mapToOrderResponse(order);
+        }
+
+        @Override
+        @Transactional
+        public void cancelCustomerOrder(String userIdentifier, Long orderId, String cancelReason) {
+                Customer customer = customerRepository.findByUserPhone(userIdentifier)
+                                .orElseGet(() -> customerRepository.findByUserEmail(userIdentifier)
+                                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                                "Customer not found")));
+
+                Order order = orderRepository.findByIdAndCustomerId(orderId, customer.getId())
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Order not found or does not belong to user"));
+
+                // Ensure it's active
+                if (order.getStatus() != OrderStatus.PLACED && order.getStatus() != OrderStatus.PENDING
+                                && order.getStatus() != OrderStatus.ON_HOLD) {
+                        throw new CheckoutException(HttpStatus.BAD_REQUEST,
+                                        "Cannot cancel an order that is already preparing, completed, or cancelled.");
+                }
+
+                // Rollback loyalty points
+                if (!loyaltyTransactionRepository.existsByOrderAndTransactionType(order,
+                                LoyaltyTransactionType.REFUND)) {
+                        int currentPoints = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+                        int redeemedPoints = order.getRewardPointsRedeemed() != null ? order.getRewardPointsRedeemed()
+                                        : 0;
+                        int earnedPoints = order.getRewardPointsEarned() != null ? order.getRewardPointsEarned() : 0;
+
+                        if (redeemedPoints > 0) {
+                                customer.setLoyaltyPoints(currentPoints + redeemedPoints);
+                                currentPoints = customer.getLoyaltyPoints();
+
+                                LoyaltyTransaction refundRedeemedTx = LoyaltyTransaction.builder()
+                                                .customer(customer)
+                                                .order(order)
+                                                .transactionType(LoyaltyTransactionType.REFUND)
+                                                .points(redeemedPoints)
+                                                .description("Refunded redeemed points for cancelled order "
+                                                                + order.getOrderNumber())
+                                                .build();
+                                loyaltyTransactionRepository.save(refundRedeemedTx);
+                        }
+
+                        if (earnedPoints > 0) {
+                                int pointsToReverse = Math.min(currentPoints, earnedPoints);
+                                customer.setLoyaltyPoints(Math.max(0, currentPoints - pointsToReverse));
+
+                                LoyaltyTransaction reverseEarnedTx = LoyaltyTransaction.builder()
+                                                .customer(customer)
+                                                .order(order)
+                                                .transactionType(LoyaltyTransactionType.REFUND)
+                                                .points(-pointsToReverse)
+                                                .description("Reversed earned points for cancelled order "
+                                                                + order.getOrderNumber())
+                                                .build();
+                                loyaltyTransactionRepository.save(reverseEarnedTx);
+                        }
+                }
+                // restock used coupon and delete usage record
+                if (order.getAppliedCouponCode() != null && !order.getAppliedCouponCode().isBlank()) {
+                        couponUsageRepository.findByOrder(order).ifPresent(couponUsageRepository::delete);
+
+                        couponRepository.findByCode(order.getAppliedCouponCode()).ifPresent(coupon -> {
+                                int usedCount = coupon.getUsedCount() != null ? coupon.getUsedCount() : 0;
+                                coupon.setUsedCount(Math.max(0, usedCount - 1));
+                                couponRepository.save(coupon);
+                        });
+                }
+
+                if (order.getFinalAmount() != null && customer.getTotalSpent() != null) {
+                        customer.setTotalSpent(
+                                        customer.getTotalSpent().subtract(order.getFinalAmount()).max(BigDecimal.ZERO));
+                }
+
+                customerRepository.save(customer);
+
+                order.setStatus(OrderStatus.CANCELLED);
+                order.setCancelReason(cancelReason);
                 orderRepository.save(order);
         }
 }
