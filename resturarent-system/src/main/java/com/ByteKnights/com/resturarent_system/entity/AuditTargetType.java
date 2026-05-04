@@ -7,5 +7,17 @@ public enum AuditTargetType {
     BRANCH,
     SYSTEM_CONFIG,
     BRANCH_CONFIG,
-    OPERATING_HOURS
+    OPERATING_HOURS,
+    MENU_CATEGORY,
+    MENU_ITEM,
+    TABLE,
+    QR_CODE,
+    QR_SESSION,
+    ORDER,
+    ORDER_ITEM,
+    PAYMENT,
+    INVENTORY_ITEM,
+    CHEF_REQUEST,
+    DELIVERY,
+    REPORT
 }

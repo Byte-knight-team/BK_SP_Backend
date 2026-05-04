@@ -64,7 +64,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
            "AND (o.orderType  IS NOT NULL) " +
            "AND (:isActive IS NULL OR " +
-           "     (:isActive = true AND o.status IN ('PLACED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
+           "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
            "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
            ") ORDER BY o.createdAt DESC")
     List<Order> findFilteredOrdersWithoutType(@Param("customerId") Long customerId, 
@@ -74,7 +74,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
            "AND (o.orderType = :type) " +
            "AND (:isActive IS NULL OR " +
-           "     (:isActive = true AND o.status IN ('PLACED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
+           "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
            "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
            ") ORDER BY o.createdAt DESC")
     List<Order> findFilteredOrders(@Param("customerId") Long customerId, 
