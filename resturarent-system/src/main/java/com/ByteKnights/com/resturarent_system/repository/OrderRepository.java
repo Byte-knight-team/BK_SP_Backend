@@ -3,7 +3,6 @@ package com.ByteKnights.com.resturarent_system.repository;
 import com.ByteKnights.com.resturarent_system.entity.Order;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderType;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
@@ -70,7 +69,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "AND (:isActive IS NULL OR " +
             "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
             "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
-            ")",
+            ") ORDER BY o.createdAt DESC",
             countQuery = "SELECT COUNT(o) FROM Order o WHERE o.customer.id = :customerId " +
             "AND (o.orderType IS NOT NULL) " +
             "AND (:isActive IS NULL OR " +
@@ -88,7 +87,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             "AND (:isActive IS NULL OR " +
             "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
             "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
-            ")",
+            ") ORDER BY o.createdAt DESC",
             countQuery = "SELECT COUNT(o) FROM Order o WHERE o.customer.id = :customerId " +
             "AND (o.orderType = :type) " +
             "AND (:isActive IS NULL OR " +

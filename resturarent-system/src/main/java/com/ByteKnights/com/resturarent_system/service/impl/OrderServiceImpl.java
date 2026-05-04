@@ -20,7 +20,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -319,7 +318,7 @@ public class OrderServiceImpl implements OrderService {
 
                 int safePage = Math.max(page, 0);
                 int safeSize = Math.max(size, 1);
-                PageRequest pageRequest = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+                PageRequest pageRequest = PageRequest.of(safePage, safeSize);
 
                 //get orders without type filter
                 if (parsedType == null) {
