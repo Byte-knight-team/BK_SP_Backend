@@ -8,7 +8,6 @@ import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
-import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
@@ -34,7 +33,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
     private final RestaurantTableRepository tableRepository;
     private final BranchRepository branchRepository;
-    private final QrCodeRepository qrCodeRepository;
     private final StaffRepository staffRepository;
 
     /**
@@ -170,39 +168,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
         RestaurantTable updated = tableRepository.save(table);
         return mapToResponse(updated);
-    }
-
-    /**
-     * Deletes a table only when it is safe to remove.
-     */
-    @Override
-    @Transactional
-    public void deleteTable(Long id) {
-        RestaurantTable table = findTableOrThrow(id);
-        enforceAdminBranchAccess(table.getBranch().getId());
-
-        // Enforce a hard business rule: once a table has QR references, the row must not be
-        // physically deleted. This keeps QR audit/history intact and avoids database FK errors
-        // from qr_codes.table_id -> restaurant_tables.id.
-        if (qrCodeRepository.existsByTableId(id)) {
-            throw new InvalidOperationException(
-                    "Cannot delete table: QR code history exists for this table. "
-                            + "Revoke and clean up QR records first.");
-        }
-
-        if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
-            throw new InvalidOperationException("Cannot delete table: active orders exist");
-        }
-
-        if (table.getState() == TableStatus.OCCUPIED) {
-            throw new InvalidOperationException("Cannot delete: The table is occupied");
-        }
-
-        if (table.getState() == TableStatus.RESERVED) {
-            throw new InvalidOperationException("Cannot delete: The table is reserved");
-        }
-
-        tableRepository.delete(table);
     }
 
     // ─────────────────────────── Helper Methods ───────────────────────────

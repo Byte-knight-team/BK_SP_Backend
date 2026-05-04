@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tables")
@@ -76,15 +75,5 @@ public class RestaurantTableController {
             @Valid @RequestBody UpdateTableStatusRequest request) {
         TableResponse response = tableService.updateTableStatus(id, request);
         return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Deletes a table when business rules allow it.
-     */
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<?> deleteTable(@PathVariable Long id) {
-        tableService.deleteTable(id);
-        return ResponseEntity.ok(Map.of("message", "Table deleted successfully"));
     }
 }

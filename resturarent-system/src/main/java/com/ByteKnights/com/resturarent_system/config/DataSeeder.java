@@ -95,9 +95,9 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege viewItemById = createPrivilege("VIEW_ITEM_BY_ID");
                 Privilege createItem = createPrivilege("CREATE_ITEM");
                 Privilege updateItem = createPrivilege("UPDATE_ITEM");
-                Privilege rejectPendingItem = createPrivilege("APPROVE_PENDING_ITEM");
+                Privilege rejectPendingItem = createPrivilege("REJECT_PENDING_ITEM");
                 Privilege approvePendingItem = createPrivilege("APPROVE_PENDING_ITEM");
-                Privilege toggleItemAvailability = createPrivilege("TOGLLE_ITEM_AVAILABILITY");
+                Privilege toggleItemAvailability = createPrivilege("TOGGLE_ITEM_AVAILABILITY");
                 Privilege deleteItem = createPrivilege("DELETE_ITEM");
                 Privilege viewAllSubcategories = createPrivilege("VIEW_ALL_SUBCATEGORIES");
 

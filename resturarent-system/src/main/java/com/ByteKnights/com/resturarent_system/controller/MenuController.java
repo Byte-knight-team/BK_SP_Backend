@@ -83,12 +83,12 @@ public class MenuController {
         return ResponseEntity.ok(count);
     }
 
-    /*@GetMapping("/categories")
-    @PreAuthorize("hasAnyRole('ADMIN','CHEF','SUPER_ADMIN') or hasAuthority('VIEW_CATEGORIES")
+    @GetMapping("/categories")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF','SUPER_ADMIN') or hasAuthority('VIEW_CATEGORIES')")
     public ResponseEntity<List<MenuCategoryResponse>> getMenuCategories() {
         List<MenuCategoryResponse> categories = menuCategoryService.getAllCategories();
         return ResponseEntity.ok(categories);
-    }*/
+    }
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN','CHEF') or hasAuthority('VIEW_ALL_ITEMS')")

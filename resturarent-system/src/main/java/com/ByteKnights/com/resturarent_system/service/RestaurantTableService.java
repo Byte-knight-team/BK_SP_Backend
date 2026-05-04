@@ -36,9 +36,4 @@ public interface RestaurantTableService {
      * Updates only table status.
      */
     TableResponse updateTableStatus(Long id, UpdateTableStatusRequest request);
-
-    /**
-     * Deletes a table.
-     */
-    void deleteTable(Long id);
 }
