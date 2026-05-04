@@ -159,7 +159,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 8. Calculate Earned Points
         Integer pointsEarned = 0;
         if (sysConfig.isLoyaltyEnabled() && sysConfig.getPointsPerAmount().compareTo(BigDecimal.ZERO) > 0) {
-            // e.g., For every $10 (amountPerPoint), earn 1 point (pointsPerAmount)
+            // e.g., For every $x (amountPerPoint), earn y point (pointsPerAmount)
             BigDecimal multiplier = finalTotal.divide(sysConfig.getAmountPerPoint(), 0, RoundingMode.DOWN);
             pointsEarned = multiplier.multiply(sysConfig.getPointsPerAmount()).intValue();
         }
@@ -212,7 +212,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     // --- Private Validators ---
-
+    //validate coupon
     private Coupon validateAndGetCoupon(String code, BigDecimal subtotal) {
         Coupon coupon = couponRepository.findByCode(code)
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Invalid coupon code"));
