@@ -14,6 +14,7 @@ import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
 import com.ByteKnights.com.resturarent_system.service.ReviewService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,9 +94,8 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public List<ReviewResponse> getRecentReviews() {
-        // Fetch 3 most recent order-level reviews for landing page
-        return reviewRepository.findRecentOrderReviews().stream()
-                .limit(3)
+        // The database already limits this to 3 rows.
+        return reviewRepository.findRecentOrderReviews(PageRequest.of(0, 3)).stream()
                 .map(review -> ReviewResponse.builder()
                         .reviewId(review.getId())
                         .rating(review.getRating())
