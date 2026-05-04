@@ -1,8 +1,6 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
-import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.TableActionRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistTableService;
@@ -62,50 +60,6 @@ public class ReceptionistTableController {
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Table #" + id + " is now available", null),
-                HttpStatus.OK
-        );
-    }
-
-    // book a table for a guest
-    @PostMapping("/reservations")
-    @PreAuthorize("hasAuthority('RECEPTIONIST_RESERVATION_CREATE')")
-    public ResponseEntity<StandardResponse> createReservation(
-            @Valid @RequestBody CreateReservationRequest request,
-            Principal principal) {
-
-        receptionistTableService.createReservation(request, principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(201, "Reservation created successfully", null),
-                HttpStatus.CREATED
-        );
-    }
-
-    // check-in a reserved guest
-    @PutMapping("/{id}/check-in")
-    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
-    public ResponseEntity<StandardResponse> checkInGuest(
-            @PathVariable Long id,
-            Principal principal) {
-        receptionistTableService.checkInGuest(id, principal.getName());
-        return new ResponseEntity<>(
-                new StandardResponse(200, "Guest checked in successfully", null),
-                HttpStatus.OK
-        );
-    }
-
-    // cancel a reservation
-    @PutMapping("/{id}/cancel-reservation")
-    @PreAuthorize("hasAuthority('RECEPTIONIST_RESERVATION_UPDATE')")
-    public ResponseEntity<StandardResponse> cancelReservation(
-            @PathVariable Long id,
-            @RequestBody CancelReservationRequest request,
-            Principal principal) {
-
-        receptionistTableService.cancelReservation(id, request.getReason(), principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(200, "Reservation cancelled successfully", null),
                 HttpStatus.OK
         );
     }

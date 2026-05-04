@@ -1,11 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service;
 
-import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
-import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-
-import java.util.List;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;import java.util.List;
 
 public interface ReceptionistTableService {
 
@@ -15,9 +10,4 @@ public interface ReceptionistTableService {
 
     void clearTable(Long tableId, String userEmail);
 
-    void createReservation(CreateReservationRequest request, String userEmail);
-
-    void checkInGuest(Long tableId, String userEmail);
-
-    void cancelReservation(Long tableId, String reason, String userEmail);
 }
