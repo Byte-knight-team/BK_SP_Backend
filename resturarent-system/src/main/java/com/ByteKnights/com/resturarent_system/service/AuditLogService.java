@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -38,7 +39,7 @@ public class AuditLogService {
     private final StaffRepository staffRepository;
     private final ObjectMapper objectMapper;
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logCurrentUserAction(
             AuditModule module,
             AuditEventType eventType,
@@ -49,8 +50,7 @@ public class AuditLogService {
             Long branchId,
             String description,
             Object oldValues,
-            Object newValues
-    ) {
+            Object newValues) {
         try {
             User actor = getCurrentAuthenticatedUser();
             Staff actorStaff = staffRepository.findByUserId(actor.getId()).orElse(null);
@@ -86,7 +86,7 @@ public class AuditLogService {
         }
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logActionAsUser(
             Long actorUserId,
             String actorEmail,
@@ -100,8 +100,7 @@ public class AuditLogService {
             Long targetId,
             String description,
             Object oldValues,
-            Object newValues
-    ) {
+            Object newValues) {
         try {
             AuditLog auditLog = AuditLog.builder()
                     .module(module)
@@ -129,7 +128,7 @@ public class AuditLogService {
         }
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logAnonymousAction(
             String actorEmail,
             AuditModule module,
@@ -140,8 +139,7 @@ public class AuditLogService {
             Long targetId,
             String description,
             Object oldValues,
-            Object newValues
-    ) {
+            Object newValues) {
         try {
             AuditLog auditLog = AuditLog.builder()
                     .module(module)
@@ -178,8 +176,7 @@ public class AuditLogService {
             Long actorUserId,
             LocalDate from,
             LocalDate to,
-            Pageable pageable
-    ) {
+            Pageable pageable) {
         Specification<AuditLog> specification = AuditLogSpecification.withFilters(
                 module,
                 eventType,
@@ -187,8 +184,7 @@ public class AuditLogService {
                 branchId,
                 actorUserId,
                 from,
-                to
-        );
+                to);
 
         return auditLogRepository.findAll(specification, pageable)
                 .map(AuditLogResponse::fromEntity);
@@ -313,8 +309,7 @@ public class AuditLogService {
     }
 
     private HttpServletRequest getCurrentRequest() {
-        ServletRequestAttributes attributes =
-                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
         return attributes != null ? attributes.getRequest() : null;
     }

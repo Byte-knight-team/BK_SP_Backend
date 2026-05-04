@@ -23,14 +23,6 @@ public class JwtService {
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
 
-    /*
-     * Old token generator kept for safety.
-     * If any old code still calls generateToken(userId, email, role),
-     * it will still work and branch values will be null.
-     */
-    public String generateToken(Long userId, String email, String role) {
-        return generateToken(userId, email, role, null, null);
-    }
 
     /*
      * Main token generator.
