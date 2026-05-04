@@ -21,7 +21,7 @@ public class ManagerSalesController {
     private final ManagerSalesService managerSalesService;
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('VIEW_SALES')")
     public ResponseEntity<ApiResponse<ManagerSalesSummaryDTO>> getSalesSummary(
             @RequestParam(required = false) Long branchId,
             @AuthenticationPrincipal JwtUserPrincipal userDetails) {

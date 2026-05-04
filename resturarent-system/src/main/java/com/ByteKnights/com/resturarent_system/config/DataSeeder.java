@@ -85,11 +85,19 @@ public class DataSeeder implements CommandLineRunner {
                 // Delivery
                 Privilege updateDeliveryStatus = createPrivilege("UPDATE_DELIVERY_STATUS");
                 Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
+                Privilege manageDeliveryStatus = createPrivilege("MANAGE_DELIVERY_STATUS");
 
                 // Branch / reports / profile
                 Privilege viewBranch = createPrivilege("VIEW_BRANCH");
                 Privilege viewReports = createPrivilege("VIEW_REPORTS");
                 Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
+
+                // Manager Dashboard & Modules
+                Privilege viewDashboard = createPrivilege("VIEW_DASHBOARD");
+                Privilege viewAnalytics = createPrivilege("VIEW_ANALYTICS");
+                Privilege viewSales = createPrivilege("VIEW_SALES");
+                Privilege viewStaff = createPrivilege("VIEW_STAFF");
+                Privilege manageDrivers = createPrivilege("MANAGE_DRIVERS");
 
                 // QR & restaurant table permissions
                 Privilege createQrcode = createPrivilege("CREATE_QRCODE");
@@ -126,9 +134,15 @@ public class DataSeeder implements CommandLineRunner {
                                 viewCustomer,
                                 updateDeliveryStatus,
                                 viewDelivery,
+                                manageDeliveryStatus,
                                 viewBranch,
                                 viewReports,
                                 viewOwnProfile,
+                                viewDashboard,
+                                viewAnalytics,
+                                viewSales,
+                                viewStaff,
+                                manageDrivers,
                                 createQrcode,
                                 regenerateQrcode,
                                 revokeQrcode,
@@ -172,7 +186,12 @@ public class DataSeeder implements CommandLineRunner {
                                 viewBranch,
                                 manageOrders,
                                 viewReports,
-                                viewCustomer));
+                                viewCustomer,
+                                viewDashboard,
+                                viewAnalytics,
+                                viewSales,
+                                viewStaff,
+                                manageDrivers));
 
                 createRoleWithDefaultPermissions("CHEF", Set.of(
                                 manageMenu,
@@ -186,7 +205,8 @@ public class DataSeeder implements CommandLineRunner {
 
                 createRoleWithDefaultPermissions("DELIVERY", Set.of(
                                 updateDeliveryStatus,
-                                viewDelivery));
+                                viewDelivery,
+                                manageDeliveryStatus));
 
                 createRoleWithDefaultPermissions("CUSTOMER", Set.of(
                                 viewOwnOrders,

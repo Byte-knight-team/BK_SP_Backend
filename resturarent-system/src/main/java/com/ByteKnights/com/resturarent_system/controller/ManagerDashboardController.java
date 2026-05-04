@@ -21,7 +21,7 @@ public class ManagerDashboardController {
     private final ManagerDashboardService managerDashboardService;
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('MANAGER', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('VIEW_DASHBOARD')")
     public ResponseEntity<ApiResponse<ManagerDashboardSummaryDTO>> getDashboardSummary(
             @RequestParam(required = false) Long branchId,
             @AuthenticationPrincipal JwtUserPrincipal userDetails) {

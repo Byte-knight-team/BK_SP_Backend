@@ -17,7 +17,7 @@ public class ManagerStaffController {
     private final ManagerStaffService managerStaffService;
 
     @GetMapping("/summary")
-    @PreAuthorize("hasRole('MANAGER') or hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('VIEW_STAFF')")
     public ResponseEntity<ManagerStaffSummaryDTO> getStaffSummary(
             @RequestParam(required = false) Long branchId,
             @AuthenticationPrincipal JwtUserPrincipal userDetails) {
