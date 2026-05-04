@@ -94,7 +94,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public List<ReviewResponse> getRecentReviews() {
-        // The database already limits this to 3 rows.
+        //fetch last three recent order reviews with comments ad build response
         return reviewRepository.findRecentOrderReviews(PageRequest.of(0, 3)).stream()
                 .map(review -> ReviewResponse.builder()
                         .reviewId(review.getId())
