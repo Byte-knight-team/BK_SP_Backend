@@ -46,7 +46,8 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 .collect(Collectors.toList());
 
         // 3. Map Riders and calculate metrics
-        List<DeliveryStatus> activeStatuses = Arrays.asList(DeliveryStatus.ASSIGNED, DeliveryStatus.OUT_FOR_DELIVERY);
+        List<DeliveryStatus> activeStatuses = Arrays.asList(
+                DeliveryStatus.ASSIGNED, DeliveryStatus.ACCEPTED, DeliveryStatus.OUT_FOR_DELIVERY);
 
         int driversOnline = 0;
         int available = 0;
