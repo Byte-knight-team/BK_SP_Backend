@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.customer.ReviewSubmissionRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.ReviewResponse;
 import com.ByteKnights.com.resturarent_system.entity.Customer;
 import com.ByteKnights.com.resturarent_system.entity.Order;
 import com.ByteKnights.com.resturarent_system.entity.OrderItem;
@@ -16,6 +17,8 @@ import com.ByteKnights.com.resturarent_system.service.ReviewService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class ReviewServiceImpl implements ReviewService {
@@ -86,5 +89,19 @@ public class ReviewServiceImpl implements ReviewService {
                 reviewRepository.save(itemReview);
             }
         }
+    }
+
+    @Override
+    public List<ReviewResponse> getRecentReviews() {
+        // Fetch 3 most recent order-level reviews for landing page
+        return reviewRepository.findRecentOrderReviews().stream()
+                .limit(3)
+                .map(review -> ReviewResponse.builder()
+                        .reviewId(review.getId())
+                        .rating(review.getRating())
+                        .comment(review.getComment())
+                        .createdAt(review.getCreatedAt())
+                        .build())
+                .collect(Collectors.toList());
     }
 }
