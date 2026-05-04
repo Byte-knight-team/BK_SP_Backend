@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CancelOrderRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.PaymentUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.PlaceOrderRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerOrdersPageResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderResponse;
 import com.ByteKnights.com.resturarent_system.service.OrderService;
 import org.springframework.http.HttpStatus;
@@ -30,10 +31,10 @@ public class OrderController {
     public ResponseEntity<ApiResponse<OrderPlacementResponse>> placeOrder(
             Principal principal,
             @RequestBody PlaceOrderRequest request) {
-            
+
         String userIdentifier = principal != null ? principal.getName() : null;
         OrderPlacementResponse response = orderService.placeCustomerOrder(userIdentifier, request);
-        
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Order placed successfully!", response));
     }
@@ -42,20 +43,23 @@ public class OrderController {
     public ResponseEntity<ApiResponse<String>> updatePayment(
             @PathVariable Long orderId,
             @RequestBody PaymentUpdateRequest request) {
-            
+
         orderService.updatePaymentStatus(orderId, request);
-        
+
         return ResponseEntity.ok(ApiResponse.success("Payment status updated successfully", null));
     }
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<OrderResponse>>> getMyOrders(
+    public ResponseEntity<ApiResponse<CustomerOrdersPageResponse>> getMyOrders(
             Principal principal,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) Boolean active) {
-            
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
         String userIdentifier = principal.getName();
-        List<OrderResponse> orders = orderService.getCustomerOrders(userIdentifier, type, active);
+        CustomerOrdersPageResponse orders = orderService.getCustomerOrdersPage(userIdentifier, type, active, page,
+                size);
         return ResponseEntity.ok(ApiResponse.success("Orders fetched successfully", orders));
     }
 
