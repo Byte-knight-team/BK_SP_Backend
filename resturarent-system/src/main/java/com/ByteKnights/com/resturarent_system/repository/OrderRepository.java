@@ -98,7 +98,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByIdAndBranchId(Long orderId, Long branchId);
 
-
+    List<Order> findByTableIdAndStatusNotIn(Long id, List<OrderStatus> cancelled);
 
     // --- Kitchen Queries START ---
 
@@ -119,12 +119,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
 
     // 2.Peak hours graph data based on order approval time
+    // Just adding the NOT IN line to your existing code!
     @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
             "FROM orders " +
-            "WHERE branch_id = :branchId " + // Branch Filter
+            "WHERE branch_id = :branchId " +
+            "AND status NOT IN ('CANCELLED', 'REJECTED') " + // Exclude cancelled and rejected orders(extra safe)
             "AND approved_at >= NOW() - INTERVAL 7 DAY " +
             "GROUP BY hr", nativeQuery = true)
     List<Object[]> findOrderCountByHourByBranch(@Param("branchId") Long branchId);
+
 
 
     // --- Kitchen Queries END ---
