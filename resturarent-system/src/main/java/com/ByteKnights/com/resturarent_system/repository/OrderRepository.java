@@ -4,6 +4,8 @@ import com.ByteKnights.com.resturarent_system.entity.Order;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.entity.OrderType;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -59,27 +61,44 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @EntityGraph(attributePaths = "items")
     List<Order> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
 
-    //retrive orders without type filter
-    @EntityGraph(attributePaths = "items")
-    @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
-           "AND (o.orderType  IS NOT NULL) " +
-           "AND (:isActive IS NULL OR " +
-           "     (:isActive = true AND o.status IN ('PLACED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
-           "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
-           ") ORDER BY o.createdAt DESC")
-    List<Order> findFilteredOrdersWithoutType(@Param("customerId") Long customerId, 
-                                              @Param("isActive") Boolean isActive);
-    //retive orders with type filter  
-    @EntityGraph(attributePaths = "items")
-    @Query("SELECT o FROM Order o WHERE o.customer.id = :customerId " +
-           "AND (o.orderType = :type) " +
-           "AND (:isActive IS NULL OR " +
-           "     (:isActive = true AND o.status IN ('PLACED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
-           "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
-           ") ORDER BY o.createdAt DESC")
-    List<Order> findFilteredOrders(@Param("customerId") Long customerId, 
-                                   @Param("type") OrderType type, 
-                                   @Param("isActive") Boolean isActive);
+
+
+        //retrive paginated orders without type filter      
+        @EntityGraph(attributePaths = "items")
+        @Query(value = "SELECT o FROM Order o WHERE o.customer.id = :customerId " +
+            "AND (o.orderType IS NOT NULL) " +
+            "AND (:isActive IS NULL OR " +
+            "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
+            "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
+            ")",
+            countQuery = "SELECT COUNT(o) FROM Order o WHERE o.customer.id = :customerId " +
+            "AND (o.orderType IS NOT NULL) " +
+            "AND (:isActive IS NULL OR " +
+            "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
+            "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
+            ")")
+        Page<Order> findFilteredOrdersWithoutType(@Param("customerId") Long customerId,
+                                @Param("isActive") Boolean isActive,
+                                Pageable pageable);
+
+        //retrive paginated orders with a type filter
+        @EntityGraph(attributePaths = "items")
+        @Query(value = "SELECT o FROM Order o WHERE o.customer.id = :customerId " +
+            "AND (o.orderType = :type) " +
+            "AND (:isActive IS NULL OR " +
+            "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
+            "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
+            ")",
+            countQuery = "SELECT COUNT(o) FROM Order o WHERE o.customer.id = :customerId " +
+            "AND (o.orderType = :type) " +
+            "AND (:isActive IS NULL OR " +
+            "     (:isActive = true AND o.status IN ('PLACED', 'APPROVED', 'PENDING', 'PREPARING', 'READY', 'COMPLETED', 'OUT_FOR_DELIVERY', 'ARRIVED', 'ON_HOLD')) OR " +
+            "     (:isActive = false AND o.status IN ('SERVED', 'CANCELLED', 'REJECTED'))" +
+            ")")
+        Page<Order> findFilteredOrders(@Param("customerId") Long customerId,
+                        @Param("type") OrderType type,
+                        @Param("isActive") Boolean isActive,
+                        Pageable pageable);
 
     @EntityGraph(attributePaths = "items")
     Optional<Order> findByIdAndCustomerId(Long id, Long customerId);
