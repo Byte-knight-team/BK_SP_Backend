@@ -8,9 +8,11 @@ import java.math.BigDecimal;
 
 @Data
 public class UpdateStockDTO {
+
     // this field cannot be empty
     @NotBlank(message = "Item name is required")
     private String itemName;
+
     // use PositiveOrZero because stock can be 0, but it cannot be negative
     @PositiveOrZero(message = "Quantity cannot be negative")
     private BigDecimal newQuantity;
