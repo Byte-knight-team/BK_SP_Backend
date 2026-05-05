@@ -25,6 +25,14 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         private final StaffRepository staffRepository;
         private final DeliveryRepository deliveryRepository;
 
+        /**
+         * Compiles the data required for the Manager's Delivery Dashboard.
+         * Includes online drivers, dispatchable orders, and historical deliveries.
+         *
+         * @param targetBranchId Optional branch ID filter.
+         * @param userId The ID of the currently authenticated manager.
+         * @return A comprehensive summary of driver activity and dispatch status.
+         */
         @Override
         @Transactional(readOnly = true)
         public ManagerDriverSummaryDTO getDriverSummary(Long targetBranchId, Long userId) {
@@ -150,6 +158,13 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 .build();
         }
 
+        /**
+         * Manual assignment of a delivery task to a specific driver by the Manager.
+         * Generates the Delivery record and updates the core Order status.
+         *
+         * @param orderId ID of the order being assigned.
+         * @param driverId ID of the driver receiving the assignment.
+         */
         @Override
         @org.springframework.transaction.annotation.Transactional
         public void assignDriver(Long orderId, Long driverId) {
@@ -184,6 +199,9 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 orderRepository.save(order);
         }
 
+        /**
+         * Helper method to determine the correct branch context.
+         */
         private Long resolveBranchId(Long targetBranchId, Long userId) {
                 if (targetBranchId != null)
                         return targetBranchId;

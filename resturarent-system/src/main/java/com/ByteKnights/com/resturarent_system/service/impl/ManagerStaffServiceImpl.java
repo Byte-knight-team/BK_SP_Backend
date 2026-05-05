@@ -21,6 +21,14 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
     private final StaffRepository staffRepository;
     private final BranchRepository branchRepository;
 
+    /**
+     * Retrieves a summary of all active staff members assigned to the Manager's branch.
+     * Excludes higher-level administrative roles from the list.
+     * 
+     * @param targetBranchId Optional branch ID filter.
+     * @param userId Authenticated manager's user ID.
+     * @return DTO containing aggregate counts and a list of staff member details.
+     */
     @Override
     public ManagerStaffSummaryDTO getStaffSummary(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
@@ -69,6 +77,9 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
                 .build();
     }
 
+    /**
+     * Formats raw database role names into user-friendly display labels.
+     */
     private String formatRole(String roleName) {
         if (roleName == null) return "Unknown";
         switch (roleName.toUpperCase()) {
@@ -81,6 +92,9 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
         }
     }
 
+    /**
+     * Helper method to determine the correct branch context.
+     */
     private Long resolveBranchId(Long targetBranchId, Long userId) {
         if (targetBranchId != null) return targetBranchId;
         Staff staff = staffRepository.findByUserId(userId)

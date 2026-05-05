@@ -28,6 +28,14 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
         private final StaffRepository staffRepository;
         private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM dd, yyyy, hh:mm a");
 
+        /**
+         * Calculates and aggregates sales data for the Manager's financial dashboard.
+         * Processes gross sales, refunds, net sales, payment methods, and recent transactions.
+         * 
+         * @param targetBranchId Optional specific branch ID to filter by.
+         * @param userId The ID of the authenticated manager.
+         * @return A DTO containing aggregated financial metrics.
+         */
         @Override
         public ManagerSalesSummaryDTO getSalesSummary(Long targetBranchId, Long userId) {
                 Long finalBranchId = resolveBranchId(targetBranchId, userId);
@@ -46,7 +54,7 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
                 // 3. Net Sales
                 BigDecimal netSales = grossSales.subtract(totalRefunds);
 
-                // 4. Payment Methods
+                // 4. Payment Methods (Card vs Cash breakdowns)
                 BigDecimal cardPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethod(finalBranchId,
                                 PaymentMethod.CARD);
                 cardPayments = (cardPayments != null) ? cardPayments : BigDecimal.ZERO;
@@ -55,13 +63,7 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
                                 PaymentMethod.CASH);
                 cashPayments = (cashPayments != null) ? cashPayments : BigDecimal.ZERO;
 
-                // 5. Source Breakdown (Using PAID status for accuracy)
-                // We'll calculate these using a custom query or filtering logic if needed, but
-                // for now we'll stick to OrderType + PAID
-                // Since we don't have a specific method for OrderType + PaymentStatus in the
-                // repo, I'll use a manual check if needed
-                // But for simplicity, I'll update the logic to reflect PAID status orders.
-
+                // 5. Source Breakdown (Dine-in vs Delivery revenue using PAID status)
                 BigDecimal dineIn = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
                                 finalBranchId, OrderType.QR, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
                 dineIn = (dineIn != null) ? dineIn : BigDecimal.ZERO;
@@ -71,7 +73,7 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
                                 Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
                 delivery = (delivery != null) ? delivery : BigDecimal.ZERO;
 
-                // 6. Recent Transactions
+                // 6. Recent Transactions List
                 List<ManagerSalesSummaryDTO.TransactionDTO> transactions = orderRepository
                                 .findTop50ByBranchIdOrderByCreatedAtDesc(finalBranchId)
                                 .stream()
@@ -100,6 +102,10 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
                                 .build();
         }
 
+        /**
+         * Resolves the branch ID to use for fetching sales data.
+         * Fallback to the user's assigned branch if no explicit target is provided.
+         */
         private Long resolveBranchId(Long targetBranchId, Long userId) {
                 if (targetBranchId != null)
                         return targetBranchId;
