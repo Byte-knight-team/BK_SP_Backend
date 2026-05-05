@@ -19,7 +19,6 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -31,16 +30,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
+/*
  * Standalone controller-layer tests for SystemConfigController.
  *
- * These tests cover the API layer for:
+ * Current review scope:
  * - global tax/service charge/loyalty config
  * - branch delivery/pickup/dine-in config
  * - effective config response
  *
- * Operating hours and order cancellation window are intentionally not tested here
- * because they are outside the simplified review focus.
+ * Operating hours were removed from this scope.
  */
 @ExtendWith(MockitoExtension.class)
 class SystemConfigControllerTest {
@@ -54,7 +52,8 @@ class SystemConfigControllerTest {
 
     @BeforeEach
     void setUp() {
-        SystemConfigController systemConfigController = new SystemConfigController(systemConfigService);
+        SystemConfigController systemConfigController =
+                new SystemConfigController(systemConfigService);
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(systemConfigController)
@@ -82,7 +81,8 @@ class SystemConfigControllerTest {
                 .andExpect(jsonPath("$.pointsPerAmount").value(1.00))
                 .andExpect(jsonPath("$.amountPerPoint").value(100.00))
                 .andExpect(jsonPath("$.minPointsToRedeem").value(50))
-                .andExpect(jsonPath("$.valuePerPoint").value(2.00));
+                .andExpect(jsonPath("$.valuePerPoint").value(2.00))
+                .andExpect(jsonPath("$.orderCancelWindowMinutes").value(0));
 
         verify(systemConfigService, times(1)).getGlobalConfig();
     }
@@ -93,7 +93,8 @@ class SystemConfigControllerTest {
         UpdateGlobalConfigRequest request = buildUpdateGlobalConfigRequest();
         GlobalConfigResponse response = buildGlobalConfigResponse();
 
-        when(systemConfigService.updateGlobalConfig(any(UpdateGlobalConfigRequest.class))).thenReturn(response);
+        when(systemConfigService.updateGlobalConfig(any(UpdateGlobalConfigRequest.class)))
+                .thenReturn(response);
 
         // Act + Assert
         mockMvc.perform(put("/api/admin/config/global")
@@ -109,9 +110,11 @@ class SystemConfigControllerTest {
                 .andExpect(jsonPath("$.pointsPerAmount").value(1.00))
                 .andExpect(jsonPath("$.amountPerPoint").value(100.00))
                 .andExpect(jsonPath("$.minPointsToRedeem").value(50))
-                .andExpect(jsonPath("$.valuePerPoint").value(2.00));
+                .andExpect(jsonPath("$.valuePerPoint").value(2.00))
+                .andExpect(jsonPath("$.orderCancelWindowMinutes").value(0));
 
-        verify(systemConfigService, times(1)).updateGlobalConfig(any(UpdateGlobalConfigRequest.class));
+        verify(systemConfigService, times(1))
+                .updateGlobalConfig(any(UpdateGlobalConfigRequest.class));
     }
 
     @Test
@@ -151,7 +154,8 @@ class SystemConfigControllerTest {
         response.setDeliveryEnabled(false);
         response.setBranchActiveForOrders(false);
 
-        when(systemConfigService.updateBranchConfig(eq(2L), any(UpdateBranchConfigRequest.class))).thenReturn(response);
+        when(systemConfigService.updateBranchConfig(eq(2L), any(UpdateBranchConfigRequest.class)))
+                .thenReturn(response);
 
         // Act + Assert
         mockMvc.perform(put("/api/admin/config/branches/2")
@@ -166,7 +170,8 @@ class SystemConfigControllerTest {
                 .andExpect(jsonPath("$.dineInEnabled").value(true))
                 .andExpect(jsonPath("$.branchActiveForOrders").value(false));
 
-        verify(systemConfigService, times(1)).updateBranchConfig(eq(2L), any(UpdateBranchConfigRequest.class));
+        verify(systemConfigService, times(1))
+                .updateBranchConfig(eq(2L), any(UpdateBranchConfigRequest.class));
     }
 
     @Test
@@ -190,6 +195,7 @@ class SystemConfigControllerTest {
                 .andExpect(jsonPath("$.amountPerPoint").value(100.00))
                 .andExpect(jsonPath("$.minPointsToRedeem").value(50))
                 .andExpect(jsonPath("$.valuePerPoint").value(2.00))
+                .andExpect(jsonPath("$.orderCancelWindowMinutes").value(0))
                 .andExpect(jsonPath("$.deliveryFee").value(8.50))
                 .andExpect(jsonPath("$.deliveryEnabled").value(true))
                 .andExpect(jsonPath("$.pickupEnabled").value(true))
@@ -201,6 +207,7 @@ class SystemConfigControllerTest {
 
     private UpdateGlobalConfigRequest buildUpdateGlobalConfigRequest() {
         UpdateGlobalConfigRequest request = new UpdateGlobalConfigRequest();
+
         request.setTaxEnabled(true);
         request.setTaxPercentage(new BigDecimal("10.00"));
         request.setServiceChargeEnabled(true);
@@ -210,11 +217,6 @@ class SystemConfigControllerTest {
         request.setAmountPerPoint(new BigDecimal("100.00"));
         request.setMinPointsToRedeem(50);
         request.setValuePerPoint(new BigDecimal("2.00"));
-
-        /*
-         * Required by the DTO validation.
-         * Not tested here because order cancel window is outside this simplified scope.
-         */
         request.setOrderCancelWindowMinutes(0);
 
         return request;
@@ -222,6 +224,7 @@ class SystemConfigControllerTest {
 
     private GlobalConfigResponse buildGlobalConfigResponse() {
         GlobalConfigResponse response = new GlobalConfigResponse();
+
         response.setId(1L);
         response.setTaxEnabled(true);
         response.setTaxPercentage(new BigDecimal("10.00"));
@@ -234,11 +237,13 @@ class SystemConfigControllerTest {
         response.setValuePerPoint(new BigDecimal("2.00"));
         response.setOrderCancelWindowMinutes(0);
         response.setUpdatedAt(LocalDateTime.of(2026, 4, 28, 10, 0));
+
         return response;
     }
 
     private BranchConfigResponse buildBranchConfigResponse() {
         BranchConfigResponse response = new BranchConfigResponse();
+
         response.setId(5L);
         response.setBranchId(2L);
         response.setBranchName("Branch 02");
@@ -248,11 +253,13 @@ class SystemConfigControllerTest {
         response.setDineInEnabled(true);
         response.setBranchActiveForOrders(true);
         response.setUpdatedAt(LocalDateTime.of(2026, 4, 28, 10, 0));
+
         return response;
     }
 
     private EffectiveBranchConfigResponse buildEffectiveBranchConfigResponse() {
         EffectiveBranchConfigResponse response = new EffectiveBranchConfigResponse();
+
         response.setBranchId(2L);
         response.setBranchName("Branch 02");
 
@@ -275,11 +282,6 @@ class SystemConfigControllerTest {
         response.setPickupEnabled(true);
         response.setDineInEnabled(true);
         response.setBranchActiveForOrders(true);
-
-        /*
-         * Operating hours are not part of this simplified test focus.
-         */
-        response.setOperatingHours(List.of());
 
         return response;
     }

@@ -1,13 +1,10 @@
 package com.ByteKnights.com.resturarent_system.service;
 
-import com.ByteKnights.com.resturarent_system.dto.request.superadmin.OperatingHourItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateBranchConfigRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateGlobalConfigRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateOperatingHoursRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.BranchConfigResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.EffectiveBranchConfigResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.GlobalConfigResponse;
-import com.ByteKnights.com.resturarent_system.dto.response.superadmin.OperatingHourItemResponse;
 import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
 import com.ByteKnights.com.resturarent_system.entity.AuditModule;
 import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
@@ -15,14 +12,10 @@ import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
 import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.BranchConfig;
-import com.ByteKnights.com.resturarent_system.entity.BranchOperatingHours;
-import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.entity.SystemConfig;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.repository.BranchConfigRepository;
-import com.ByteKnights.com.resturarent_system.repository.BranchOperatingHoursRepository;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
-import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.SystemConfigRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
@@ -31,16 +24,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.time.DayOfWeek;
-import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -49,37 +34,36 @@ public class SystemConfigService {
     private final SystemConfigRepository systemConfigRepository;
     private final BranchRepository branchRepository;
     private final BranchConfigRepository branchConfigRepository;
-    private final BranchOperatingHoursRepository branchOperatingHoursRepository;
     private final UserRepository userRepository;
-    private final StaffRepository staffRepository;
     private final AuditLogService auditLogService;
 
-    public SystemConfigService(SystemConfigRepository systemConfigRepository,
+    public SystemConfigService(
+            SystemConfigRepository systemConfigRepository,
             BranchRepository branchRepository,
             BranchConfigRepository branchConfigRepository,
-            BranchOperatingHoursRepository branchOperatingHoursRepository,
             UserRepository userRepository,
-            StaffRepository staffRepository,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService
+    ) {
         this.systemConfigRepository = systemConfigRepository;
         this.branchRepository = branchRepository;
         this.branchConfigRepository = branchConfigRepository;
-        this.branchOperatingHoursRepository = branchOperatingHoursRepository;
         this.userRepository = userRepository;
-        this.staffRepository = staffRepository;
         this.auditLogService = auditLogService;
     }
 
     public GlobalConfigResponse getGlobalConfig() {
+        validateSuperAdminAccess();
+
         SystemConfig config = getOrCreateGlobalConfig();
         return mapGlobalConfig(config);
     }
 
     /*
      * Updates global system settings.
-     * Manual audit is used here because old/new configuration values are important.
+     * Manual audit is used because old/new config values are important.
      */
     public GlobalConfigResponse updateGlobalConfig(UpdateGlobalConfigRequest request) {
+        validateSuperAdminAccess();
         validateGlobalConfigRequest(request);
 
         SystemConfig config = getOrCreateGlobalConfig();
@@ -98,6 +82,7 @@ public class SystemConfigService {
 
         SystemConfig saved = systemConfigRepository.save(config);
 
+        // log the audit trail
         auditLogService.logCurrentUserAction(
                 AuditModule.CONFIG,
                 AuditEventType.GLOBAL_CONFIG_UPDATED,
@@ -108,25 +93,30 @@ public class SystemConfigService {
                 null,
                 "Global configuration updated successfully",
                 oldValues,
-                buildGlobalConfigSnapshot(saved));
+                buildGlobalConfigSnapshot(saved)
+        );
 
         return mapGlobalConfig(saved);
     }
 
+    //get branch config
     public BranchConfigResponse getBranchConfig(Long branchId) {
-        validateBranchAccess(branchId);
+
+        validateSuperAdminAccess();
 
         Branch branch = getBranchOrThrow(branchId);
         BranchConfig config = getOrCreateBranchConfig(branch);
+
         return mapBranchConfig(config);
     }
 
     /*
-     * Updates branch-specific system settings.
-     * Manual audit is used here because old/new configuration values are important.
+     * Updates branch specific order settings.
+     * Manual audit is used because old/new branch config values are important.
      */
     public BranchConfigResponse updateBranchConfig(Long branchId, UpdateBranchConfigRequest request) {
-        validateAdminBranchWriteAccess(branchId);
+        
+        validateSuperAdminAccess();
         validateBranchConfigRequest(request);
 
         Branch branch = getBranchOrThrow(branchId);
@@ -151,101 +141,34 @@ public class SystemConfigService {
                 branch.getId(),
                 "Branch configuration updated successfully",
                 oldValues,
-                buildBranchConfigSnapshot(saved));
+                buildBranchConfigSnapshot(saved)
+        );
 
         return mapBranchConfig(saved);
     }
 
-    public List<OperatingHourItemResponse> getOperatingHours(Long branchId) {
-        validateBranchAccess(branchId);
-
-        Branch branch = getBranchOrThrow(branchId);
-
-        List<BranchOperatingHours> hours = branchOperatingHoursRepository.findByBranch(branch);
-        return hours.stream()
-                .sorted(Comparator.comparing(item -> item.getDayOfWeek().getValue()))
-                .map(this::mapOperatingHour)
-                .collect(Collectors.toList());
-    }
-
-    public List<OperatingHourItemResponse> updateOperatingHours(Long branchId, UpdateOperatingHoursRequest request) {
-        validateAdminBranchWriteAccess(branchId);
-        validateOperatingHoursRequest(request);
-
-        Branch branch = getBranchOrThrow(branchId);
-
-        branchOperatingHoursRepository.deleteByBranch(branch);
-
-        List<BranchOperatingHours> newRows = new ArrayList<>();
-        for (OperatingHourItemRequest item : request.getOperatingHours()) {
-            BranchOperatingHours entity = new BranchOperatingHours();
-            entity.setBranch(branch);
-            entity.setDayOfWeek(parseDayOfWeek(item.getDayOfWeek()));
-            entity.setOpen(Boolean.TRUE.equals(item.getIsOpen()));
-
-            if (Boolean.TRUE.equals(item.getIsOpen())) {
-                LocalTime openTime = parseTime(item.getOpenTime(), "openTime");
-                LocalTime closeTime = parseTime(item.getCloseTime(), "closeTime");
-
-                if (!closeTime.isAfter(openTime)) {
-                    throw new IllegalArgumentException("closeTime must be after openTime for " + item.getDayOfWeek());
-                }
-
-                entity.setOpenTime(openTime);
-                entity.setCloseTime(closeTime);
-
-                if (item.getLastOrderTime() != null && !item.getLastOrderTime().isBlank()) {
-                    LocalTime lastOrderTime = parseTime(item.getLastOrderTime(), "lastOrderTime");
-
-                    if (lastOrderTime.isBefore(openTime) || lastOrderTime.isAfter(closeTime)) {
-                        throw new IllegalArgumentException(
-                                "lastOrderTime must be between openTime and closeTime for " + item.getDayOfWeek());
-                    }
-
-                    entity.setLastOrderTime(lastOrderTime);
-                }
-            } else {
-                entity.setOpenTime(null);
-                entity.setCloseTime(null);
-                entity.setLastOrderTime(null);
-            }
-
-            newRows.add(entity);
-        }
-
-        List<BranchOperatingHours> saved = branchOperatingHoursRepository.saveAll(newRows);
-
-        return saved.stream()
-                .sorted(Comparator.comparing(item -> item.getDayOfWeek().getValue()))
-                .map(this::mapOperatingHour)
-                .collect(Collectors.toList());
-    }
-
     /*
-     * Gets the effective system configuration for a branch.
-     * Uses global configuration as base and overrides with branch-specific settings.
+     * Returns the final config applied to a branch.
+     * This now combines only global config + branch config.
      */
     public EffectiveBranchConfigResponse getEffectiveBranchConfig(Long branchId) {
-        validateBranchAccess(branchId);
+        validateSuperAdminAccess();
 
         Branch branch = getBranchOrThrow(branchId);
         SystemConfig global = getOrCreateGlobalConfig();
         BranchConfig branchConfig = getOrCreateBranchConfig(branch);
 
-        List<OperatingHourItemResponse> operatingHours = branchOperatingHoursRepository.findByBranch(branch)
-                .stream()
-                .sorted(Comparator.comparing(item -> item.getDayOfWeek().getValue()))
-                .map(this::mapOperatingHour)
-                .collect(Collectors.toList());
-
         EffectiveBranchConfigResponse response = new EffectiveBranchConfigResponse();
+
         response.setBranchId(branch.getId());
         response.setBranchName(branch.getName());
 
         response.setTaxEnabled(global.isTaxEnabled());
         response.setTaxPercentage(global.getTaxPercentage());
+
         response.setServiceChargeEnabled(global.isServiceChargeEnabled());
         response.setServiceChargePercentage(global.getServiceChargePercentage());
+
         response.setLoyaltyEnabled(global.isLoyaltyEnabled());
         response.setPointsPerAmount(global.getPointsPerAmount());
         response.setAmountPerPoint(global.getAmountPerPoint());
@@ -255,17 +178,15 @@ public class SystemConfigService {
 
         response.setDeliveryFee(branchConfig.getDeliveryFee());
         response.setDeliveryEnabled(branchConfig.isDeliveryEnabled());
+
         response.setPickupEnabled(branchConfig.isPickupEnabled());
         response.setDineInEnabled(branchConfig.isDineInEnabled());
         response.setBranchActiveForOrders(branchConfig.isBranchActiveForOrders());
 
-        response.setOperatingHours(operatingHours);
-
         return response;
     }
 
-    // --- Helper methods ---
-
+    //this method is used to get the current authenticated user
     private User getCurrentAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
@@ -286,6 +207,7 @@ public class SystemConfigService {
         }
 
         String email = authentication.getName();
+
         if (email != null && !email.trim().isEmpty()) {
             return userRepository.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
@@ -294,20 +216,30 @@ public class SystemConfigService {
         throw new RuntimeException("Authenticated user not found");
     }
 
-    /**
-     * Retrieves or creates the global system configuration.
-     * Creates a default configuration if none exists.
-     */
-    private SystemConfig getOrCreateGlobalConfig() {
-        return systemConfigRepository.findAll().stream().findFirst().orElseGet(() -> {
-            SystemConfig config = new SystemConfig();
-            return systemConfigRepository.save(config);
-        });
+    // Extra service layer safety.
+    // Controller already allows only SUPER_ADMIN, but service also checks it.
+    private void validateSuperAdminAccess() {
+        User user = getCurrentAuthenticatedUser();
+        String roleName = normalize(user.getRole().getName());
+
+        if (!"SUPER_ADMIN".equals(roleName)) {
+            throw new RuntimeException("Only SUPER_ADMIN can access system configuration");
+        }
     }
 
-    /**
-     * Retrieves or creates the branch-specific configuration.
-     * Creates a default configuration if none exists.
+    
+    //Returns existing global config or creates a default config.
+    //First means for all branches this global config will be applied 
+    private SystemConfig getOrCreateGlobalConfig() {
+        return systemConfigRepository.findAll()
+                .stream()
+                .findFirst()
+                .orElseGet(() -> systemConfigRepository.save(new SystemConfig()));
+    }
+
+    /*
+     * Returns existing branch config or creates a default config for the branch.
+     * Used for a new branch ,not need to manually create branch config for the new branch
      */
     private BranchConfig getOrCreateBranchConfig(Branch branch) {
         return branchConfigRepository.findByBranch(branch).orElseGet(() -> {
@@ -317,132 +249,47 @@ public class SystemConfigService {
         });
     }
 
-    /**
-     * Retrieves a branch by its ID.
-     * Throws an exception if the branch is not found.
-     */
+    //get or create branch config and return branch config
     private Branch getBranchOrThrow(Long branchId) {
         return branchRepository.findById(branchId)
                 .orElseThrow(() -> new RuntimeException("Branch not found with id: " + branchId));
     }
 
-    /**
-     * Validates the global configuration update request.
-     * Ensures percentages are within valid range (0-100) and loyalty values are positive.
+    /*
+     * Validates global config values before saving.
      */
     private void validateGlobalConfigRequest(UpdateGlobalConfigRequest request) {
-        if (request.getTaxPercentage().doubleValue() < 0 || request.getTaxPercentage().doubleValue() > 100) {
+
+        //validate tax percentage
+        if (request.getTaxPercentage().doubleValue() < 0
+                || request.getTaxPercentage().doubleValue() > 100) {
             throw new IllegalArgumentException("Tax percentage must be between 0 and 100");
         }
 
+        //validate service charge percentage
         if (request.getServiceChargePercentage().doubleValue() < 0
                 || request.getServiceChargePercentage().doubleValue() > 100) {
             throw new IllegalArgumentException("Service charge percentage must be between 0 and 100");
         }
 
+        //validate amount per point
         if (request.getAmountPerPoint().doubleValue() <= 0) {
             throw new IllegalArgumentException("Amount per point must be greater than 0");
         }
     }
 
-    /**
-     * Validates the branch configuration update request.
-     * Ensures delivery fee is non-negative.
-     */
+    //validate branch config values before saving
     private void validateBranchConfigRequest(UpdateBranchConfigRequest request) {
+        //validate delivery fee
         if (request.getDeliveryFee().doubleValue() < 0) {
             throw new IllegalArgumentException("Delivery fee cannot be negative");
         }
     }
 
-    private void validateOperatingHoursRequest(UpdateOperatingHoursRequest request) {
-        if (request.getOperatingHours() == null || request.getOperatingHours().isEmpty()) {
-            throw new IllegalArgumentException("Operating hours list cannot be empty");
-        }
-
-        Set<DayOfWeek> uniqueDays = new HashSet<>();
-        for (OperatingHourItemRequest item : request.getOperatingHours()) {
-            DayOfWeek day = parseDayOfWeek(item.getDayOfWeek());
-            if (!uniqueDays.add(day)) {
-                throw new IllegalArgumentException("Duplicate dayOfWeek found: " + item.getDayOfWeek());
-            }
-
-            boolean isOpen = Boolean.TRUE.equals(item.getIsOpen());
-
-            if (isOpen) {
-                if (item.getOpenTime() == null || item.getOpenTime().isBlank()) {
-                    throw new IllegalArgumentException(
-                            "openTime is required when isOpen = true for " + item.getDayOfWeek());
-                }
-                if (item.getCloseTime() == null || item.getCloseTime().isBlank()) {
-                    throw new IllegalArgumentException(
-                            "closeTime is required when isOpen = true for " + item.getDayOfWeek());
-                }
-            }
-        }
-    }
-
-    /*
-     Validates that the current user has write access to the specified branch.
-     */
-    private void validateAdminBranchWriteAccess(Long branchId) {
-        validateBranchAccess(branchId);
-    }
-
-    /**
-     * Validates that the current user has read access to the specified branch.
-     */
-    private void validateBranchAccess(Long branchId) {
-        User creator = getCurrentAuthenticatedUser();
-        String creatorRole = normalize(creator.getRole().getName());
-
-        if ("SUPER_ADMIN".equals(creatorRole)) {
-            return;
-        }
-
-        if ("ADMIN".equals(creatorRole)) {
-            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
-                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
-
-            Long adminBranchId = creatorStaff.getBranch().getId();
-
-            if (!adminBranchId.equals(branchId)) {
-                throw new RuntimeException("ADMIN can access configuration only for their own branch");
-            }
-
-            return;
-        }
-
-        throw new RuntimeException("Only SUPER_ADMIN or ADMIN can access branch configuration");
-    }
-
-    /**
-     * Parses the day of week string into DayOfWeek enum.
-     */
-    private DayOfWeek parseDayOfWeek(String value) {
-        try {
-            return DayOfWeek.valueOf(value.trim().toUpperCase());
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid dayOfWeek: " + value);
-        }
-    }
-
-    /**
-     * Parses the time string into LocalTime. Supports both HH:mm:ss and HH:mm formats.
-     */
-    private LocalTime parseTime(String value, String fieldName) {
-        try {
-            return LocalTime.parse(value);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid time format for " + fieldName + ". Use HH:mm:ss or HH:mm");
-        }
-    }
-
-    /**
-     * Maps a SystemConfig entity to a GlobalConfigResponse DTO.
-     */
+    //map global config to global config response
     private GlobalConfigResponse mapGlobalConfig(SystemConfig config) {
         GlobalConfigResponse response = new GlobalConfigResponse();
+
         response.setId(config.getId());
         response.setTaxEnabled(config.isTaxEnabled());
         response.setTaxPercentage(config.getTaxPercentage());
@@ -455,14 +302,14 @@ public class SystemConfigService {
         response.setValuePerPoint(config.getValuePerPoint());
         response.setOrderCancelWindowMinutes(config.getOrderCancelWindowMinutes());
         response.setUpdatedAt(config.getUpdatedAt());
+
         return response;
     }
 
-    /**
-     * Maps a BranchConfig entity to a BranchConfigResponse DTO.
-     */
+    //map branch config to branch config response
     private BranchConfigResponse mapBranchConfig(BranchConfig config) {
         BranchConfigResponse response = new BranchConfigResponse();
+
         response.setId(config.getId());
         response.setBranchId(config.getBranch().getId());
         response.setBranchName(config.getBranch().getName());
@@ -472,28 +319,16 @@ public class SystemConfigService {
         response.setDineInEnabled(config.isDineInEnabled());
         response.setBranchActiveForOrders(config.isBranchActiveForOrders());
         response.setUpdatedAt(config.getUpdatedAt());
+
         return response;
     }
 
-    /**
-     * Maps a BranchOperatingHours entity to an OperatingHourItemResponse DTO.
-     */
-    private OperatingHourItemResponse mapOperatingHour(BranchOperatingHours entity) {
-        OperatingHourItemResponse response = new OperatingHourItemResponse();
-        response.setId(entity.getId());
-        response.setDayOfWeek(entity.getDayOfWeek().name());
-        response.setOpen(entity.isOpen());
-        response.setOpenTime(entity.getOpenTime() != null ? entity.getOpenTime().toString() : null);
-        response.setCloseTime(entity.getCloseTime() != null ? entity.getCloseTime().toString() : null);
-        response.setLastOrderTime(entity.getLastOrderTime() != null ? entity.getLastOrderTime().toString() : null);
-        return response;
-    }
-
-    /**
-     * Builds a snapshot map of the global configuration for audit logging.
+    /*
+     * Builds old/new global config data for audit logging.
      */
     private Map<String, Object> buildGlobalConfigSnapshot(SystemConfig config) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
+
         snapshot.put("id", config.getId());
         snapshot.put("taxEnabled", config.isTaxEnabled());
         snapshot.put("taxPercentage", config.getTaxPercentage());
@@ -506,14 +341,16 @@ public class SystemConfigService {
         snapshot.put("valuePerPoint", config.getValuePerPoint());
         snapshot.put("orderCancelWindowMinutes", config.getOrderCancelWindowMinutes());
         snapshot.put("updatedAt", config.getUpdatedAt());
+
         return snapshot;
     }
 
-    /**
-     * Builds a snapshot map of the branch configuration for audit logging.
+    /*
+     * Builds old/new branch config data for audit logging.
      */
     private Map<String, Object> buildBranchConfigSnapshot(BranchConfig config) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
+
         snapshot.put("id", config.getId());
         snapshot.put("branchId", config.getBranch() != null ? config.getBranch().getId() : null);
         snapshot.put("branchName", config.getBranch() != null ? config.getBranch().getName() : null);
@@ -523,6 +360,7 @@ public class SystemConfigService {
         snapshot.put("dineInEnabled", config.isDineInEnabled());
         snapshot.put("branchActiveForOrders", config.isBranchActiveForOrders());
         snapshot.put("updatedAt", config.getUpdatedAt());
+
         return snapshot;
     }
 
@@ -530,6 +368,7 @@ public class SystemConfigService {
         if (value == null) {
             return null;
         }
+
         return value.trim().toUpperCase();
     }
 }

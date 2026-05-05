@@ -8,8 +8,8 @@ public class EmailTestingService {
 
     /*
      * Runtime testing flag
-     * false -> email service tries to send real email
-     * true  -> email service intentionally fails
+     * false - email service tries to send real email
+     * true - email service intentionally fails
      */
     private boolean forceFail;
 
@@ -21,7 +21,6 @@ public class EmailTestingService {
     }
 
     /*
-        Returns whether email sending should be forced to fail.
         SmtpEmailService checks this before sending the real email.
     */
     public boolean isForceFail() {

@@ -271,6 +271,7 @@ public class AuditLogService {
             return null;
         }
 
+        //
         try {
             Object sanitized = sanitizeValue(value);
             return objectMapper.writeValueAsString(sanitized);
