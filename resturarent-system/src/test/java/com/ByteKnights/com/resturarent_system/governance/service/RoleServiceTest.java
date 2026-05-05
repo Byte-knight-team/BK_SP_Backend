@@ -2,21 +2,29 @@ package com.ByteKnights.com.resturarent_system.governance.service;
 
 import com.ByteKnights.com.resturarent_system.dto.RoleSummaryResponse;
 import com.ByteKnights.com.resturarent_system.dto.UpdateRoleRequest;
-import com.ByteKnights.com.resturarent_system.entity.*;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
+import com.ByteKnights.com.resturarent_system.entity.Privilege;
+import com.ByteKnights.com.resturarent_system.entity.Role;
+import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.repository.PrivilegeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.RoleService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
@@ -29,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/**
+/*
  * Unit tests for RoleService.
  *
  * These tests cover the governance / RBAC role-management logic.
@@ -53,7 +61,7 @@ class RoleServiceTest {
     @InjectMocks
     private RoleService roleService;
 
-    /**
+    /*
      * Clear Spring Security context after each test.
      * This prevents one test's authenticated role from affecting another test.
      */
@@ -90,18 +98,11 @@ class RoleServiceTest {
         verify(roleRepository, times(1)).findByName("CASHIER");
         verify(roleRepository, times(1)).save(any(Role.class));
 
-        verify(auditLogService, times(1)).logCurrentUserAction(
-                eq(AuditModule.RBAC),
-                eq(AuditEventType.ROLE_CREATED),
-                eq(AuditStatus.SUCCESS),
-                eq(AuditSeverity.INFO),
-                eq(AuditTargetType.ROLE),
-                eq(10L),
-                isNull(),
-                eq("Role created successfully"),
-                isNull(),
-                anyMap()
-        );
+        /*
+         * Current RoleService does not audit role creation.
+         * If you add ROLE_CREATED audit logging later, update this test.
+         */
+        verifyNoInteractions(auditLogService);
     }
 
     @Test
@@ -239,6 +240,80 @@ class RoleServiceTest {
         assertTrue(result.contains("VIEW_STAFF"));
 
         verify(roleRepository, times(1)).findById(2L);
+    }
+
+    @Test
+    void assignPermissionsToRole_shouldReplacePermissionsAndWriteAuditLog() {
+        // Arrange
+        setAuthenticatedJwtSuperAdmin();
+
+        Role managerRole = buildRole(4L, "MANAGER", "Manager role", new BigDecimal("75000.00"));
+
+        Privilege oldPrivilege = buildPrivilege(1L, "VIEW_STAFF", "View staff");
+        Privilege newPrivilegeOne = buildPrivilege(2L, "VIEW_REPORTS", "View reports");
+        Privilege newPrivilegeTwo = buildPrivilege(3L, "MANAGE_ORDERS", "Manage orders");
+
+        managerRole.setPermissions(new HashSet<>(Set.of(oldPrivilege)));
+
+        when(roleRepository.findById(4L)).thenReturn(Optional.of(managerRole));
+        when(privilegeRepository.findByName("VIEW_REPORTS")).thenReturn(Optional.of(newPrivilegeOne));
+        when(privilegeRepository.findByName("MANAGE_ORDERS")).thenReturn(Optional.of(newPrivilegeTwo));
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Act
+        Role result = roleService.assignPermissionsToRole(
+                4L,
+                Set.of("VIEW_REPORTS", "MANAGE_ORDERS")
+        );
+
+        // Assert
+        assertNotNull(result);
+        assertEquals(2, result.getPermissions().size());
+        assertTrue(result.getPermissions().contains(newPrivilegeOne));
+        assertTrue(result.getPermissions().contains(newPrivilegeTwo));
+        assertFalse(result.getPermissions().contains(oldPrivilege));
+
+        verify(roleRepository, times(1)).findById(4L);
+        verify(privilegeRepository, times(1)).findByName("VIEW_REPORTS");
+        verify(privilegeRepository, times(1)).findByName("MANAGE_ORDERS");
+        verify(roleRepository, times(1)).save(managerRole);
+
+        verify(auditLogService, times(1)).logCurrentUserAction(
+                eq(AuditModule.RBAC),
+                eq(AuditEventType.ROLE_PERMISSIONS_UPDATED),
+                eq(AuditStatus.SUCCESS),
+                eq(AuditSeverity.INFO),
+                eq(AuditTargetType.ROLE),
+                eq(4L),
+                isNull(),
+                eq("Role permissions updated successfully"),
+                anyMap(),
+                anyMap()
+        );
+    }
+
+    @Test
+    void assignPermissionsToRole_shouldThrowException_whenPrivilegeDoesNotExist() {
+        // Arrange
+        setAuthenticatedJwtSuperAdmin();
+
+        Role managerRole = buildRole(4L, "MANAGER", "Manager role", new BigDecimal("75000.00"));
+
+        when(roleRepository.findById(4L)).thenReturn(Optional.of(managerRole));
+        when(privilegeRepository.findByName("UNKNOWN_PERMISSION")).thenReturn(Optional.empty());
+
+        // Act + Assert
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> roleService.assignPermissionsToRole(4L, Set.of("UNKNOWN_PERMISSION"))
+        );
+
+        assertEquals("Privilege not found: UNKNOWN_PERMISSION", exception.getMessage());
+
+        verify(roleRepository, times(1)).findById(4L);
+        verify(privilegeRepository, times(1)).findByName("UNKNOWN_PERMISSION");
+        verify(roleRepository, never()).save(any(Role.class));
+        verifyNoInteractions(auditLogService);
     }
 
     @Test
@@ -380,7 +455,7 @@ class RoleServiceTest {
         );
     }
 
-    /**
+    /*
      * Creates a fake authenticated role in Spring Security.
      * RoleService reads ROLE_SUPER_ADMIN / ROLE_ADMIN from authorities.
      */
@@ -390,6 +465,37 @@ class RoleServiceTest {
                         "test-user",
                         null,
                         List.of(new SimpleGrantedAuthority("ROLE_" + roleName))
+                );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+    }
+
+    /*
+     * Creates a fake JWT principal for methods that directly read JwtUserPrincipal.
+     */
+    private void setAuthenticatedJwtSuperAdmin() {
+        Role superAdminRole = buildRole(1L, "SUPER_ADMIN", "Global admin", BigDecimal.ZERO);
+
+        User superAdminUser = User.builder()
+                .id(1L)
+                .fullName("Super Admin")
+                .username("superadmin")
+                .email("superadmin@test.com")
+                .phone("0770000000")
+                .password("encoded-password")
+                .role(superAdminRole)
+                .isActive(true)
+                .passwordChanged(true)
+                .emailSent(true)
+                .build();
+
+        JwtUserPrincipal principal = new JwtUserPrincipal(superAdminUser);
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        principal,
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))
                 );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);

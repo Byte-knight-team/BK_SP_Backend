@@ -5,11 +5,20 @@ import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateGloba
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.BranchConfigResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.EffectiveBranchConfigResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.GlobalConfigResponse;
-import com.ByteKnights.com.resturarent_system.entity.*;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
+import com.ByteKnights.com.resturarent_system.entity.Branch;
+import com.ByteKnights.com.resturarent_system.entity.BranchConfig;
+import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
+import com.ByteKnights.com.resturarent_system.entity.InviteStatus;
+import com.ByteKnights.com.resturarent_system.entity.Role;
+import com.ByteKnights.com.resturarent_system.entity.SystemConfig;
+import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.repository.BranchConfigRepository;
-import com.ByteKnights.com.resturarent_system.repository.BranchOperatingHoursRepository;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
-import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.SystemConfigRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
@@ -31,19 +40,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/**
+/*
  * Unit tests for SystemConfigService.
  *
- * These tests cover the governance system configuration logic:
- * - global tax configuration
- * - service charge configuration
- * - loyalty configuration
- * - branch delivery / pickup / dine-in configuration
- * - branch config access rules
- * - audit logging for config changes
+ * Current review scope:
+ * - SUPER_ADMIN only access
+ * - global config
+ * - branch config
+ * - effective config
+ * - audit logging for config updates
  *
- * Operating hours and order cancellation window are intentionally not tested here
- * because they are outside the simplified review focus.
+ * Operating hours were removed from this scope.
  */
 @ExtendWith(MockitoExtension.class)
 class SystemConfigServiceTest {
@@ -58,13 +65,7 @@ class SystemConfigServiceTest {
     private BranchConfigRepository branchConfigRepository;
 
     @Mock
-    private BranchOperatingHoursRepository branchOperatingHoursRepository;
-
-    @Mock
     private UserRepository userRepository;
-
-    @Mock
-    private StaffRepository staffRepository;
 
     @Mock
     private AuditLogService auditLogService;
@@ -72,7 +73,7 @@ class SystemConfigServiceTest {
     @InjectMocks
     private SystemConfigService systemConfigService;
 
-    /**
+    /*
      * Clear Spring Security context after each test.
      */
     @AfterEach
@@ -83,6 +84,10 @@ class SystemConfigServiceTest {
     @Test
     void getGlobalConfig_shouldCreateDefaultConfig_whenNoConfigExists() {
         // Arrange
+        User superAdmin = buildSuperAdminUser();
+        setAuthenticatedUser(superAdmin);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(superAdmin));
         when(systemConfigRepository.findAll()).thenReturn(List.of());
 
         when(systemConfigRepository.save(any(SystemConfig.class))).thenAnswer(invocation -> {
@@ -114,10 +119,13 @@ class SystemConfigServiceTest {
     @Test
     void updateGlobalConfig_shouldUpdateConfigAndWriteAuditLog_whenRequestIsValid() {
         // Arrange
+        User superAdmin = buildSuperAdminUser();
         SystemConfig existingConfig = buildSystemConfig(1L);
-
         UpdateGlobalConfigRequest request = buildValidGlobalConfigRequest();
 
+        setAuthenticatedUser(superAdmin);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(superAdmin));
         when(systemConfigRepository.findAll()).thenReturn(List.of(existingConfig));
         when(systemConfigRepository.save(any(SystemConfig.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -159,8 +167,13 @@ class SystemConfigServiceTest {
     @Test
     void updateGlobalConfig_shouldThrowException_whenTaxPercentageIsInvalid() {
         // Arrange
+        User superAdmin = buildSuperAdminUser();
         UpdateGlobalConfigRequest request = buildValidGlobalConfigRequest();
         request.setTaxPercentage(new BigDecimal("150.00"));
+
+        setAuthenticatedUser(superAdmin);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(superAdmin));
 
         // Act + Assert
         IllegalArgumentException exception = assertThrows(
@@ -177,9 +190,7 @@ class SystemConfigServiceTest {
     @Test
     void getBranchConfig_shouldReturnBranchConfig_whenSuperAdminAccessesBranch() {
         // Arrange
-        Role superAdminRole = buildRole(1L, "SUPER_ADMIN");
-        User superAdmin = buildUser(1L, "superadmin@test.com", superAdminRole);
-
+        User superAdmin = buildSuperAdminUser();
         Branch branch = buildBranch(2L, "Branch 02");
         BranchConfig config = buildBranchConfig(5L, branch);
 
@@ -211,9 +222,7 @@ class SystemConfigServiceTest {
     @Test
     void updateBranchConfig_shouldUpdateConfigAndWriteAuditLog_whenSuperAdminAccessesBranch() {
         // Arrange
-        Role superAdminRole = buildRole(1L, "SUPER_ADMIN");
-        User superAdmin = buildUser(1L, "superadmin@test.com", superAdminRole);
-
+        User superAdmin = buildSuperAdminUser();
         Branch branch = buildBranch(2L, "Branch 02");
         BranchConfig config = buildBranchConfig(5L, branch);
 
@@ -264,8 +273,7 @@ class SystemConfigServiceTest {
     @Test
     void updateBranchConfig_shouldThrowException_whenDeliveryFeeIsNegative() {
         // Arrange
-        Role superAdminRole = buildRole(1L, "SUPER_ADMIN");
-        User superAdmin = buildUser(1L, "superadmin@test.com", superAdminRole);
+        User superAdmin = buildSuperAdminUser();
 
         UpdateBranchConfigRequest request = new UpdateBranchConfigRequest();
         request.setDeliveryFee(new BigDecimal("-1.00"));
@@ -286,23 +294,20 @@ class SystemConfigServiceTest {
 
         assertEquals("Delivery fee cannot be negative", exception.getMessage());
 
+        verify(branchRepository, never()).findById(anyLong());
         verify(branchConfigRepository, never()).save(any(BranchConfig.class));
         verifyNoInteractions(auditLogService);
     }
 
     @Test
-    void getBranchConfig_shouldThrowException_whenAdminAccessesAnotherBranch() {
+    void getBranchConfig_shouldThrowException_whenAdminTriesToAccessConfig() {
         // Arrange
         Role adminRole = buildRole(2L, "ADMIN");
         User adminUser = buildUser(10L, "admin@test.com", adminRole);
 
-        Branch adminBranch = buildBranch(1L, "Admin Branch");
-        Staff adminStaff = buildStaff(20L, adminUser, adminBranch);
-
         setAuthenticatedUser(adminUser);
 
         when(userRepository.findById(10L)).thenReturn(Optional.of(adminUser));
-        when(staffRepository.findByUserId(10L)).thenReturn(Optional.of(adminStaff));
 
         // Act + Assert
         RuntimeException exception = assertThrows(
@@ -310,7 +315,7 @@ class SystemConfigServiceTest {
                 () -> systemConfigService.getBranchConfig(2L)
         );
 
-        assertEquals("ADMIN can access configuration only for their own branch", exception.getMessage());
+        assertEquals("Only SUPER_ADMIN can access system configuration", exception.getMessage());
 
         verify(branchRepository, never()).findById(2L);
         verifyNoInteractions(branchConfigRepository);
@@ -319,9 +324,7 @@ class SystemConfigServiceTest {
     @Test
     void getEffectiveBranchConfig_shouldCombineGlobalAndBranchConfig() {
         // Arrange
-        Role superAdminRole = buildRole(1L, "SUPER_ADMIN");
-        User superAdmin = buildUser(1L, "superadmin@test.com", superAdminRole);
-
+        User superAdmin = buildSuperAdminUser();
         Branch branch = buildBranch(2L, "Branch 02");
 
         SystemConfig globalConfig = buildSystemConfig(1L);
@@ -343,12 +346,6 @@ class SystemConfigServiceTest {
         when(branchRepository.findById(2L)).thenReturn(Optional.of(branch));
         when(systemConfigRepository.findAll()).thenReturn(List.of(globalConfig));
         when(branchConfigRepository.findByBranch(branch)).thenReturn(Optional.of(branchConfig));
-
-        /*
-         * Service method still loads operating hours internally.
-         * We return an empty list because operating hours are not part of this test focus.
-         */
-        when(branchOperatingHoursRepository.findByBranch(branch)).thenReturn(List.of());
 
         // Act
         EffectiveBranchConfigResponse response = systemConfigService.getEffectiveBranchConfig(2L);
@@ -375,12 +372,9 @@ class SystemConfigServiceTest {
         assertTrue(response.isPickupEnabled());
         assertTrue(response.isDineInEnabled());
         assertTrue(response.isBranchActiveForOrders());
-
-        assertNotNull(response.getOperatingHours());
-        assertTrue(response.getOperatingHours().isEmpty());
     }
 
-    /**
+    /*
      * Put a fake authenticated user into Spring Security context.
      * SystemConfigService reads the current user from SecurityContextHolder.
      */
@@ -397,6 +391,7 @@ class SystemConfigServiceTest {
 
     private UpdateGlobalConfigRequest buildValidGlobalConfigRequest() {
         UpdateGlobalConfigRequest request = new UpdateGlobalConfigRequest();
+
         request.setTaxEnabled(true);
         request.setTaxPercentage(new BigDecimal("10.00"));
         request.setServiceChargeEnabled(true);
@@ -406,11 +401,6 @@ class SystemConfigServiceTest {
         request.setAmountPerPoint(new BigDecimal("100.00"));
         request.setMinPointsToRedeem(50);
         request.setValuePerPoint(new BigDecimal("2.00"));
-
-        /*
-         * Required by the DTO validation.
-         * Not tested here because order cancel window is outside this simplified scope.
-         */
         request.setOrderCancelWindowMinutes(0);
 
         return request;
@@ -418,6 +408,7 @@ class SystemConfigServiceTest {
 
     private SystemConfig buildSystemConfig(Long id) {
         SystemConfig config = new SystemConfig();
+
         config.setId(id);
         config.setTaxEnabled(false);
         config.setTaxPercentage(BigDecimal.ZERO);
@@ -429,11 +420,13 @@ class SystemConfigServiceTest {
         config.setMinPointsToRedeem(0);
         config.setValuePerPoint(BigDecimal.ZERO);
         config.setOrderCancelWindowMinutes(0);
+
         return config;
     }
 
     private BranchConfig buildBranchConfig(Long id, Branch branch) {
         BranchConfig config = new BranchConfig();
+
         config.setId(id);
         config.setBranch(branch);
         config.setDeliveryFee(new BigDecimal("8.50"));
@@ -441,6 +434,7 @@ class SystemConfigServiceTest {
         config.setPickupEnabled(true);
         config.setDineInEnabled(true);
         config.setBranchActiveForOrders(true);
+
         return config;
     }
 
@@ -463,6 +457,11 @@ class SystemConfigServiceTest {
                 .build();
     }
 
+    private User buildSuperAdminUser() {
+        Role superAdminRole = buildRole(1L, "SUPER_ADMIN");
+        return buildUser(1L, "superadmin@test.com", superAdminRole);
+    }
+
     private User buildUser(Long id, String email, Role role) {
         return User.builder()
                 .id(id)
@@ -476,16 +475,6 @@ class SystemConfigServiceTest {
                 .passwordChanged(true)
                 .inviteStatus(InviteStatus.SENT)
                 .emailSent(true)
-                .build();
-    }
-
-    private Staff buildStaff(Long id, User user, Branch branch) {
-        return Staff.builder()
-                .id(id)
-                .user(user)
-                .branch(branch)
-                .salary(BigDecimal.ZERO)
-                .employmentStatus(EmploymentStatus.ACTIVE)
                 .build();
     }
 }

@@ -92,7 +92,7 @@ public class MailConfig {
         props.put("mail.debug", "false");
 
         /*
-         * Return the configured JavaMailSender bean, spring will manage this bean and inject it wherever needed.
+         * Return the configured JavaMailSender bean.
          */
         return mailSender;
     }
