@@ -32,12 +32,8 @@ public class JwtUserPrincipal implements UserDetails {
 
             /*
              * Role authority.
-             *
              * This keeps existing checks working:
-             * @PreAuthorize("hasRole('ADMIN')")
              * @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
-             *
-             * Spring role checks expect ROLE_ prefix internally.
              */
             String roleAuthority = roleName.startsWith("ROLE_")
                     ? roleName
@@ -47,11 +43,8 @@ public class JwtUserPrincipal implements UserDetails {
 
             /*
              * Privilege authorities.
-             *
              * These make dynamic RBAC permissions work:
              * @PreAuthorize("hasAuthority('CREATE_STAFF')")
-             * @PreAuthorize("hasAuthority('VIEW_ORDERS')")
-             *
              * These privileges are NOT stored in the JWT.
              * They are loaded from:
              * User -> Role -> role_permissions -> Privileges

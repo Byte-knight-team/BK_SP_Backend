@@ -71,7 +71,7 @@ public class AuditAspect {
                 return number.longValue();
             }
         } catch (Exception ignored) {
-            // Some DTOs may not have getId(). That is okay.
+            //Some DTOs may not have getId(), and it will not affect the audit log
         }
 
         return null;

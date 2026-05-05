@@ -49,16 +49,8 @@ public class DataSeeder implements CommandLineRunner {
         public void run(String... args) throws Exception {
 
                 /*
-                 * Privileges are system-level permission names.
-                 *
-                 * These can be used in controllers/services like:
-                 * 
-                 * @PreAuthorize("hasAuthority('CREATE_STAFF')")
-                 *
-                 * Important:
-                 * Use only uppercase snake_case privilege names.
-                 * Do not use duplicate camelCase names like createTable or createQRCode.
-                 */
+                   Privileges are system-level permission names.
+                */
 
                 // Staff & RBAC
                 Privilege createStaff = createPrivilege("CREATE_STAFF");
@@ -91,18 +83,19 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege viewReports = createPrivilege("VIEW_REPORTS");
                 Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
 
-                // QR & restaurant table permissions
+                // QR permissions
                 Privilege createQrcode = createPrivilege("CREATE_QRCODE");
                 Privilege regenerateQrcode = createPrivilege("REGENERATE_QRCODE");
                 Privilege revokeQrcode = createPrivilege("REVOKE_QRCODE");
-
+               
+                //Restaurant table permissions
                 Privilege createRestaurantTable = createPrivilege("CREATE_RESTAURANT_TABLE");
                 Privilege viewRestaurantTable = createPrivilege("VIEW_RESTAURANT_TABLE");
                 Privilege viewRestaurantTableById = createPrivilege("VIEW_RESTAURANT_TABLE_BY_ID");
                 Privilege updateRestaurantTable = createPrivilege("UPDATE_RESTAURANT_TABLE");
                 Privilege deleteRestaurantTable = createPrivilege("DELETE_RESTAURANT_TABLE");
 
-                // Kitchen
+                //Kitchen permissions
                 Privilege kitchenViewStats = createPrivilege("KITCHEN_VIEW_STATS");
                 Privilege kitchenOrderView = createPrivilege("KITCHEN_ORDER_VIEW");
                 Privilege kitchenOrderUpdate = createPrivilege("KITCHEN_ORDER_UPDATE");
@@ -115,14 +108,8 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege kitchenAlertView = createPrivilege("KITCHEN_ALERT_VIEW");
                 Privilege kitchenAlertResolve = createPrivilege("KITCHEN_ALERT_RESOLVE");
 
-                // RECEPTIONIST
-
                 /*
                  * All known system privileges.
-                 *
-                 * SUPER_ADMIN will always receive missing privileges from this set.
-                 * Other roles will only receive default permissions when they are first
-                 * created.
                  */
                 Set<Privilege> allPrivileges = Set.of(
                                 createStaff,
@@ -165,32 +152,16 @@ public class DataSeeder implements CommandLineRunner {
                                 kitchenAlertResolve);
 
                 /*
-                 * For normal roles, default permissions are added ONLY when the role is first
-                 * created.
-                 *
-                 * This prevents the DataSeeder from overwriting changes made from
-                 * the Roles & Permissions page.
-                 *
-                 * Example:
-                 * If SUPER_ADMIN removes CREATE_STAFF from ADMIN using the frontend,
-                 * restarting the backend should NOT automatically add it back.
+                 * For normal roles, default permissions are added ONLY when the role is first created.
+                 * This prevents the DataSeeder from overwriting changes made from the Roles & Permissions page.
                  */
                 Role superAdminRole = createRoleWithDefaultPermissions("SUPER_ADMIN", allPrivileges);
 
                 /*
-                 * SUPER_ADMIN is the owner role.
-                 *
-                 * SUPER_ADMIN always gets all currently known system privileges.
-                 * This is safe because SUPER_ADMIN is a protected/read-only core role.
-                 */
+                    SUPER_ADMIN is the owner role,  gets all currently known system privileges
+                */
                 addMissingPermissions(superAdminRole, allPrivileges);
 
-                /*
-                 * ADMIN default permissions.
-                 *
-                 * Because existing roles are not overwritten, changing this only affects
-                 * fresh databases where ADMIN does not exist yet.
-                 */
                 createRoleWithDefaultPermissions("ADMIN", Set.of(
                                 createStaff));
 
@@ -230,8 +201,6 @@ public class DataSeeder implements CommandLineRunner {
 
         /*
          * Creates a privilege only if it does not already exist.
-         *
-         * This is safe to run every backend startup.
          */
         private Privilege createPrivilege(String name) {
                 return privilegeRepository.findByName(name).orElseGet(() -> {
@@ -244,13 +213,7 @@ public class DataSeeder implements CommandLineRunner {
         }
 
         /*
-         * Creates a role with default permissions only if the role does not already
-         * exist.
-         *
-         * If the role already exists, we return it as it is.
-         * We do NOT overwrite its permissions.
-         *
-         * This is important because role permissions are editable from the frontend.
+         * Creates a role with default permissions only if the role does not already exist.
          */
         private Role createRoleWithDefaultPermissions(String name, Set<Privilege> defaultPermissions) {
                 Role existingRole = roleRepository.findByName(name).orElse(null);
@@ -269,9 +232,7 @@ public class DataSeeder implements CommandLineRunner {
 
         /*
          * Adds missing permissions without removing existing permissions.
-         *
-         * We use this only for SUPER_ADMIN so that the system owner role always
-         * receives new system privileges added later.
+         * We use this only for SUPER_ADMIN so that the system owner role always receives new system privileges added later.
          */
         private void addMissingPermissions(Role role, Set<Privilege> permissionsToAdd) {
                 if (role == null) {

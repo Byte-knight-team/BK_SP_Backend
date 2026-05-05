@@ -43,7 +43,8 @@ public class BranchService {
 
         if (isBlank(request.getContactNumber())) {
             validationErrors.append("Contact number is required. ");
-        } else if (!isValidContactNumber(request.getContactNumber())) {
+        } 
+        else if (!isValidContactNumber(request.getContactNumber())) {
             validationErrors.append("Contact number is invalid. ");
         }
 

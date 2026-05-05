@@ -447,12 +447,6 @@ public class StaffService {
 
                 /*
                  * ADMIN can assign only branch-level staff roles.
-                 *
-                 * This blocks:
-                 * CUSTOMER
-                 * SUPER_ADMIN
-                 * ADMIN
-                 *
                  * This allows:
                  * MANAGER
                  * CHEF

@@ -124,7 +124,7 @@ public class RoleService {
         return savedRole;
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Set<String> getPermissionsOfRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
@@ -170,7 +170,9 @@ public class RoleService {
                 .filter(role -> {
                     String roleName = normalizeRoleNameForAccessCheck(role.getName());
 
+                    // ADMIN cannot access SUPER_ADMIN role
                     if ("ADMIN".equals(currentUserRole)) {
+                        // ADMIN_HIDDEN_ROLE_NAMES = ["SUPER_ADMIN"]
                         return !ADMIN_HIDDEN_ROLE_NAMES.contains(roleName);
                     }
 
@@ -181,6 +183,7 @@ public class RoleService {
                 .toList();
     }
 
+    // gets role details by ID
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public RoleSummaryResponse getRoleSummaryById(Long roleId) {
         Role role = roleRepository.findById(roleId)
@@ -260,10 +263,8 @@ public class RoleService {
     }
 
     /*
-     * Deletes a custom role only if it is not a core role
-     * and is not assigned to any users.
-     * Manual audit is kept because this method returns void,
-     * so AOP cannot capture targetId from the result.
+     * Deletes a custom role only if it is not a core role and is not assigned to any users.
+     * Manual audit is used ere because this method returns void, so aop cannot capture targetId from the result.
      */
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public void deleteRole(Long roleId) {
@@ -327,6 +328,7 @@ public class RoleService {
         return roleName.trim().toUpperCase();
     }
 
+    //Maps role to role summary
     private RoleSummaryResponse mapToRoleSummary(Role role) {
         int permissionCount = role.getPermissions() != null ? role.getPermissions().size() : 0;
         long activeUserCount = userRepository.countByRoleAndIsActiveTrue(role);
@@ -337,10 +339,11 @@ public class RoleService {
                 .description(role.getDescription())
                 .permissionCount(permissionCount)
                 .activeUserCount(activeUserCount)
-                .baseSalary(role.getBaseSalary()) // Returned so frontend can show/edit role default salary.
+                .baseSalary(role.getBaseSalary())
                 .build();
     }
 
+    //Normalizes role name
     private String normalizeRoleName(String name) {
         if (name == null || name.trim().isEmpty()) {
             throw new RuntimeException("Role name is required");
@@ -349,9 +352,8 @@ public class RoleService {
         return name.trim().toUpperCase();
     }
 
-    /*
-     * Snapshot is used by manual audit logs to store old/new role state.
-     */
+
+    //Snapshot is used by manual audit logs to store old/new role state.
     private Map<String, Object> buildRoleAuditSnapshot(Role role) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("roleId", role.getId());
@@ -363,6 +365,7 @@ public class RoleService {
         return snapshot;
     }
 
+    //Extracts permission names from privileges
     private Set<String> extractPermissionNames(Set<Privilege> privileges) {
         Set<String> permissionNames = new TreeSet<>();
 
@@ -377,11 +380,7 @@ public class RoleService {
         return permissionNames;
     }
 
-    /*
-     * Salary validation helper.
-     * Null salary becomes 0.00, negative salary is rejected,
-     * and valid salary is stored with 2 decimal places.
-     */
+    //Salary validation helper, null salary becomes 0.00, negative salary is rejected, and valid salary is stored with 2 decimal places.
     private BigDecimal normalizeSalary(BigDecimal salary) {
         if (salary == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
