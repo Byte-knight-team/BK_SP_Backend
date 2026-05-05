@@ -497,7 +497,7 @@ public class KitchenServiceImpl implements KitchenService {
             // Count how many meals this chef finished today
             long mealsToday = orderItemRepository.countMealsPreparedToday(chef.getId(), startOfToday);
 
-            // 8. Map all data to the DTO
+            // Map all data to the DTO
             dtoList.add(new ChefDetailsDTO(
                     chef.getId(),
                     chef.getUser().getFullName(),
