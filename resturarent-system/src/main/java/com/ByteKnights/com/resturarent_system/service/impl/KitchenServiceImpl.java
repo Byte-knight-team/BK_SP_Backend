@@ -95,7 +95,7 @@ public class KitchenServiceImpl implements KitchenService {
             // row[1] = mealCount (Number)
             String mealName = (String) row[0];
 
-            // SQL SUM() typically returns Long/BigInteger. Direct cast Long to Integer will fail.
+            // SQL SUM() typically returns Long/BigInteger. Direct cast Long to Integer will fail.(ClassCastException)
             // Using 'Number' (the parent class) prevents crashes by safely handling any numeric type.
             Number countNumber = (Number) row[1];
             int count = countNumber.intValue();
@@ -164,8 +164,6 @@ public class KitchenServiceImpl implements KitchenService {
         return dtos;
     }
 
-
-
     // inventory alerts
     @Override
     public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
@@ -184,6 +182,7 @@ public class KitchenServiceImpl implements KitchenService {
         List<InventoryDetailsDTO> alerts = new ArrayList<>();
 
         for (InventoryItem item : items) {
+            // Convert BigDecimal to double to simplify mathematical calculations and improve readability
             double current = item.getQuantity().doubleValue();
             double reorder = item.getReorderLevel().doubleValue();
             double max = item.getMaxStock().doubleValue();
@@ -216,8 +215,10 @@ public class KitchenServiceImpl implements KitchenService {
         // Added logic to identify the branch
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
         Long branchId = staff.getBranch().getId();
 
         // Define the time range: Only fetch orders starting from today's midnight
@@ -225,7 +226,7 @@ public class KitchenServiceImpl implements KitchenService {
 
         // Sorting logic (Pending/Preparing = ASC, Completed = DESC)
         Sort sort = (status == OrderStatus.COMPLETED)
-                ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
+                ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt") //Direction is an Enum
                 : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
         // Retrieve sorted orders from today
