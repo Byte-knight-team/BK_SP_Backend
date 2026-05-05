@@ -165,7 +165,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         LocalDateTime start,
                         LocalDateTime end);
 
-        // 1.kitchen dashboard stats
+        // kitchen dashboard stats
 
         @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
                         "FROM orders WHERE branch_id = :branchId " + // breach filter
@@ -176,12 +176,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("branchId") Long branchId,
                         @Param("startOfToday") LocalDateTime startOfToday);
 
-        // 2.Peak hours graph data based on order approval time
-        // Just adding the NOT IN line to your existing code!
+        // Peak hours graph data based on order approval time
+
         @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
                         "FROM orders " +
                         "WHERE branch_id = :branchId " +
-                        "AND status NOT IN ('CANCELLED', 'REJECTED') " + // Exclude cancelled and rejected orders(extra
+                        "AND status NOT IN ('CANCELLED', 'REJECTED') " + // Exclude canceled and rejected orders(extra
                                                                          // safe)
                         "AND approved_at >= NOW() - INTERVAL 7 DAY " +
                         "GROUP BY hr", nativeQuery = true)
@@ -196,22 +196,18 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
 
-        // --- Kitchen Queries START ---
-
-        // 1.kitchen dashboard stats
 
         @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
                         "FROM orders WHERE status = 'COMPLETED' AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL", nativeQuery = true)
         Double getAveragePreparationTime();
 
-        // 2.Peak hours graph data based on order approval time
+        // Peak hours graph data based on order approval time
         @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
                         "FROM orders " +
                         "WHERE approved_at >= NOW() - INTERVAL 7 DAY " +
                         "GROUP BY hr", nativeQuery = true)
         List<Object[]> findOrderCountByHour();
 
-        // --- Kitchen Queries END ---
 
         @Query(value = "SELECT DATE(created_at) as day, SUM(final_amount) as revenue, COUNT(id) as orders " +
                         "FROM orders " +
