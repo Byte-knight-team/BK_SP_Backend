@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
-import java.util.List;
 
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderPlacementResponse;
 
