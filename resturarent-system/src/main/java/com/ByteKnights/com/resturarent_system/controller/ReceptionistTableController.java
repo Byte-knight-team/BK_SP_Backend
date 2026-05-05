@@ -26,7 +26,9 @@ public class ReceptionistTableController {
     @GetMapping
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
     public ResponseEntity<StandardResponse> getBranchTables(Principal principal) {
+
         List<ReceptionistTableResponse> tables = receptionistTableService.getBranchTables(principal.getName());
+
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", tables),
                 HttpStatus.OK

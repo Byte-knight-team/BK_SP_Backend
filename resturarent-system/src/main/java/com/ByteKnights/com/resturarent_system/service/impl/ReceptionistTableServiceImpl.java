@@ -54,10 +54,12 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
                         // If the table has active orders, fetch them
                         if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
+
                                 // Fetch ALL orders for this table EXCEPT Cancelled or Rejected ones
                                 List<Order> activeOrders = orderRepository.findByTableIdAndStatusNotIn(
                                                 table.getId(),
                                                 List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED));
+
                                 // Create a list of just the Order Strings (e.g. "#ORD-482")
                                 List<String> orderNumbers = new ArrayList<>();
                                 for (Order order : activeOrders) {
@@ -86,6 +88,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
                 Staff staff = staffRepository.findByUser(user)
                                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
                 Long branchId = staff.getBranch().getId();
 
                 // Find the table and use a Lock for safety
@@ -94,8 +97,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
                 // Security Check: Ensure table belongs to the same branch
                 if (!table.getBranch().getId().equals(branchId)) {
-                        throw new RuntimeException(
-                                        "Security Alert: Access Denied! This table does not belong to your branch.");
+                        throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
                 }
 
                 // Update status and guest count
@@ -118,6 +120,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
                 Staff staff = staffRepository.findByUser(user)
                                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
                 Long branchId = staff.getBranch().getId();
 
                 // Find the table with a Lock
@@ -126,8 +129,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
                 // Security Check: Ensure table belongs to the same branch
                 if (!table.getBranch().getId().equals(branchId)) {
-                        throw new RuntimeException(
-                                        "Security Alert: Access Denied! This table does not belong to your branch.");
+                        throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
                 }
 
                 // Reset table data
