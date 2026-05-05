@@ -81,6 +81,7 @@ public class KitchenController {
     @GetMapping("/order-cards")
     @PreAuthorize("hasAuthority('KITCHEN_ORDER_VIEW')")
     public ResponseEntity<StandardResponse> getOrdersByStatus(
+            //Spring automatically converts the 'status' String from the URL into the OrderStatus Enum constant.
             @RequestParam OrderStatus status,
             Principal principal) {
 
@@ -88,6 +89,49 @@ public class KitchenController {
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Success", orders),
+                HttpStatus.OK
+        );
+    }
+
+    // create a kitchen alert for the receptionist
+    @PostMapping("/alerts")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_CREATE')") // Or whatever authority you use
+    public ResponseEntity<StandardResponse> createKitchenAlert(
+            @Valid @RequestBody CreateAlertRequestDTO requestDTO,
+            Principal principal) {
+
+        kitchenService.createKitchenAlert(requestDTO, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(201, "Alert broadcasted successfully!", null),
+                HttpStatus.CREATED
+        );
+    }
+
+    // get all active kitchen alerts
+    @GetMapping("/alerts")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_VIEW')")
+    public ResponseEntity<StandardResponse> getActiveAlerts(Principal principal) {
+
+        List<ActiveAlertDTO> alerts = kitchenService.getActiveAlerts(principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Success", alerts),
+                HttpStatus.OK
+        );
+    }
+
+    //resole kitchen alerts
+    @PutMapping("/alerts/{id}/resolve")
+    @PreAuthorize("hasAuthority('KITCHEN_ALERT_RESOLVE')")
+    public ResponseEntity<StandardResponse> resolveAlert(
+            @PathVariable Long id,
+            Principal principal) {
+
+        kitchenService.resolveAlert(id, principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Alert marked as resolved", null),
                 HttpStatus.OK
         );
     }
@@ -299,50 +343,6 @@ public class KitchenController {
                 HttpStatus.OK
         );
     }
-
-    // create a kitchen alert for the receptionist
-    @PostMapping("/alerts")
-    @PreAuthorize("hasAuthority('KITCHEN_ALERT_CREATE')") // Or whatever authority you use
-    public ResponseEntity<StandardResponse> createKitchenAlert(
-            @Valid @RequestBody CreateAlertRequestDTO requestDTO,
-            Principal principal) {
-
-        kitchenService.createKitchenAlert(requestDTO, principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(201, "Alert broadcasted successfully!", null),
-                HttpStatus.CREATED
-        );
-    }
-
-    // get all active kitchen alerts
-    @GetMapping("/alerts")
-    @PreAuthorize("hasAuthority('KITCHEN_ALERT_VIEW')")
-    public ResponseEntity<StandardResponse> getActiveAlerts(Principal principal) {
-
-        List<ActiveAlertDTO> alerts = kitchenService.getActiveAlerts(principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(200, "Success", alerts),
-                HttpStatus.OK
-        );
-    }
-
-    //resole kitchen alerts
-    @PutMapping("/alerts/{id}/resolve")
-    @PreAuthorize("hasAuthority('KITCHEN_ALERT_RESOLVE')")
-    public ResponseEntity<StandardResponse> resolveAlert(
-            @PathVariable Long id,
-            Principal principal) {
-
-        kitchenService.resolveAlert(id, principal.getName());
-
-        return new ResponseEntity<>(
-                new StandardResponse(200, "Alert marked as resolved", null),
-                HttpStatus.OK
-        );
-    }
-
 
 
 }
