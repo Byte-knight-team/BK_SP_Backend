@@ -44,13 +44,12 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             OrderStatus.PREPARING,
             OrderStatus.READY,
             OrderStatus.OUT_FOR_DELIVERY,
-            OrderStatus.SERVED,
+            OrderStatus.COMPLETED,
             OrderStatus.ON_HOLD);
 
     // Revenue should only include orders that have a successful payment outcome.
     private static final Set<PaymentStatus> REVENUE_PAYMENT_STATUSES = EnumSet.of(
-            PaymentStatus.PAID,
-            PaymentStatus.SUCCESS);
+            PaymentStatus.PAID);
 
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
@@ -107,7 +106,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long preparingCount = countOrdersForScope(adminBranchId, OrderStatus.PREPARING);
         long readyCount = countOrdersForScope(adminBranchId, OrderStatus.READY);
         long inDeliveryCount = countOrdersForScope(adminBranchId, OrderStatus.OUT_FOR_DELIVERY);
-        long completedCount = countOrdersForScope(adminBranchId, OrderStatus.COMPLETED);
+        long completedCount = countOrdersForScope(adminBranchId, OrderStatus.SERVED);
 
         return AdminDashboardOrderFlowResponse.builder()
                 .preparingCount(preparingCount)
