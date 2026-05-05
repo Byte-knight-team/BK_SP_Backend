@@ -38,6 +38,10 @@ public class AuditLogController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
+        /*
+            Creates a PageRequest with ,page (0-indexed) ,size (results per page) 
+            ,Sorts by createdAt descending (newest events first)
+        */
         PageRequest pageable = PageRequest.of(
                 page,
                 size,

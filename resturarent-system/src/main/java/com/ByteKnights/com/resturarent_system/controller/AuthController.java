@@ -8,12 +8,18 @@ import com.ByteKnights.com.resturarent_system.dto.ChangePasswordRequest;
 import com.ByteKnights.com.resturarent_system.dto.LoginResponse;
 import com.ByteKnights.com.resturarent_system.dto.StaffLoginRequest;
 
+/*
+ * AuthController handles authentication-related API requests.
+ * It receives requests from the frontend and passes the actual logic to AuthService.
+ */
+
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173")
 public class AuthController {
 
     private final AuthService authService;
+
+
 
     public AuthController(AuthService authService) {
         this.authService = authService;

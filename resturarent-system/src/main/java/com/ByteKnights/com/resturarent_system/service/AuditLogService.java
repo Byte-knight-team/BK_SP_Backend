@@ -28,6 +28,7 @@ import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
+//Handles creating and reading audit logs.
 @Service
 @RequiredArgsConstructor
 public class AuditLogService {
@@ -39,6 +40,10 @@ public class AuditLogService {
     private final StaffRepository staffRepository;
     private final ObjectMapper objectMapper;
 
+    /*
+        Logs an action done by the currently authenticated user.
+        Used when the user is already available from the JWT security context.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logCurrentUserAction(
             AuditModule module,
@@ -55,11 +60,17 @@ public class AuditLogService {
             User actor = getCurrentAuthenticatedUser();
             Staff actorStaff = staffRepository.findByUserId(actor.getId()).orElse(null);
 
+            /*
+             * If branchId is not passed manually, use the actor's branch.
+             */
             Long resolvedBranchId = branchId;
             if (resolvedBranchId == null && actorStaff != null && actorStaff.getBranch() != null) {
                 resolvedBranchId = actorStaff.getBranch().getId();
             }
 
+            /*
+             * Build the audit log record with actor, target, request, and value details.
+             */
             AuditLog auditLog = AuditLog.builder()
                     .module(module)
                     .eventType(eventType)
@@ -86,6 +97,10 @@ public class AuditLogService {
         }
     }
 
+    /*
+     * Logs an action for a known actor.
+     * Used when actor details are passed directly, such as login success/failure.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logActionAsUser(
             Long actorUserId,
@@ -128,6 +143,10 @@ public class AuditLogService {
         }
     }
 
+    /*
+     * Logs actions where the user is not authenticated yet.
+     * Example: failed login due to invalid email.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void logAnonymousAction(
             String actorEmail,
@@ -167,6 +186,9 @@ public class AuditLogService {
         }
     }
 
+    /*
+     * Returns audit logs.
+     */
     @Transactional(readOnly = true)
     public Page<AuditLogResponse> getAuditLogs(
             AuditModule module,
@@ -190,6 +212,9 @@ public class AuditLogService {
                 .map(AuditLogResponse::fromEntity);
     }
 
+    /*
+     * Returns one audit log by ID.
+     */
     @Transactional(readOnly = true)
     public AuditLogResponse getAuditLogById(Long id) {
         AuditLog auditLog = auditLogRepository.findById(id)
@@ -198,6 +223,9 @@ public class AuditLogService {
         return AuditLogResponse.fromEntity(auditLog);
     }
 
+    /*
+     * Gets the logged-in user.
+     */
     private User getCurrentAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
@@ -207,16 +235,25 @@ public class AuditLogService {
 
         Object principal = authentication.getPrincipal();
 
+        /*
+         * Main case: authenticated user comes from JWT.
+         */
         if (principal instanceof JwtUserPrincipal jwtUser) {
             return userRepository.findByEmail(jwtUser.getEmail())
                     .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
         }
 
+        /*
+         * Fallback case: principal is a User object.
+         */
         if (principal instanceof User user) {
             return userRepository.findById(user.getId())
                     .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
         }
 
+        /*
+         * Final fallback: use authentication name as email.
+         */
         String email = authentication.getName();
         if (email != null && !email.trim().isEmpty()) {
             return userRepository.findByEmail(email)
@@ -226,6 +263,9 @@ public class AuditLogService {
         throw new RuntimeException("Authenticated user not found");
     }
 
+    /*
+     * Converts old/new audit values into JSON.
+     */
     private String toJson(Object value) {
         if (value == null) {
             return null;
@@ -239,13 +279,20 @@ public class AuditLogService {
         }
     }
 
+    /*
+     * Removes sensitive values before storing audit JSON.
+     */
     private Object sanitizeValue(Object value) {
         if (value == null) {
             return null;
         }
 
+        /*
+         * Sanitize map values key by key.
+         */
         if (value instanceof Map<?, ?> mapValue) {
             Map<String, Object> sanitized = new LinkedHashMap<>();
+
             for (Map.Entry<?, ?> entry : mapValue.entrySet()) {
                 String key = String.valueOf(entry.getKey());
 
@@ -255,9 +302,13 @@ public class AuditLogService {
                     sanitized.put(key, sanitizeValue(entry.getValue()));
                 }
             }
+
             return sanitized;
         }
 
+        /*
+         * Sanitize each item inside a collection.
+         */
         if (value instanceof Collection<?> collection) {
             return collection.stream()
                     .map(this::sanitizeValue)
@@ -267,35 +318,50 @@ public class AuditLogService {
         return value;
     }
 
+    /*
+     * Checks whether a field name contains sensitive data.
+     */
     private boolean isSensitiveKey(String key) {
         if (key == null) {
             return false;
         }
 
         String normalized = key.trim().toLowerCase();
+
         return normalized.contains("password")
                 || normalized.contains("token")
                 || normalized.contains("secret")
                 || normalized.contains("temporarypassword");
     }
 
+    /*
+     * Gets the current HTTP method.
+     */
     private String getCurrentRequestMethod() {
         HttpServletRequest request = getCurrentRequest();
         return request != null ? request.getMethod() : null;
     }
 
+    /*
+     * Gets the current API endpoint URI.
+     */
     private String getCurrentRequestUri() {
         HttpServletRequest request = getCurrentRequest();
         return request != null ? request.getRequestURI() : null;
     }
 
+    /*
+     * Gets the requester IP address.
+     */
     private String getCurrentIpAddress() {
         HttpServletRequest request = getCurrentRequest();
+
         if (request == null) {
             return null;
         }
 
         String forwardedFor = request.getHeader("X-Forwarded-For");
+
         if (forwardedFor != null && !forwardedFor.isBlank()) {
             return forwardedFor.split(",")[0].trim();
         }
@@ -303,13 +369,20 @@ public class AuditLogService {
         return request.getRemoteAddr();
     }
 
+    /*
+     * Gets the browser/client user-agent.
+     */
     private String getCurrentUserAgent() {
         HttpServletRequest request = getCurrentRequest();
         return request != null ? request.getHeader("User-Agent") : null;
     }
 
+    /*
+     * Gets the current HTTP request object.
+     */
     private HttpServletRequest getCurrentRequest() {
-        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        ServletRequestAttributes attributes =
+                (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
 
         return attributes != null ? attributes.getRequest() : null;
     }

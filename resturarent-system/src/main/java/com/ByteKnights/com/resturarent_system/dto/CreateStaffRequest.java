@@ -16,16 +16,6 @@ public class CreateStaffRequest {
     private String roleName;
     private Long branchId;
 
-    /*
-        Optional salary override.
-
-        If this value is provided:
-        - Staff.salary uses this value.
-
-        If this value is not provided:
-        - Staff.salary uses Role.baseSalary.
-
-        This keeps staff creation simple but still allows salary adjustment.
-    */
+    //Optional salary override.
     private BigDecimal salary;
 }

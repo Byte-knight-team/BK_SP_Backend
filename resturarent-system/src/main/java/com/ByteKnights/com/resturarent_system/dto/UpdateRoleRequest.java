@@ -14,9 +14,7 @@ public class UpdateRoleRequest {
 
     /*
         Default salary for this role.
-
         This does not automatically update existing staff salaries.
-        It affects new staff creation unless salary is manually overridden.
     */
     private BigDecimal baseSalary;
 }

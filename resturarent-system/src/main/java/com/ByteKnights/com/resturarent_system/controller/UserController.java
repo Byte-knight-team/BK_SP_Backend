@@ -11,13 +11,12 @@ public class UserController {
 
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(/* TODO: @AuthenticationPrincipal or SecurityContext */) {
-        // TODO: Return current authenticated user's profile
+
         return null;
     }
 
     @PutMapping("/profile")
-    public ResponseEntity<?> updateProfile(/* TODO: @RequestBody ProfileUpdateRequest request */) {
-        // TODO: Update current user's profile
+    public ResponseEntity<?> updateProfile() {
         return null;
     }
 }

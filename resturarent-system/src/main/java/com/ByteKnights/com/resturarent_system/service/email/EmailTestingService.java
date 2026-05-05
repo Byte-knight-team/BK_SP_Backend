@@ -14,16 +14,16 @@ public class EmailTestingService {
     private boolean forceFail;
 
     /*
-     * Loads the default value from application.properties.
-     */
+        Loads the default value from application.properties.
+    */
     public EmailTestingService(@Value("${app.email.force-fail:false}") boolean forceFail) {
         this.forceFail = forceFail;
     }
 
     /*
-     * Returns whether email sending should be forced to fail.
-     * SmtpEmailService checks this before sending the real email.
-     */
+        Returns whether email sending should be forced to fail.
+        SmtpEmailService checks this before sending the real email.
+    */
     public boolean isForceFail() {
         return forceFail;
     }

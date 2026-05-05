@@ -91,6 +91,7 @@ public class AuditLog {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    //setting current timestamp before saving
     @PrePersist
     public void prePersist() {
         if (createdAt == null) {

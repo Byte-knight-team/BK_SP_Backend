@@ -14,45 +14,46 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+/*
+    JwtService handles JWT token creation, validation and extracting data from tokens.
+ */
 @Service
 public class JwtService {
 
+    /*
+     * Secret key used to sign and verify JWT tokens.
+     */
     @Value("${app.jwt.secret}")
     private String jwtSecret;
 
+    /*
+     * Token expiration time in milliseconds.
+     */
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
 
-
     /*
-     * Main token generator.
-     *
-     * JWT payload will contain:
-     * - role
-     * - userId
-     * - branchId
-     * - branchName
-     * - sub/email
-     * - iat
-     * - exp
-     *
-     * Do not store sensitive data like password, salary, phone,
-     * temporary password, or full user details in the JWT.
+     * Generates a staff JWT token after successful login.
      */
     public String generateToken(
             Long userId,
             String email,
             String role,
             Long branchId,
-            String branchName
-    ) {
+            String branchName) {
         Map<String, Object> claims = new HashMap<>();
 
+        /*
+         * Custom data stored inside the JWT payload.
+         */
         claims.put("role", role);
         claims.put("userId", userId);
         claims.put("branchId", branchId);
         claims.put("branchName", branchName);
 
+        /*
+         * Build and sign the JWT token.
+         */
         return Jwts.builder()
                 .claims(claims)
                 .subject(email)
@@ -62,6 +63,9 @@ public class JwtService {
                 .compact();
     }
 
+    /*
+     * Generates a JWT token for QR/session related use cases.
+     */
     public String generateQrToken(Map<String, Object> claims, String subject, long expirationMs) {
         return Jwts.builder()
                 .claims(claims)
@@ -72,64 +76,9 @@ public class JwtService {
                 .compact();
     }
 
-    public String extractEmail(String token) {
-        return extractClaim(token, Claims::getSubject);
-    }
-
-    public String extractRole(String token) {
-        return extractAllClaims(token).get("role", String.class);
-    }
-
-    public Long getUserIdFromToken(String token) {
-        Claims claims = extractAllClaims(token);
-
-        /*
-         * userId was stored as a number.
-         * Reading as Number is safer than directly reading as Long,
-         * because some JWT parsers may deserialize small numbers as Integer.
-         */
-        Number userId = claims.get("userId", Number.class);
-        return userId == null ? null : userId.longValue();
-    }
-
-    public Long getBranchIdFromToken(String token) {
-        Claims claims = extractAllClaims(token);
-
-        Number branchId = claims.get("branchId", Number.class);
-        return branchId == null ? null : branchId.longValue();
-    }
-
-    public String getBranchNameFromToken(String token) {
-        return extractAllClaims(token).get("branchName", String.class);
-    }
-
-    public boolean validateToken(String token) {
-        try {
-            extractAllClaims(token);
-            return !isTokenExpired(token);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    public boolean isTokenValid(String token, String email) {
-        final String extractedEmail = extractEmail(token);
-        return extractedEmail.equals(email) && !isTokenExpired(token);
-    }
-
-    private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
-    private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
-    }
-
-    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        Claims claims = extractAllClaims(token);
-        return claimsResolver.apply(claims);
-    }
-
+    /*
+     * Verifies the token signature and parses the token to get all claims.
+     */
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
@@ -138,6 +87,9 @@ public class JwtService {
                 .getPayload();
     }
 
+    /*
+     * Creates the signing key used for JWT signing and verification.
+     */
     private SecretKey getSigningKey() {
         byte[] keyBytes;
 
@@ -149,4 +101,92 @@ public class JwtService {
 
         return Keys.hmacShaKeyFor(keyBytes);
     }
+
+    /*
+     * Checks whether the token is valid and not expired.
+     */
+    public boolean validateToken(String token) {
+        try {
+            extractAllClaims(token);
+            return !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /*
+     * Generic method to extract any claim from the token.
+     */
+    public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
+        Claims claims = extractAllClaims(token);
+        return claimsResolver.apply(claims);
+    }
+
+    /*
+     * Checks token validity against a specific email.
+     */
+    public boolean isTokenValid(String token, String email) {
+        final String extractedEmail = extractEmail(token);
+        return extractedEmail.equals(email) && !isTokenExpired(token);
+    }
+
+    /*
+     * Extracts email from the token subject.
+     */
+    public String extractEmail(String token) {
+        return extractClaim(token, Claims::getSubject);
+    }
+
+    /*
+     * Extracts role from token claims.
+     */
+    public String extractRole(String token) {
+        return extractAllClaims(token).get("role", String.class);
+    }
+
+    /*
+     * Extracts userId from token.
+     */
+    public Long getUserIdFromToken(String token) {
+        Claims claims = extractAllClaims(token);
+
+        /*
+         * Read as Number because JWT may store numbers as Integer or Long depending on
+         * size.
+         */
+        Number userId = claims.get("userId", Number.class);
+        return userId == null ? null : userId.longValue();
+    }
+
+    /*
+     * Extracts branchId from token.
+     */
+    public Long getBranchIdFromToken(String token) {
+        Claims claims = extractAllClaims(token);
+
+        Number branchId = claims.get("branchId", Number.class);
+        return branchId == null ? null : branchId.longValue();
+    }
+
+    /*
+     * Extracts branchName from token.
+     */
+    public String getBranchNameFromToken(String token) {
+        return extractAllClaims(token).get("branchName", String.class);
+    }
+
+    /*
+     * Extracts expiration date from the token.
+     */
+    private Date extractExpiration(String token) {
+        return extractClaim(token, Claims::getExpiration);
+    }
+
+    /*
+     * Checks whether the token expiry time has passed.
+     */
+    private boolean isTokenExpired(String token) {
+        return extractExpiration(token).before(new Date());
+    }
+
 }

@@ -68,31 +68,18 @@ public class SecurityConfig {
 
                                                 /*
                                                  * Branch management.
-                                                 * Only SUPER_ADMIN can create/update/deactivate branches.
                                                  */
                                                 .requestMatchers("/api/admin/branches", "/api/admin/branches/**")
                                                 .hasRole("SUPER_ADMIN")
 
                                                 /*
                                                  * Staff management.
-                                                 * SUPER_ADMIN and ADMIN can access staff endpoints.
-                                                 *
-                                                 * Actual branch-level restrictions are handled inside StaffService.
-                                                 * Example:
-                                                 * - ADMIN can manage only own-branch staff.
-                                                 * - ADMIN cannot manage SUPER_ADMIN or ADMIN-level accounts.
                                                  */
                                                 .requestMatchers("/api/admin/staff", "/api/admin/staff/**")
                                                 .hasAnyRole("SUPER_ADMIN", "ADMIN")
 
                                                 /*
                                                  * Role READ access.
-                                                 *
-                                                 * SUPER_ADMIN needs this for Roles & Permissions.
-                                                 * ADMIN needs this only for Create Staff / Edit Staff role dropdown.
-                                                 *
-                                                 * This does NOT allow ADMIN to create, update, delete,
-                                                 * or change role permissions.
                                                  */
                                                 .requestMatchers(HttpMethod.GET, "/api/admin/roles")
                                                 .hasAnyRole("SUPER_ADMIN", "ADMIN")
@@ -102,17 +89,12 @@ public class SecurityConfig {
 
                                                 /*
                                                  * Role permission READ access.
-                                                 *
-                                                 * Keep this SUPER_ADMIN only because this is part of RBAC management.
-                                                 * Create Staff / Edit Staff does not need this endpoint.
                                                  */
                                                 .requestMatchers(HttpMethod.GET, "/api/admin/roles/*/permissions")
                                                 .hasRole("SUPER_ADMIN")
 
                                                 /*
                                                  * Role MANAGEMENT access.
-                                                 * Only SUPER_ADMIN can create roles, update roles,
-                                                 * update permissions, or delete roles.
                                                  */
                                                 .requestMatchers(HttpMethod.POST, "/api/admin/roles")
                                                 .hasRole("SUPER_ADMIN")
@@ -127,8 +109,7 @@ public class SecurityConfig {
                                                 .hasRole("SUPER_ADMIN")
 
                                                 /*
-                                                 * Privileges list.
-                                                 * Keep SUPER_ADMIN only because privileges are part of RBAC management.
+                                                 * Privileges list
                                                  */
                                                 .requestMatchers(HttpMethod.GET, "/api/admin/privileges")
                                                 .hasRole("SUPER_ADMIN")
