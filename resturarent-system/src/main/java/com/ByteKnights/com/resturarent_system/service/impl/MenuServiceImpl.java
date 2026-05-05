@@ -62,18 +62,12 @@ import java.util.stream.Collectors;
 @Service
 public class MenuServiceImpl implements MenuService {
 
-    private static final BigDecimal MAX_MENU_ITEM_PRICE = new BigDecimal("99999999.99");
-    
+    private static final BigDecimal MAX_MENU_ITEM_PRICE = new BigDecimal("99999999.99");    
     private static final int MAX_PREPARATION_TIME_MINUTES = 240;
-
     private final MenuItemRepository menuItemRepository;
-    
     private final BranchRepository branchRepository;
-    
     private final MenuCategoryRepository menuCategoryRepository;
-    
     private final StaffRepository staffRepository;
-    
     private final UserRepository userRepository;
 
     public MenuServiceImpl(MenuItemRepository menuItemRepository,
