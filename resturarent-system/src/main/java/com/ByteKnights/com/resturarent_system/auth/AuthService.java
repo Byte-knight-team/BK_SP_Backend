@@ -162,7 +162,8 @@ public class AuthService {
         }
 
         /*
-         * We generate a jwt token for the user using the generateToken method of JwtService.
+         * We generate a jwt token for the user using the generateToken method of
+         * JwtService.
          * The token is valid for 08 hours.
          */
         String token = jwtService.generateToken(
@@ -170,7 +171,8 @@ public class AuthService {
                 user.getEmail(),
                 user.getRole().getName(),
                 branchId,
-                branchName);
+                branchName,
+                user.getFullName());
 
         Map<String, Object> loginDetails = new LinkedHashMap<>();
         loginDetails.put("userId", user.getId());

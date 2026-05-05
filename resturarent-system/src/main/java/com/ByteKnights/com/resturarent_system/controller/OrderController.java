@@ -31,10 +31,10 @@ public class OrderController {
     public ResponseEntity<ApiResponse<OrderPlacementResponse>> placeOrder(
             Principal principal,
             @RequestBody PlaceOrderRequest request) {
-            
+
         String userIdentifier = principal != null ? principal.getName() : null;
         OrderPlacementResponse response = orderService.placeCustomerOrder(userIdentifier, request);
-        
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Order placed successfully!", response));
     }
@@ -43,9 +43,9 @@ public class OrderController {
     public ResponseEntity<ApiResponse<String>> updatePayment(
             @PathVariable Long orderId,
             @RequestBody PaymentUpdateRequest request) {
-            
+
         orderService.updatePaymentStatus(orderId, request);
-        
+
         return ResponseEntity.ok(ApiResponse.success("Payment status updated successfully", null));
     }
 
@@ -56,9 +56,10 @@ public class OrderController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
-            
+
         String userIdentifier = principal.getName();
-        CustomerOrdersPageResponse orders = orderService.getCustomerOrdersPage(userIdentifier, type, active, page, size);
+        CustomerOrdersPageResponse orders = orderService.getCustomerOrdersPage(userIdentifier, type, active, page,
+                size);
         return ResponseEntity.ok(ApiResponse.success("Orders fetched successfully", orders));
     }
 

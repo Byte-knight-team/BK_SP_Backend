@@ -37,7 +37,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private static final int MAX_TREND_DAYS = 31;
     private static final DateTimeFormatter DAY_LABEL_FORMATTER = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH);
 
-    // Dashboard "active orders" are those still in operational flow (not finished/cancelled).
+    // Dashboard "active orders" are those still in operational flow (not
+    // finished/cancelled).
     private static final Set<OrderStatus> ACTIVE_ORDER_STATUSES = EnumSet.of(
             OrderStatus.PLACED,
             OrderStatus.PENDING,
@@ -131,7 +132,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
 
         Map<LocalDate, BigDecimal> revenueByDate = new LinkedHashMap<>();
         LocalDate cursor = startDate;
-        // Pre-fill each day so the chart has continuous points, even for zero-revenue days.
+        // Pre-fill each day so the chart has continuous points, even for zero-revenue
+        // days.
         while (!cursor.isAfter(endDate)) {
             revenueByDate.put(cursor, BigDecimal.ZERO);
             cursor = cursor.plusDays(1);
@@ -167,7 +169,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     private List<Order> fetchRevenueOrdersForScope(Long adminBranchId, LocalDateTime start, LocalDateTime end) {
-        // Reuse scoped query variants to keep ADMIN and SUPER_ADMIN behavior consistent.
+        // Reuse scoped query variants to keep ADMIN and SUPER_ADMIN behavior
+        // consistent.
         if (adminBranchId == null) {
             return orderRepository.findByPaymentStatusInAndCreatedAtBetween(REVENUE_PAYMENT_STATUSES, start, end);
         }
@@ -224,7 +227,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         }
 
         return staffRepository.findByUserId(jwtUser.getUser().getId())
-            // Branch association is mandatory for ADMIN dashboard scoping.
+                // Branch association is mandatory for ADMIN dashboard scoping.
                 .map(staff -> staff.getBranch().getId())
                 .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
     }

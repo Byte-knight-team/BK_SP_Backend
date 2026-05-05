@@ -50,6 +50,14 @@ public class Staff {
     @Builder.Default
     private EmploymentStatus employmentStatus = EmploymentStatus.ACTIVE;
 
+    @Column(name = "is_online")
+    @Builder.Default
+    private Boolean isOnline = false;
+
+    public boolean isOnline() {
+        return isOnline != null && isOnline;
+    }
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

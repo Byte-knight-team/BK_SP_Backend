@@ -108,50 +108,50 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                  */
                 if (!isSuperAdmin) {
                     /*
-                    * CUSTOMER users do NOT have Staff records.
-                    * Only staff-side roles such as ADMIN, MANAGER, CHEF, RECEPTIONIST,
-                    * and DELIVERY need branch validation.
-                    */
-                   boolean isCustomer = "CUSTOMER".equalsIgnoreCase(roleName)
-                           || "ROLE_CUSTOMER".equalsIgnoreCase(roleName);
-                   
-                   if (!isSuperAdmin && !isCustomer) {
-                   
-                       /*
-                        * Use findByUserIdWithBranch instead of findByUserId.
-                        *
-                        * Reason:
-                        * Branch is lazy-loaded in Staff entity.
-                        * If we use normal findByUserId, staff.getBranch().getStatus()
-                        * can cause LazyInitializationException inside this filter.
-                        *
-                        * findByUserIdWithBranch uses JOIN FETCH and loads Staff + Branch together.
-                        */
-                       Staff staff = staffRepository
-                               .findByUserIdWithBranch(userEntity.getId())
-                               .orElse(null);
-                   
-                       // If staff has no branch, block the request.
-                       if (staff == null || staff.getBranch() == null) {
-                           denyRequest(
-                                   response,
-                                   "STAFF_BRANCH_NOT_ASSIGNED",
-                                   "Staff branch is not assigned");
-                           return;
-                       }
-                   
-                       /*
-                        * If staff branch is inactive, block the request.
-                        * This handles already logged-in staff after their branch is deactivated.
-                        */
-                       if (!"ACTIVE".equals(String.valueOf(staff.getBranch().getStatus()))) {
-                           denyRequest(
-                                   response,
-                                   "BRANCH_INACTIVE",
-                                   "Your branch is inactive. Please contact the system administrator.");
-                           return;
-                       }
-                   }
+                     * CUSTOMER users do NOT have Staff records.
+                     * Only staff-side roles such as ADMIN, MANAGER, CHEF, RECEPTIONIST,
+                     * and DELIVERY need branch validation.
+                     */
+                    boolean isCustomer = "CUSTOMER".equalsIgnoreCase(roleName)
+                            || "ROLE_CUSTOMER".equalsIgnoreCase(roleName);
+
+                    if (!isSuperAdmin && !isCustomer) {
+
+                        /*
+                         * Use findByUserIdWithBranch instead of findByUserId.
+                         *
+                         * Reason:
+                         * Branch is lazy-loaded in Staff entity.
+                         * If we use normal findByUserId, staff.getBranch().getStatus()
+                         * can cause LazyInitializationException inside this filter.
+                         *
+                         * findByUserIdWithBranch uses JOIN FETCH and loads Staff + Branch together.
+                         */
+                        Staff staff = staffRepository
+                                .findByUserIdWithBranch(userEntity.getId())
+                                .orElse(null);
+
+                        // If staff has no branch, block the request.
+                        if (staff == null || staff.getBranch() == null) {
+                            denyRequest(
+                                    response,
+                                    "STAFF_BRANCH_NOT_ASSIGNED",
+                                    "Staff branch is not assigned");
+                            return;
+                        }
+
+                        /*
+                         * If staff branch is inactive, block the request.
+                         * This handles already logged-in staff after their branch is deactivated.
+                         */
+                        if (!"ACTIVE".equals(String.valueOf(staff.getBranch().getStatus()))) {
+                            denyRequest(
+                                    response,
+                                    "BRANCH_INACTIVE",
+                                    "Your branch is inactive. Please contact the system administrator.");
+                            return;
+                        }
+                    }
                 }
 
                 /*

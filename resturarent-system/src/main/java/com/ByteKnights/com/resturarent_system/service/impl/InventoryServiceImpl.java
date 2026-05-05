@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.inventory.CreateInvent
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.RemoveInventoryStockRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.RestockInventoryItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInventoryItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.ResolveChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryLogDTO;
@@ -14,12 +15,15 @@ import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import com.ByteKnights.com.resturarent_system.entity.InventoryTransaction;
 import com.ByteKnights.com.resturarent_system.entity.InventoryTransactionType;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryTransactionRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +61,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final BranchRepository branchRepository;
     private final StaffRepository staffRepository;
     private final InventoryTransactionRepository inventoryTransactionRepository;
+    private final UserRepository userRepository;
 
     /**
      * Helper method to securely resolve the branch ID.
@@ -145,11 +150,16 @@ public class InventoryServiceImpl implements InventoryService {
                 .map(this::toChefRequestDTO)
                 .toList();
 
+        // 4. Fetch Branch name for the header
+        String branchName = branchRepository.findById(finalBranchId)
+                .map(Branch::getName)
+                .orElse("Unknown Branch");
+
         /*
-         * 4. Package all our calculations into the Summary DTO and return it.
+         * 5. Package all our calculations into the Summary DTO and return it.
          */
         return InventorySummaryDTO.builder()
-                .branch("Colombo Main") // Hardcoded for now; can fetch from Branch entity later
+                .branch(branchName)
                 .totalInventoryValue(totalValue)
                 .lowStockAlerts(lowStockCount)
                 .pendingChefDrafts(chefRequestDTOs.size()) // The number of pending drafts is just the size of the list!
@@ -184,6 +194,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .name(request.getName())
                 .category(request.getCategory())
                 .quantity(request.getQuantity())
+                .maxStock(request.getQuantity()) // Set initial stock as max stock
                 .unit(request.getUnit())
                 .reorderLevel(request.getReorderLevel())
                 .unitPrice(request.getUnitPrice())
@@ -210,21 +221,37 @@ public class InventoryServiceImpl implements InventoryService {
     @Transactional
     public InventoryItemDTO restockItem(Long id, RestockInventoryItemRequest request, Long userId) {
         InventoryItem item = getAndVerifyItem(id, userId);
-        BigDecimal previousQuantity = item.getQuantity();
+        BigDecimal previousQuantity = item.getQuantity() != null ? item.getQuantity() : BigDecimal.ZERO;
+        BigDecimal currentUnitPrice = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
 
         BigDecimal addedQuantity = request.getQuantity() != null ? request.getQuantity() : BigDecimal.ZERO;
-        item.setQuantity(item.getQuantity().add(addedQuantity));
+        BigDecimal newBatchUnitPrice = request.getUnitPrice() != null ? request.getUnitPrice() : currentUnitPrice;
 
-        if (request.getUnitPrice() != null) {
+        // 1. Calculate the New Total Quantity
+        BigDecimal newTotalQuantity = previousQuantity.add(addedQuantity);
+
+        // 2. Calculate the Weighted Average Cost (WAC)
+        // Formula: ((Old Qty * Old Price) + (New Qty * New Price)) / Total Qty
+        if (newTotalQuantity.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal currentTotalValue = previousQuantity.multiply(currentUnitPrice);
+            BigDecimal newBatchValue = addedQuantity.multiply(newBatchUnitPrice);
+            BigDecimal combinedValue = currentTotalValue.add(newBatchValue);
+
+            // Use 4 decimal places for precision during calculation, then round as needed
+            BigDecimal weightedAveragePrice = combinedValue.divide(newTotalQuantity, 2, java.math.RoundingMode.HALF_UP);
+            item.setUnitPrice(weightedAveragePrice);
+        } else if (request.getUnitPrice() != null) {
+            // If total quantity is still zero (unlikely for restock), just use the provided price
             item.setUnitPrice(request.getUnitPrice());
         }
 
+        item.setQuantity(newTotalQuantity);
         InventoryItem savedItem = inventoryItemRepository.save(item);
 
         // LOG TRANSACTION
         saveTransaction(savedItem, userId, InventoryTransactionType.RESTOCK,
                 addedQuantity, previousQuantity, savedItem.getQuantity(),
-                savedItem.getUnitPrice(), request.getNotes());
+                newBatchUnitPrice, request.getNotes());
 
         return toItemDTO(savedItem);
     }
@@ -297,6 +324,49 @@ public class InventoryServiceImpl implements InventoryService {
      * 7. Retrieves the history of all inventory updates (logs).
      */
     @Override
+    @Transactional
+    public ChefRequestDTO resolveChefRequest(Long requestId, ResolveChefRequestDTO requestDTO, Long userId) {
+        ChefRequest chefRequest = chefRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("Chef request not found with ID: " + requestId));
+
+        // Get the manager user resolving the request (optional to store, but good for
+        // validation)
+        User manager = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Manager not found"));
+
+        // Validate branch access if the manager is not SUPER_ADMIN
+        boolean isSuperAdmin = manager.getRole().getName().equals("SUPER_ADMIN");
+        if (!isSuperAdmin) {
+            Staff staff = staffRepository.findByUserId(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Staff record not found"));
+            if (staff.getBranch() == null || !staff.getBranch().getId().equals(chefRequest.getBranch().getId())) {
+                throw new RuntimeException("You do not have permission to resolve requests for this branch.");
+            }
+        }
+
+        ChefRequestStatus newStatus;
+        String statusStr = requestDTO.getStatus().toUpperCase();
+
+        if ("ACCEPTED".equals(statusStr) || "APPROVED".equals(statusStr)) {
+            newStatus = ChefRequestStatus.APPROVED;
+        } else if ("REJECTED".equals(statusStr)) {
+            newStatus = ChefRequestStatus.REJECTED;
+        } else {
+            try {
+                newStatus = ChefRequestStatus.valueOf(statusStr);
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException("Invalid status: " + requestDTO.getStatus());
+            }
+        }
+
+        chefRequest.setStatus(newStatus);
+        chefRequest.setManagerNote(requestDTO.getManagerNote());
+
+        ChefRequest updatedRequest = chefRequestRepository.saveAndFlush(chefRequest);
+        return toChefRequestDTO(updatedRequest);
+    }
+
+    @Override
     public List<InventoryLogDTO> getInventoryLogs(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
 
@@ -311,18 +381,49 @@ public class InventoryServiceImpl implements InventoryService {
 
     /**
      * Private helper to convert an InventoryTransaction entity to a DTO.
+     * Populates all detail fields for the Log Detail popup modal.
      */
     private InventoryLogDTO toLogDTO(InventoryTransaction transaction) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm a");
 
+        // Resolve the staff member's display name
+        String performedBy = "Unknown";
+        if (transaction.getStaff() != null) {
+            String first = transaction.getStaff().getFirstName();
+            String last = transaction.getStaff().getLastName();
+            if (first != null && last != null) {
+                performedBy = first + " " + last;
+            } else if (transaction.getStaff().getUser() != null
+                    && transaction.getStaff().getUser().getFullName() != null) {
+                performedBy = transaction.getStaff().getUser().getFullName();
+            }
+        }
+
+        // Resolve item metadata
+        String category = "";
+        String unit = "";
+        if (transaction.getInventoryItem() != null) {
+            category = transaction.getInventoryItem().getCategory() != null
+                    ? transaction.getInventoryItem().getCategory() : "";
+            unit = transaction.getInventoryItem().getUnit() != null
+                    ? transaction.getInventoryItem().getUnit() : "";
+        }
+
         return InventoryLogDTO.builder()
+                .id(transaction.getId())
                 .itemName(transaction.getInventoryItem().getName())
+                .category(category)
+                .unit(unit)
                 .updatedAt(transaction.getCreatedAt().format(formatter))
                 .updateType(transaction.getTransactionType().name())
+                .quantityChange(transaction.getQuantityChange())
+                .previousQuantity(transaction.getPreviousQuantity())
+                .newQuantity(transaction.getNewQuantity())
+                .unitPrice(transaction.getUnitPrice())
+                .performedBy(performedBy)
                 .notes(transaction.getNotes())
                 .build();
     }
-
 
     /**
      * Internal helper to fetch an item and ensure the user has permission to update
@@ -414,7 +515,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .item(req.getItemName())
                 .quantity(formattedQuantity)
                 .note(req.getChefNote())
+                .managerNote(req.getManagerNote())
                 .status(req.getStatus() != null ? req.getStatus().name() : "PENDING")
+                .requestType(req.getRequestType() != null ? req.getRequestType().name() : null)
                 .avatarColor(generateAvatarColor(req.getChefName()))
                 .build();
     }

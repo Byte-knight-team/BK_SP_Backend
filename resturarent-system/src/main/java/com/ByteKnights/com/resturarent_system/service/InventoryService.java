@@ -9,6 +9,8 @@ import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInvent
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryLogDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.inventory.ResolveChefRequestDTO;
 
 public interface InventoryService {
     /**
@@ -72,12 +74,17 @@ public interface InventoryService {
     /**
      * 6. Corrects or updates an existing inventory item's details.
      * 
-     * @param id      The ID of the item to correct.
+     * @param itemId      The ID of the item to correct.
      * @param request The corrected item details.
      * @param userId  The ID of the logged-in user.
      * @return InventoryItemDTO The updated item details.
      */
-    InventoryItemDTO correctItem(Long id, UpdateInventoryItemRequest request, Long userId);
+    InventoryItemDTO correctItem(Long itemId, UpdateInventoryItemRequest request, Long userId);
+
+    /**
+     * Resolves a chef request (Accept or Reject).
+     */
+    ChefRequestDTO resolveChefRequest(Long requestId, ResolveChefRequestDTO requestDTO, Long userId);
 
     /**
      * 7. Retrieves the history of all inventory updates (logs) for a specific branch.
