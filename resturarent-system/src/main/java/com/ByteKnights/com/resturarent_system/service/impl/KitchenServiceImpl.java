@@ -41,6 +41,7 @@ public class KitchenServiceImpl implements KitchenService {
 
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
         Long branchId = staff.getBranch().getId();
 
         // Define "Today" (Midnight of today)
@@ -53,6 +54,8 @@ public class KitchenServiceImpl implements KitchenService {
 
         // Fetch Average Time ONLY for this branch and ONLY for today
         Double avgTime = orderRepository.getAveragePreparationTimeTodayByBranch(branchId, startOfToday);
+
+        // add data to the dto
         return new KitchenDashboardStatsDTO(
                 pending,
                 preparing,
@@ -654,8 +657,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Update the Parent Order Status to PREPARING
         Order order = item.getOrder();
         if (order.getStatus() == OrderStatus.PENDING) {
-            order.setStatus(OrderStatus.PREPARING);
-            order.setStatusUpdatedAt(LocalDateTime.now());
+            order.updateStatus(OrderStatus.PREPARING);
             orderRepository.save(order);
         }
 
@@ -711,8 +713,7 @@ public class KitchenServiceImpl implements KitchenService {
 
         // If everything is done, Order becomes COMPLETED
         if (allFinished) {
-            order.setStatus(OrderStatus.COMPLETED);
-            order.setStatusUpdatedAt(LocalDateTime.now());
+            order.updateStatus(OrderStatus.COMPLETED);
             orderRepository.save(order);
         }
 
