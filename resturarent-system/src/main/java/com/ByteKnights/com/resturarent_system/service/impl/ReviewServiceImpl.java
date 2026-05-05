@@ -26,7 +26,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final OrderItemRepository orderItemRepository;
 
     public ReviewServiceImpl(ReviewRepository reviewRepository, OrderRepository orderRepository,
-                             CustomerRepository customerRepository, OrderItemRepository orderItemRepository) {
+            CustomerRepository customerRepository, OrderItemRepository orderItemRepository) {
         this.reviewRepository = reviewRepository;
         this.orderRepository = orderRepository;
         this.customerRepository = customerRepository;
@@ -67,7 +67,7 @@ public class ReviewServiceImpl implements ReviewService {
             for (ReviewSubmissionRequest.ItemReviewRequest itemReq : request.getItemReviews()) {
                 OrderItem item = orderItemRepository.findById(itemReq.getOrderItemId())
                         .orElseThrow(() -> new ResourceNotFoundException("Order item not found"));
-                
+
                 if (!item.getOrder().getId().equals(order.getId())) {
                     throw new CheckoutException(HttpStatus.BAD_REQUEST, "Item does not belong to this order.");
                 }

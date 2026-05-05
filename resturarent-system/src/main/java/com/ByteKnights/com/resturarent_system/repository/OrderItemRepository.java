@@ -12,6 +12,8 @@ import java.util.List;
 @Repository
 public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
+    List<OrderItem> findByOrderIdIn(List<Long> orderIds);
+
     // --- Kitchen Queries START ---
 
     // 1. kitchen dashboard top 5 most popular meals with count

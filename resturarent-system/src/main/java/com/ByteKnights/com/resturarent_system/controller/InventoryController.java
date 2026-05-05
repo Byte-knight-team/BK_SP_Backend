@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.inventory.UpdateInvent
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventoryLogDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.InventorySummaryDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.service.InventoryService;
 
 import org.springframework.web.bind.annotation.*;
@@ -229,6 +230,28 @@ public class InventoryController {
 
         List<InventoryLogDTO> logs = inventoryService.getInventoryLogs(targetBranchId, userId);
         return ResponseEntity.ok(logs);
+    }
+
+    /**
+     * Resolves a pending chef request (Accept or Reject).
+     * 
+     * Path: PATCH /api/inventory/chef-requests/{id}/resolve
+     * 
+     * @param id        The ID of the chef request.
+     * @param request   The resolution payload (status and managerNote).
+     * @param principal The authenticated user.
+     * @return 200 OK with the updated ChefRequestDTO.
+     */
+    @PatchMapping("/chef-requests/{id}/resolve")
+    @PreAuthorize("hasRole('MANAGER')")
+    public ResponseEntity<ChefRequestDTO> resolveChefRequest(
+            @PathVariable Long id,
+            @RequestBody com.ByteKnights.com.resturarent_system.dto.request.inventory.ResolveChefRequestDTO request,
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+
+        Long userId = principal.getUser().getId();
+        ChefRequestDTO updatedRequest = inventoryService.resolveChefRequest(id, request, userId);
+        return ResponseEntity.ok(updatedRequest);
     }
 
     /**

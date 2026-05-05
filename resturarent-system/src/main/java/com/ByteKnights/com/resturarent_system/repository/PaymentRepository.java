@@ -12,4 +12,9 @@ import org.springframework.stereotype.Repository;
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByOrder(Order order);
+
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.branch.id = :branchId AND p.paymentMethod = :method AND p.paymentStatus = 'PAID'")
+    java.math.BigDecimal sumAmountByBranchIdAndPaymentMethod(
+            @org.springframework.data.repository.query.Param("branchId") Long branchId,
+            @org.springframework.data.repository.query.Param("method") com.ByteKnights.com.resturarent_system.entity.PaymentMethod method);
 }
