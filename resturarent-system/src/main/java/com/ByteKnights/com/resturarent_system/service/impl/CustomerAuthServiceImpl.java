@@ -206,8 +206,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customerRepository.save(customer);
 
         // 4. Send SMS
-        //smsService.sendOtpSms(phone, otpCode);
-        System.out.println(otpCode);
+        smsService.sendOtpSms(phone, otpCode);
+        //System.out.println(otpCode);
     }
 
     @Override
