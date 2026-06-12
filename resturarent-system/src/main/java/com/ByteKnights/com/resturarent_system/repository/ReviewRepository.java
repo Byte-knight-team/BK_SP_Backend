@@ -25,4 +25,18 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             ORDER BY r.createdAt DESC
             """)
     List<Review> findRecentOrderReviews(Pageable pageable);
+
+        @Query("""
+          SELECT AVG(r.rating)
+          FROM Review r
+          WHERE r.orderItem.menuItem.id = :menuItemId
+          """)
+        Double findAverageRatingByMenuItemId(Long menuItemId);
+
+        @Query("""
+          SELECT COUNT(r)
+          FROM Review r
+          WHERE r.orderItem.menuItem.id = :menuItemId
+          """)
+        Long countByMenuItemId(Long menuItemId);
 }

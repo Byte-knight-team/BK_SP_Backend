@@ -18,6 +18,7 @@ import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import org.springframework.stereotype.Service;
@@ -46,17 +47,20 @@ public class MenuServiceImpl implements MenuService {
     private final MenuCategoryRepository menuCategoryRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
+    private final ReviewRepository reviewRepository;
 
     public MenuServiceImpl(MenuItemRepository menuItemRepository,
                            BranchRepository branchRepository,
                            MenuCategoryRepository menuCategoryRepository,
                            StaffRepository staffRepository,
-                           UserRepository userRepository) {
+                           UserRepository userRepository,
+                           ReviewRepository reviewRepository) {
         this.menuItemRepository = menuItemRepository;
         this.branchRepository = branchRepository;
         this.menuCategoryRepository = menuCategoryRepository;
         this.staffRepository = staffRepository;
         this.userRepository = userRepository;
+        this.reviewRepository = reviewRepository;
     }
 
     @Override
@@ -203,7 +207,10 @@ public class MenuServiceImpl implements MenuService {
         );
 
         // Convert the database Entities into clean DTOs for React
-        return items.stream().map(item -> com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse.builder()
+        return items.stream().map(item -> {
+            Double avg = reviewRepository.findAverageRatingByMenuItemId(item.getId());
+            Long count = reviewRepository.countByMenuItemId(item.getId());
+            return com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse.builder()
                 .id(item.getId())
                 .name(item.getName())
                 .description(item.getDescription())
@@ -214,8 +221,10 @@ public class MenuServiceImpl implements MenuService {
                 .subCategory(item.getSubCategory())
                 .isAvailable(item.getIsAvailable())
                 .preparationTime(item.getPreparationTime())
-                .build()
-        ).collect(Collectors.toList());
+                .averageRating(avg)
+                .ratingCount(count)
+                .build();
+        }).collect(Collectors.toList());
     }
 
     @Override
