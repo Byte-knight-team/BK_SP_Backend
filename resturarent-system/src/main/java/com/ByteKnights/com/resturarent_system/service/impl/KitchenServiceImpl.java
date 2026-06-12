@@ -41,6 +41,7 @@ public class KitchenServiceImpl implements KitchenService {
 
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
         Long branchId = staff.getBranch().getId();
 
         // Define "Today" (Midnight of today)
@@ -53,6 +54,8 @@ public class KitchenServiceImpl implements KitchenService {
 
         // Fetch Average Time ONLY for this branch and ONLY for today
         Double avgTime = orderRepository.getAveragePreparationTimeTodayByBranch(branchId, startOfToday);
+
+        // add data to the dto
         return new KitchenDashboardStatsDTO(
                 pending,
                 preparing,
@@ -71,9 +74,11 @@ public class KitchenServiceImpl implements KitchenService {
 
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
         Long branchId = staff.getBranch().getId();
 
         List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7DaysByBranch(branchId);
+
         Long totalSold = orderItemRepository.getTotalItemsSoldInLast7DaysByBranch(branchId);
 
         // avoid division by zero
@@ -115,48 +120,50 @@ public class KitchenServiceImpl implements KitchenService {
         // Identify the branch
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
         Long branchId = staff.getBranch().getId();
 
-        // initialize the map with zero counts for all time slots
-        Map<String, Integer> peakHourMap = new LinkedHashMap<>();
-        peakHourMap.put("8AM-10AM", 0);
-        peakHourMap.put("10AM-12PM", 0);
-        peakHourMap.put("12PM-2PM", 0);
-        peakHourMap.put("2PM-4PM", 0);
-        peakHourMap.put("4PM-6PM", 0);
-        peakHourMap.put("6PM-8PM", 0);
-        peakHourMap.put("8PM-10PM", 0);
+        // Initialize the 7 time slots with 0 orders each
+        List<PeakHourDTO> dtos = new ArrayList<>();
+        dtos.add(new PeakHourDTO("8AM-10AM", 0));
+        dtos.add(new PeakHourDTO("10AM-12PM", 0));
+        dtos.add(new PeakHourDTO("12PM-2PM", 0));
+        dtos.add(new PeakHourDTO("2PM-4PM", 0));
+        dtos.add(new PeakHourDTO("4PM-6PM", 0));
+        dtos.add(new PeakHourDTO("6PM-8PM", 0));
+        dtos.add(new PeakHourDTO("8PM-10PM", 0));
 
-        // fetch raw data from the database (Hour, Count)
+        // Fetch raw data from database: row[0] = Hour (0-23), row[1] = Order Count
         List<Object[]> rawData = orderRepository.findOrderCountByHourByBranch(branchId);
 
-        // map the count from the database to the corresponding time bucket (slot)
+        // Map each database row into the correct time slot
         for (Object[] row : rawData) {
             int hour = ((Number) row[0]).intValue();
             int count = ((Number) row[1]).intValue();
 
-            String slot = null;
-            if (hour >= 8 && hour < 10) slot = "8AM-10AM";
-            else if (hour >= 10 && hour < 12) slot = "10AM-12PM";
-            else if (hour >= 12 && hour < 14) slot = "12PM-2PM";
-            else if (hour >= 14 && hour < 16) slot = "2PM-4PM";
-            else if (hour >= 16 && hour < 18) slot = "4PM-6PM";
-            else if (hour >= 18 && hour < 20) slot = "6PM-8PM";
-            else if (hour >= 20 && hour < 22) slot = "8PM-10PM";
-
-            if (slot != null) {
-                peakHourMap.put(slot, peakHourMap.get(slot) + count);
+            if (hour >= 8 && hour < 10) {
+                dtos.get(0).setOrdersCount(dtos.get(0).getOrdersCount() + count);
+            } else if (hour >= 10 && hour < 12) {
+                dtos.get(1).setOrdersCount(dtos.get(1).getOrdersCount() + count);
+            } else if (hour >= 12 && hour < 14) {
+                dtos.get(2).setOrdersCount(dtos.get(2).getOrdersCount() + count);
+            } else if (hour >= 14 && hour < 16) {
+                dtos.get(3).setOrdersCount(dtos.get(3).getOrdersCount() + count);
+            } else if (hour >= 16 && hour < 18) {
+                dtos.get(4).setOrdersCount(dtos.get(4).getOrdersCount() + count);
+            } else if (hour >= 18 && hour < 20) {
+                dtos.get(5).setOrdersCount(dtos.get(5).getOrdersCount() + count);
+            } else if (hour >= 20 && hour < 22) {
+                dtos.get(6).setOrdersCount(dtos.get(6).getOrdersCount() + count);
             }
         }
 
-        // convert the Map to a DTO list for the response
-        List<PeakHourDTO> dtos = new ArrayList<>();
-        peakHourMap.forEach((time, ordersCount) -> dtos.add(new PeakHourDTO(time, ordersCount)));
-
         return dtos;
     }
+
 
 
     // inventory alerts
@@ -166,8 +173,10 @@ public class KitchenServiceImpl implements KitchenService {
         // identify the branch
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
         Long branchId = staff.getBranch().getId();
 
         List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);  //no need to write native query
@@ -497,7 +506,7 @@ public class KitchenServiceImpl implements KitchenService {
             // Count how many meals this chef finished today
             long mealsToday = orderItemRepository.countMealsPreparedToday(chef.getId(), startOfToday);
 
-            // 8. Map all data to the DTO
+            // Map all data to the DTO
             dtoList.add(new ChefDetailsDTO(
                     chef.getId(),
                     chef.getUser().getFullName(),
@@ -654,8 +663,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Update the Parent Order Status to PREPARING
         Order order = item.getOrder();
         if (order.getStatus() == OrderStatus.PENDING) {
-            order.setStatus(OrderStatus.PREPARING);
-            order.setStatusUpdatedAt(LocalDateTime.now());
+            order.updateStatus(OrderStatus.PREPARING);
             orderRepository.save(order);
         }
 
@@ -711,8 +719,7 @@ public class KitchenServiceImpl implements KitchenService {
 
         // If everything is done, Order becomes COMPLETED
         if (allFinished) {
-            order.setStatus(OrderStatus.COMPLETED);
-            order.setStatusUpdatedAt(LocalDateTime.now());
+            order.updateStatus(OrderStatus.COMPLETED);
             orderRepository.save(order);
         }
 

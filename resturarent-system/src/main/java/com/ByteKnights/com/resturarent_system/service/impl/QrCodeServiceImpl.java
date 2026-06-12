@@ -66,7 +66,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .table(table)
                 .active(true)
                 .lastGeneratedAt(LocalDateTime.now())
-            .createdByUser(actorUser)
+                .createdByUser(actorUser)
                 .build();
 
         QrCode saved = qrCodeRepository.save(qrCode);
@@ -122,7 +122,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .table(lockedTable)
                 .active(true)
                 .lastGeneratedAt(LocalDateTime.now())
-            .createdByUser(actorUser)
+                .createdByUser(actorUser)
                 .build();
 
         QrCode saved = qrCodeRepository.save(replacement);
@@ -147,9 +147,9 @@ public class QrCodeServiceImpl implements QrCodeService {
     public QrCodeResponse getActiveQrCodeForTable(Long tableId) {
         QrCode activeQr = qrCodeRepository.findFirstByTableIdAndActiveTrue(tableId)
                 .orElseThrow(() -> new ResourceNotFoundException("No active QR code found for table: " + tableId));
-        
+
         enforceAdminBranchAccess(activeQr.getBranch().getId());
-        
+
         return mapToResponseWithSecureQr(activeQr);
     }
 
@@ -221,8 +221,8 @@ public class QrCodeServiceImpl implements QrCodeService {
 
     private QrCodeResponse mapToResponse(QrCode qrCode) {
         Long createdByUserId = qrCode.getCreatedByUser() != null
-            ? qrCode.getCreatedByUser().getId()
-            : null;
+                ? qrCode.getCreatedByUser().getId()
+                : null;
 
         return QrCodeResponse.builder()
                 .id(qrCode.getId())
