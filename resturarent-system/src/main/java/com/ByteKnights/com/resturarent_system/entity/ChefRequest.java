@@ -54,6 +54,9 @@ public class ChefRequest {
     @Column(name = "chef_note", length = 500)
     private String chefNote;
 
+    @Column(name = "manager_note", length = 500)
+    private String managerNote;
+
     /**
      * Current status of this request.
      * Defaults to PENDING when created; managers can change it to APPROVED or

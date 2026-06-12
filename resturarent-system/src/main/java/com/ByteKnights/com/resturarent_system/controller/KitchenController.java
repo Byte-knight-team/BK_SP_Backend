@@ -28,7 +28,7 @@ public class KitchenController {
     @GetMapping("/stats")
     @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
     public ResponseEntity<StandardResponse> getKitchenDashboardStats(Principal principal) {
-        // Pass the email!
+        // Pass the email
         KitchenDashboardStatsDTO stats = kitchenService.getKitchenDashboardStats(principal.getName());
 
         return new ResponseEntity<>(

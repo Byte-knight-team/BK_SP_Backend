@@ -27,11 +27,11 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
                 // Get the logged-in User
                 User user = userRepository.findByEmail(userEmail)
-                        .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new RuntimeException("User not found"));
 
                 // Find the Staff profile to identify their branch
                 Staff staff = staffRepository.findByUser(user)
-                        .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+                                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
                 Long branchId = staff.getBranch().getId();
 
@@ -43,22 +43,21 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                 for (RestaurantTable table : tables) {
                         // Build base response
                         ReceptionistTableResponse response = ReceptionistTableResponse.builder()
-                                .id(table.getId())
-                                .tableNumber(table.getTableNumber())
-                                .capacity(table.getCapacity())
-                                .status(table.getState())
-                                .currentGuestCount(table.getCurrentGuestCount())
-                                .activeOrderCount(table.getActiveOrderCount())
-                                .statusUpdatedAt(table.getStatusUpdatedAt())
-                                .build();
+                                        .id(table.getId())
+                                        .tableNumber(table.getTableNumber())
+                                        .capacity(table.getCapacity())
+                                        .status(table.getState())
+                                        .currentGuestCount(table.getCurrentGuestCount())
+                                        .activeOrderCount(table.getActiveOrderCount())
+                                        .statusUpdatedAt(table.getStatusUpdatedAt())
+                                        .build();
 
                         // If the table has active orders, fetch them
                         if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
                                 // Fetch ALL orders for this table EXCEPT Cancelled or Rejected ones
                                 List<Order> activeOrders = orderRepository.findByTableIdAndStatusNotIn(
-                                        table.getId(),
-                                        List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED)
-                                );
+                                                table.getId(),
+                                                List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED));
                                 // Create a list of just the Order Strings (e.g. "#ORD-482")
                                 List<String> orderNumbers = new ArrayList<>();
                                 for (Order order : activeOrders) {
@@ -75,7 +74,6 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                 }
                 return dtoList;
         }
-
 
         // mark a table as OCCUPIED and set the guest count
         @Override
@@ -140,6 +138,5 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                 // Save
                 tableRepository.save(table);
         }
-
 
 }
