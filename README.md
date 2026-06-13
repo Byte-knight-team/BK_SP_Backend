@@ -380,15 +380,14 @@ Check SQL dialect in `.env` matches your database:
 
 ## Maintainers
 
-For questions or issues, contact the backend team listed in the project documentation.
+For questions or issues, contact the backend team.
 
 ---
 
 ## License
 
-(Add license information if applicable.)
 
 ---
 
-**Last Updated**: April 2026
+**Last Updated**: June 2026
 
