@@ -200,16 +200,15 @@ public class MenuServiceImpl implements MenuService {
         // only branch 1 is doing online services
         Long targetBranchId = (branchId != null) ? branchId : 1;
 
-        // Fetch only ACTIVE and AVAILABLE items for this specific branch
-        List<MenuItem> items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(
-                targetBranchId, 
-            MenuItemStatus.ACTIVE
-        );
+        // Fetch EVERYTHING (Items, Averages, Counts) in ONE single SQL query!
+        List<Object[]> results = menuItemRepository.findMenuItemsWithReviewStats(targetBranchId, MenuItemStatus.ACTIVE);
 
-        // Convert the database Entities into clean DTOs for React
-        return items.stream().map(item -> {
-            Double avg = reviewRepository.findAverageRatingByMenuItemId(item.getId());
-            Long count = reviewRepository.countByMenuItemId(item.getId());
+        // Convert the database results into clean DTOs for React
+        return results.stream().map(row -> {
+            MenuItem item = (MenuItem) row[0];
+            Double avg = (Double) row[1];
+            Long count = (Long) row[2];
+
             return com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse.builder()
                 .id(item.getId())
                 .name(item.getName())
@@ -221,7 +220,7 @@ public class MenuServiceImpl implements MenuService {
                 .subCategory(item.getSubCategory())
                 .isAvailable(item.getIsAvailable())
                 .preparationTime(item.getPreparationTime())
-                .averageRating(avg)
+                .averageRating(avg > 0 ? avg : null) // Keep it null if there are no ratings
                 .ratingCount(count)
                 .build();
         }).collect(Collectors.toList());
