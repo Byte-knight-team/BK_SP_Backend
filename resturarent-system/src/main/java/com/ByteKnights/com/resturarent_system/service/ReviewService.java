@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.request.customer.ReviewSubmissionRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemReviewsResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.ReviewImagePresignResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.ReviewResponse;
 import java.util.List;
@@ -13,4 +14,8 @@ public interface ReviewService {
     
     // Fetch recent order reviews for landing page
     List<ReviewResponse> getRecentReviews();
+
+    // Fetch paginated item-level reviews for a menu item (reviews modal)
+    MenuItemReviewsResponse getMenuItemReviews(Long menuItemId, int page, int size);
 }
+

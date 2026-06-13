@@ -1,6 +1,8 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.customer.ReviewSubmissionRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemReviewSummaryResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemReviewsResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.ReviewImagePresignResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.ReviewImageResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.ReviewResponse;
@@ -19,11 +21,13 @@ import com.ByteKnights.com.resturarent_system.repository.ReviewImageRepository;
 import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
 import com.ByteKnights.com.resturarent_system.service.ReviewImageStorageService;
 import com.ByteKnights.com.resturarent_system.service.ReviewService;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -154,6 +158,70 @@ public class ReviewServiceImpl implements ReviewService {
                         .images(imagesByReviewId.getOrDefault(review.getId(), List.of()))
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MenuItemReviewsResponse getMenuItemReviews(Long menuItemId, int page, int size) {
+        // 1. Get rating breakdown
+        List<Object[]> rawCounts = reviewRepository.countRatingsByMenuItemId(menuItemId);
+        Map<Integer, Long> breakdown = new HashMap<>();
+        for (int i = 1; i <= 5; i++) breakdown.put(i, 0L);
+        long totalCount = 0;
+        long sum = 0;
+
+        for (Object[] row : rawCounts) {
+            Integer stars = (Integer) row[0];
+            Long count = (Long) row[1];
+            breakdown.put(stars, count);
+            totalCount += count;
+            sum += (stars * count);
+        }
+
+        Double avgRating = totalCount == 0 ? 0.0 : (double) sum / totalCount;
+        MenuItemReviewSummaryResponse summary = MenuItemReviewSummaryResponse.builder()
+                .menuItemId(menuItemId)
+                .averageRating(avgRating)
+                .totalCount(totalCount)
+                .ratingBreakdown(breakdown)
+                .build();
+
+        // 2. Get paginated reviews
+        Page<Review> reviewPage = reviewRepository.findByMenuItemId(menuItemId, PageRequest.of(page, size));
+        
+        List<ReviewResponse> reviewResponses = new ArrayList<>();
+        if (reviewPage.hasContent()) {
+            List<Long> reviewIds = reviewPage.getContent().stream().map(Review::getId).toList();
+            Map<Long, List<ReviewImageResponse>> imagesByReviewId = reviewImageRepository.findByReviewIdIn(reviewIds)
+                    .stream()
+                    .collect(Collectors.groupingBy(
+                            image -> image.getReview().getId(),
+                            Collectors.mapping(
+                                    image -> reviewImageStorageService.toResponse(
+                                            image.getImageKey(),
+                                            image.getFileName(),
+                                            image.getContentType()),
+                                    Collectors.toList())));
+
+            reviewResponses = reviewPage.getContent().stream()
+                    .map(review -> ReviewResponse.builder()
+                            .reviewId(review.getId())
+                            .customerName(review.getCustomer().getUser().getFullName())
+                            .rating(review.getRating())
+                            .comment(review.getComment())
+                            .createdAt(review.getCreatedAt())
+                            .images(imagesByReviewId.getOrDefault(review.getId(), List.of()))
+                            .build())
+                    .toList();
+        }
+
+        return MenuItemReviewsResponse.builder()
+                .summary(summary)
+                .reviews(reviewResponses)
+                .page(reviewPage.getNumber())
+                .totalPages(reviewPage.getTotalPages())
+                .hasMore(reviewPage.hasNext())
+                .build();
     }
 
     private void saveReviewImages(Review review, List<ReviewSubmissionRequest.ReviewImageKeyEntry> imageEntries,
