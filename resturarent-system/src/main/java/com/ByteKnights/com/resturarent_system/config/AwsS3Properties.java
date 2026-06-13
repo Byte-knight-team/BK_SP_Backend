@@ -2,6 +2,10 @@ package com.ByteKnights.com.resturarent_system.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Binds all aws.s3.* properties from application.properties into a single typed object.
+ * Values are sourced from environment variables (AWS_S3_BUCKET_NAME, AWS_REGION, etc.).
+ */
 @ConfigurationProperties(prefix = "aws.s3")
 public class AwsS3Properties {
 
