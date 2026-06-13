@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
 
+import com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemReviewsResponse;
+
 @RestController
 @RequestMapping("/api/v1")
 @CrossOrigin
@@ -49,5 +51,14 @@ public class ReviewController {
     public ResponseEntity<ApiResponse<List<ReviewResponse>>> getRecentReviews() {
         List<ReviewResponse> reviews = reviewService.getRecentReviews();
         return ResponseEntity.ok(ApiResponse.success("Recent reviews fetched successfully", reviews));
+    }
+
+    @GetMapping("/menu-items/{menuItemId}/reviews")
+    public ResponseEntity<ApiResponse<MenuItemReviewsResponse>> getMenuItemReviews(
+            @PathVariable Long menuItemId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        MenuItemReviewsResponse response = reviewService.getMenuItemReviews(menuItemId, page, size);
+        return ResponseEntity.ok(ApiResponse.success("Menu item reviews fetched successfully", response));
     }
 }
