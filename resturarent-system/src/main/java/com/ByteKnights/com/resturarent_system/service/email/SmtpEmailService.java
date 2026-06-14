@@ -26,7 +26,6 @@ public class SmtpEmailService implements EmailService {
 
     /*
      * Sends staff invite email
-     * This method is called after creating a staff account or when resending a staff invite.
      */
     @Override
     public void sendStaffInviteEmail(String toEmail, String username, String temporaryPassword) {

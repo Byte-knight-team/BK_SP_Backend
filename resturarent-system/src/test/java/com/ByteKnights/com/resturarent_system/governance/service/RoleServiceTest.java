@@ -39,9 +39,6 @@ import static org.mockito.Mockito.*;
 
 /*
  * Unit tests for RoleService.
- *
- * These tests cover the governance / RBAC role-management logic.
- * Repositories and audit logging are mocked, so these tests do not use the real database.
  */
 @ExtendWith(MockitoExtension.class)
 class RoleServiceTest {
