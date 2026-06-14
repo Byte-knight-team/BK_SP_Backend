@@ -12,9 +12,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for JwtService.
- *
- * These tests verify JWT generation, claim extraction, and validation.
- * No Spring Boot application context is started.
  */
 class JwtServiceTest {
 

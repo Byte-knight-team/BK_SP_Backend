@@ -31,10 +31,6 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for StaffService.
- *
- * These tests are for the governance / staff management module.
- * Repositories, email service, password encoder, and audit log service are mocked.
- * Therefore, these tests do not connect to the real database or send real emails.
  */
 @ExtendWith(MockitoExtension.class)
 class StaffServiceTest {

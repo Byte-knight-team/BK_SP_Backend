@@ -38,12 +38,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Standalone controller-layer tests for RoleController.
- *
- * These tests check RBAC API endpoint mappings, request JSON,
- * response JSON, and whether RoleController calls RoleService correctly.
- *
- * This does not load the full Spring Boot application context.
- * That avoids unrelated security filter/database dependencies during controller testing.
  */
 @ExtendWith(MockitoExtension.class)
 class RoleControllerTest {

@@ -70,6 +70,7 @@ public class StaffService {
     private final EmailService emailService;
     private final AuditLogService auditLogService;
 
+    //audit log annotation
     @Auditable(module = AuditModule.STAFF, eventType = AuditEventType.STAFF_CREATED, targetType = AuditTargetType.USER, description = "Staff created successfully", captureResultAsNewValue = false)
     @Transactional
     public CreateStaffResponse createStaff(CreateStaffRequest request) {

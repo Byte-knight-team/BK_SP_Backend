@@ -42,15 +42,6 @@ import static org.mockito.Mockito.*;
 
 /*
  * Unit tests for SystemConfigService.
- *
- * Current review scope:
- * - SUPER_ADMIN only access
- * - global config
- * - branch config
- * - effective config
- * - audit logging for config updates
- *
- * Operating hours were removed from this scope.
  */
 @ExtendWith(MockitoExtension.class)
 class SystemConfigServiceTest {

@@ -32,13 +32,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /*
  * Standalone controller-layer tests for SystemConfigController.
- *
- * Current review scope:
- * - global tax/service charge/loyalty config
- * - branch delivery/pickup/dine-in config
- * - effective config response
- *
- * Operating hours were removed from this scope.
  */
 @ExtendWith(MockitoExtension.class)
 class SystemConfigControllerTest {

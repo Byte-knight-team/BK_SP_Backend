@@ -30,19 +30,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Standalone controller-layer tests for AuditLogController.
- *
- * These tests check audit-log API endpoint mappings, query parameters,
- * pagination response JSON, single-log lookup, and whether the controller
- * calls AuditLogService correctly.
- *
  * This does not load the full Spring Boot application context.
- * That avoids unrelated security filter/database dependencies during controller testing.
  */
 @ExtendWith(MockitoExtension.class)
 class AuditLogControllerTest {
 
     private MockMvc mockMvc;
 
+
+    /*
+    Arrange - prepare test data and mock behavior
+    Act - run the method or api
+    Assert - check whether the result is correct 
+    */
     @Mock
     private AuditLogService auditLogService;
 
@@ -55,6 +55,7 @@ class AuditLogControllerTest {
                 .build();
     }
 
+    // Test case 1: Get audit logs with default pagination
     @Test
     void getAuditLogs_shouldReturnPagedAuditLogsWithDefaultPagination() throws Exception {
         // Arrange
@@ -113,6 +114,7 @@ class AuditLogControllerTest {
         );
     }
 
+    // Test case 2: Get audit logs with filters and pagination
     @Test
     void getAuditLogs_shouldPassFiltersAndPaginationToService() throws Exception {
         // Arrange
@@ -173,6 +175,7 @@ class AuditLogControllerTest {
         );
     }
 
+    // Test case 3: Get a single audit log by ID
     @Test
     void getAuditLogById_shouldReturnOneAuditLog() throws Exception {
         // Arrange
