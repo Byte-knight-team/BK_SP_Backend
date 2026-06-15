@@ -102,4 +102,15 @@ public class CustomerProfileController {
 
         return ResponseEntity.ok(Map.of("message", "Profile picture removed successfully"));
     }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<?> getStatistics(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
+        }
+
+        String userEmail = principal.getName();
+        return ResponseEntity.ok(Map.of("data",
+                customerProfileService.getCustomerStatistics(userEmail)));
+    }
 }

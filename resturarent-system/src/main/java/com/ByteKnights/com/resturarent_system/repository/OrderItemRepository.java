@@ -46,4 +46,20 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
 
 
     // --- Kitchen Queries END ---
+
+    // ───────────────────────── Customer Statistics Dashboard ─────────────────────────
+
+    @Query(value = "SELECT oi.item_name, mi.image_url, SUM(oi.quantity) AS cnt " +
+            "FROM order_items oi JOIN orders o ON oi.order_id = o.id " +
+            "LEFT JOIN menu_items mi ON oi.menu_item_id = mi.id " +
+            "WHERE o.customer_id = :cid AND o.status NOT IN ('CANCELLED','REJECTED') " +
+            "GROUP BY oi.item_name, mi.image_url ORDER BY cnt DESC LIMIT 3",
+            nativeQuery = true)
+    List<Object[]> findTop3ItemsByCustomer(@Param("cid") Long customerId);
+
+    @Query(value = "SELECT COALESCE(SUM(oi.quantity), 0) FROM order_items oi " +
+            "JOIN orders o ON oi.order_id = o.id " +
+            "WHERE o.customer_id = :cid AND o.status NOT IN ('CANCELLED','REJECTED')",
+            nativeQuery = true)
+    Long countTotalItemsByCustomer(@Param("cid") Long customerId);
 }
