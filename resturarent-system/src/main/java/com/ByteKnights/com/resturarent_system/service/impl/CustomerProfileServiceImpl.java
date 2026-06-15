@@ -5,11 +5,16 @@ import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerProfi
 import com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePicturePresignRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePictureUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerProfileResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerStatisticsResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.ProfilePicturePresignResponse;
 import com.ByteKnights.com.resturarent_system.entity.Customer;
+import com.ByteKnights.com.resturarent_system.entity.OrderType;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.exception.CustomerAuthException;
 import com.ByteKnights.com.resturarent_system.repository.CustomerRepository;
+import com.ByteKnights.com.resturarent_system.repository.LoyaltyTransactionRepository;
+import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.CustomerProfileService;
 import com.ByteKnights.com.resturarent_system.service.ProfileImageStorageService;
@@ -19,7 +24,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
@@ -33,15 +42,24 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
     private final ProfileImageStorageService profileImageStorageService;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final LoyaltyTransactionRepository loyaltyTransactionRepository;
 
     public CustomerProfileServiceImpl(UserRepository userRepository,
             CustomerRepository customerRepository,
             PasswordEncoder passwordEncoder,
-            ProfileImageStorageService profileImageStorageService) {
+            ProfileImageStorageService profileImageStorageService,
+            OrderRepository orderRepository,
+            OrderItemRepository orderItemRepository,
+            LoyaltyTransactionRepository loyaltyTransactionRepository) {
         this.userRepository = userRepository;
         this.customerRepository = customerRepository;
         this.passwordEncoder = passwordEncoder;
         this.profileImageStorageService = profileImageStorageService;
+        this.orderRepository = orderRepository;
+        this.orderItemRepository = orderItemRepository;
+        this.loyaltyTransactionRepository = loyaltyTransactionRepository;
     }
 
     @Override
@@ -173,4 +191,91 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         userRepository.save(user);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public CustomerStatisticsResponse getCustomerStatistics(String identifier) {
+        User user = userRepository.findByEmail(identifier)
+                .orElseGet(() -> userRepository.findByPhone(identifier)
+                        .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found")));
+
+        Customer customer = customerRepository.findByUser(user)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Customer profile not found"));
+
+        Long customerId = customer.getId();
+
+        // 1. Financial totals (single query)
+        List<Object[]> financialsList = orderRepository.findLifetimeFinancials(customerId);
+        BigDecimal totalSpend = BigDecimal.ZERO;
+        BigDecimal totalDiscounts = BigDecimal.ZERO;
+        if (financialsList != null && !financialsList.isEmpty()) {
+            Object[] financials = financialsList.get(0);
+            totalSpend = financials != null && financials[0] != null
+                    ? new BigDecimal(financials[0].toString()) : BigDecimal.ZERO;
+            totalDiscounts = financials != null && financials.length > 1 && financials[1] != null
+                    ? new BigDecimal(financials[1].toString()) : BigDecimal.ZERO;
+        }
+
+        // 2. Monthly spending trend (last 6 months)
+        List<Object[]> trendRows = orderRepository.findMonthlySpendingTrend(customerId);
+        List<CustomerStatisticsResponse.MonthlySpend> spendingTrend = new ArrayList<>();
+        DateTimeFormatter monthFormatter = DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH);
+        for (Object[] row : trendRows) {
+            String yearMonth = (String) row[0]; // "2026-06"
+            BigDecimal amount = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
+            // Parse "2026-06" to "Jun"
+            YearMonth ym = YearMonth.parse(yearMonth);
+            String label = ym.format(monthFormatter);
+            spendingTrend.add(CustomerStatisticsResponse.MonthlySpend.builder()
+                    .month(label)
+                    .amount(amount)
+                    .build());
+        }
+
+        // 3. Top 3 items
+        List<Object[]> topRows = orderItemRepository.findTop3ItemsByCustomer(customerId);
+        List<CustomerStatisticsResponse.TopItem> topItems = new ArrayList<>();
+        for (Object[] row : topRows) {
+            topItems.add(CustomerStatisticsResponse.TopItem.builder()
+                    .name((String) row[0])
+                    .imageUrl(row[1] != null ? (String) row[1] : null)
+                    .orderCount(((Number) row[2]).longValue())
+                    .build());
+        }
+
+        // 4. Order type breakdown
+        List<Object[]> typeCounts = orderRepository.findOrderTypeCounts(customerId);
+        long qrCount = 0, deliveryCount = 0, pickupCount = 0;
+        for (Object[] row : typeCounts) {
+            OrderType type = (OrderType) row[0];
+            long count = ((Number) row[1]).longValue();
+            if (type == null) continue;
+            switch (type) {
+                case QR -> qrCount = count;
+                case ONLINE_DELIVERY -> deliveryCount = count;
+                case ONLINE_PICKUP -> pickupCount = count;
+            }
+        }
+
+        // 5. Loyalty
+        Integer pointsEarned = loyaltyTransactionRepository.sumPointsEarned(customerId);
+        Integer pointsRedeemed = loyaltyTransactionRepository.sumPointsRedeemed(customerId);
+
+        // 6. Total items ever ordered
+        Long totalItems = orderItemRepository.countTotalItemsByCustomer(customerId);
+
+        return CustomerStatisticsResponse.builder()
+                .totalLifetimeSpend(totalSpend)
+                .totalDiscountsSaved(totalDiscounts)
+                .spendingTrend(spendingTrend)
+                .topItems(topItems)
+                .qrOrderCount(qrCount)
+                .deliveryOrderCount(deliveryCount)
+                .pickupOrderCount(pickupCount)
+                .currentLoyaltyPoints(customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0)
+                .totalPointsEarned(pointsEarned != null ? pointsEarned : 0)
+                .totalPointsRedeemed(pointsRedeemed != null ? pointsRedeemed : 0)
+                .memberSince(user.getCreatedAt())
+                .totalItemsOrdered(totalItems != null ? totalItems : 0L)
+                .build();
+    }
 }
