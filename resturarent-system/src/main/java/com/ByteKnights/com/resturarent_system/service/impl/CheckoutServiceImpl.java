@@ -54,6 +54,13 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "System configuration is missing"));
 
+        Branch branch = branchRepository.findById(request.getBranchId())
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Branch not found"));
+        
+        if (branch.getStatus() != BranchStatus.ACTIVE) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
+        }
+
         BranchConfig branchConfig = branchConfigRepository.findByBranchId(request.getBranchId())
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Branch configuration is missing for Branch ID: " + request.getBranchId()));
@@ -180,9 +187,6 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 9. Fetch Branch Details for Pickup
         BranchDetailResponse branchDetails = null;
         if ("ONLINE_PICKUP".equalsIgnoreCase(request.getOrderType())) {
-            Branch branch = branchRepository.findById(request.getBranchId())
-                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch details not found"));
-            
             branchDetails = BranchDetailResponse.builder()
                     .name(branch.getName())
                     .address(branch.getAddress())
