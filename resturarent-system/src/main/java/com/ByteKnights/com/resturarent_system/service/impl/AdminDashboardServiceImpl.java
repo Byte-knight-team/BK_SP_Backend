@@ -69,6 +69,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     public AdminDashboardSummaryResponse getSummary() {
         // ADMIN users are branch-scoped, while SUPER_ADMIN gets global aggregates.
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
 
         long totalOrders;
         long activeOrderCount;
@@ -76,17 +77,18 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         BigDecimal totalRevenue;
 
         if (adminBranchId == null) {
-            totalOrders = orderRepository.count();
-            activeOrderCount = orderRepository.countByStatusIn(ACTIVE_ORDER_STATUSES);
-            activeUsers = userRepository.countActiveUsers();
-            totalRevenue = orderRepository.sumFinalAmountByPaymentStatusIn(REVENUE_PAYMENT_STATUSES);
+            totalOrders = orderRepository.countByCreatedAtAfter(startOfToday);
+            activeOrderCount = orderRepository.countByStatusInAndCreatedAtAfter(ACTIVE_ORDER_STATUSES, startOfToday);
+            activeUsers = userRepository.countActiveUsersCreatedAfter(startOfToday);
+            totalRevenue = orderRepository.sumFinalAmountByPaymentStatusInAndCreatedAtAfter(REVENUE_PAYMENT_STATUSES, startOfToday);
         } else {
-            totalOrders = orderRepository.countByBranchId(adminBranchId);
-            activeOrderCount = orderRepository.countByBranchIdAndStatusIn(adminBranchId, ACTIVE_ORDER_STATUSES);
-            activeUsers = userRepository.countActiveUsersByBranchId(adminBranchId);
-            totalRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(
+            totalOrders = orderRepository.countByBranchIdAndCreatedAtAfter(adminBranchId, startOfToday);
+            activeOrderCount = orderRepository.countByBranchIdAndStatusInAndCreatedAtAfter(adminBranchId, ACTIVE_ORDER_STATUSES, startOfToday);
+            activeUsers = userRepository.countActiveUsersByBranchIdCreatedAfter(adminBranchId, startOfToday);
+            totalRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusInAndCreatedAtAfter(
                     adminBranchId,
-                    REVENUE_PAYMENT_STATUSES);
+                    REVENUE_PAYMENT_STATUSES,
+                    startOfToday);
         }
 
         return AdminDashboardSummaryResponse.builder()

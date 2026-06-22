@@ -40,5 +40,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT COUNT(s) FROM Staff s JOIN s.user u WHERE s.branch.id = :branchId AND u.isActive = true")
     long countActiveUsersByBranchId(@Param("branchId") Long branchId);
 
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isActive = true AND u.createdAt >= :startOfToday")
+    long countActiveUsersCreatedAfter(@Param("startOfToday") java.time.LocalDateTime startOfToday);
+
+    @Query("SELECT COUNT(s) FROM Staff s JOIN s.user u WHERE s.branch.id = :branchId AND u.isActive = true AND u.createdAt >= :startOfToday")
+    long countActiveUsersByBranchIdCreatedAfter(@Param("branchId") Long branchId, @Param("startOfToday") java.time.LocalDateTime startOfToday);
+
     // TODO: Add more custom query methods as needed
 }
