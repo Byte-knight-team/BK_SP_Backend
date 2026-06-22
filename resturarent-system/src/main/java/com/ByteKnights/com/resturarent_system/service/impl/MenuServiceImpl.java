@@ -18,6 +18,7 @@ import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import org.springframework.stereotype.Service;
@@ -69,17 +70,20 @@ public class MenuServiceImpl implements MenuService {
     private final MenuCategoryRepository menuCategoryRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
+    private final ReviewRepository reviewRepository;
 
     public MenuServiceImpl(MenuItemRepository menuItemRepository,
                            BranchRepository branchRepository,
                            MenuCategoryRepository menuCategoryRepository,
                            StaffRepository staffRepository,
-                           UserRepository userRepository) {
+                           UserRepository userRepository,
+                           ReviewRepository reviewRepository) {
         this.menuItemRepository = menuItemRepository;
         this.branchRepository = branchRepository;
         this.menuCategoryRepository = menuCategoryRepository;
         this.staffRepository = staffRepository;
         this.userRepository = userRepository;
+        this.reviewRepository = reviewRepository;
     }
 
     // Retrieves the count of distinct menu categories.
@@ -254,14 +258,16 @@ public class MenuServiceImpl implements MenuService {
         // only branch 1 is doing online services
         Long targetBranchId = (branchId != null) ? branchId : 1;
 
-        // Fetch only ACTIVE and AVAILABLE items for this specific branch
-        List<MenuItem> items = menuItemRepository.findByBranchIdAndStatusAndIsAvailableTrue(
-                targetBranchId, 
-            MenuItemStatus.ACTIVE
-        );
+        // Fetch EVERYTHING (Items, Averages, Counts) in ONE single SQL query!
+        List<Object[]> results = menuItemRepository.findMenuItemsWithReviewStats(targetBranchId, MenuItemStatus.ACTIVE);
 
-        // Convert the database Entities into clean DTOs for React
-        return items.stream().map(item -> com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse.builder()
+        // Convert the database results into clean DTOs for React
+        return results.stream().map(row -> {
+            MenuItem item = (MenuItem) row[0];
+            Double avg = (Double) row[1];
+            Long count = (Long) row[2];
+
+            return com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse.builder()
                 .id(item.getId())
                 .name(item.getName())
                 .description(item.getDescription())
@@ -272,8 +278,10 @@ public class MenuServiceImpl implements MenuService {
                 .subCategory(item.getSubCategory())
                 .isAvailable(item.getIsAvailable())
                 .preparationTime(item.getPreparationTime())
-                .build()
-        ).collect(Collectors.toList());
+                .averageRating(avg > 0 ? avg : null) // Keep it null if there are no ratings
+                .ratingCount(count)
+                .build();
+        }).collect(Collectors.toList());
     }
 
     // Retrieves all distinct sub-category names for a given category in a branch.

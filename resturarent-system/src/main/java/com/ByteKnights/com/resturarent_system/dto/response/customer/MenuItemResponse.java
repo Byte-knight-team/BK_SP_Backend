@@ -17,4 +17,6 @@ public class MenuItemResponse {
     private String subCategory;
     private Boolean isAvailable;
     private Integer preparationTime;
+    private Double averageRating;
+    private Long ratingCount;
 }

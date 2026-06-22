@@ -5,7 +5,9 @@ import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerProfi
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerProfileResponse;
 import com.ByteKnights.com.resturarent_system.service.CustomerProfileService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -63,5 +65,52 @@ public class CustomerProfileController {
         customerProfileService.updatePassword(userEmail, request);
 
         return ResponseEntity.ok(Map.of("message", "Password updated successfully"));
+    }
+
+    @PostMapping("/profile/picture/presign")
+    public ResponseEntity<?> createProfilePictureUploadUrl(Principal principal, @RequestBody com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePicturePresignRequest request) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
+        }
+
+        String userEmail = principal.getName();
+        com.ByteKnights.com.resturarent_system.dto.response.customer.ProfilePicturePresignResponse response = customerProfileService.createProfilePictureUploadUrl(userEmail, request);
+
+        return ResponseEntity.ok(Map.of("data", response));
+    }
+
+    @PutMapping("/profile/picture")
+    public ResponseEntity<?> updateProfilePicture(Principal principal, @RequestBody com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePictureUpdateRequest request) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
+        }
+
+        String userEmail = principal.getName();
+        customerProfileService.updateProfilePicture(userEmail, request);
+
+        return ResponseEntity.ok(Map.of("message", "Profile picture updated successfully"));
+    }
+
+    @DeleteMapping("/profile/picture")
+    public ResponseEntity<?> removeProfilePicture(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
+        }
+
+        String userEmail = principal.getName();
+        customerProfileService.removeProfilePicture(userEmail);
+
+        return ResponseEntity.ok(Map.of("message", "Profile picture removed successfully"));
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<?> getStatistics(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
+        }
+
+        String userEmail = principal.getName();
+        return ResponseEntity.ok(Map.of("data",
+                customerProfileService.getCustomerStatistics(userEmail)));
     }
 }

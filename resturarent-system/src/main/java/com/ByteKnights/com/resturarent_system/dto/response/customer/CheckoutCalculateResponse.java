@@ -27,4 +27,7 @@ public class CheckoutCalculateResponse {
     private Integer loyaltyPointsEarnedThisOrder;
     private Integer minPointsToRedeem;
     private Integer maxRedeemablePoints; // Backend-calculated 50% cap
+    
+    // Branch Details (Populated for ONLINE_PICKUP)
+    private BranchDetailResponse branchDetails;
 }

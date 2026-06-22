@@ -158,7 +158,7 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .table(lockedTable)
                 .active(true)
                 .lastGeneratedAt(LocalDateTime.now())
-            .createdByUser(actorUser)
+                .createdByUser(actorUser)
                 .build();
 
         QrCode saved = qrCodeRepository.save(replacement);
@@ -194,7 +194,7 @@ public class QrCodeServiceImpl implements QrCodeService {
         
         //Ensures admin can only access: their own branch
         enforceAdminBranchAccess(activeQr.getBranch().getId());
-        
+
         return mapToResponseWithSecureQr(activeQr);
     }
 
@@ -279,8 +279,8 @@ public class QrCodeServiceImpl implements QrCodeService {
 
     private QrCodeResponse mapToResponse(QrCode qrCode) {
         Long createdByUserId = qrCode.getCreatedByUser() != null
-            ? qrCode.getCreatedByUser().getId()
-            : null;
+                ? qrCode.getCreatedByUser().getId()
+                : null;
 
         return QrCodeResponse.builder()
                 .id(qrCode.getId())

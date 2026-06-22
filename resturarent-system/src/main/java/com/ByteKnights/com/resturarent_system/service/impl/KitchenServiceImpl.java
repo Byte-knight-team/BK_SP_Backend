@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateAlertRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.*;
@@ -28,29 +29,57 @@ public class KitchenServiceImpl implements KitchenService {
     final UserRepository userRepository;
     final StaffRepository staffRepository;
     final ChefAttendanceRepository chefAttendanceRepository;
+    final KitchenAlertRepository kitchenAlertRepository;
 
     // kitchen dashboard stat
     @Override
-    public KitchenDashboardStatsDTO getKitchenDashboardStats() {
+    public KitchenDashboardStatsDTO getKitchenDashboardStats(String userEmail) {
 
-        long pending = orderRepository.countByStatus(OrderStatus.PENDING);
-        long preparing = orderRepository.countByStatus(OrderStatus.PREPARING);
-        long completed = orderRepository.countByStatus(OrderStatus.COMPLETED);
+        // Get Branch ID
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Double avgTime = orderRepository.getAveragePreparationTime();
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        // Define "Today" (Midnight of today)
+        LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
+
+        // Fetch counts ONLY for this branch and ONLY for today
+        long pending = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PENDING, startOfToday);
+        long preparing = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PREPARING, startOfToday);
+        long completed = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.COMPLETED, startOfToday);
+
+        // Fetch Average Time ONLY for this branch and ONLY for today
+        Double avgTime = orderRepository.getAveragePreparationTimeTodayByBranch(branchId, startOfToday);
+
+        // add data to the dto
         return new KitchenDashboardStatsDTO(
                 pending,
                 preparing,
                 completed,
-                avgTime != null ? Math.round(avgTime * 100.0) / 100.0 : 0.0 // Round to 2 decimal places
+                avgTime != null ? Math.round(avgTime * 100.0) / 100.0 : 0.0
         );
     }
 
     // most popular meals
     @Override
-    public List<PopularMealDTO> getMostPopularMealsInLast7Days() {
-        List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7Days();
-        Long totalSold = orderItemRepository.getTotalItemsSoldInLast7Days();
+    public List<PopularMealDTO> getMostPopularMealsInLast7Days(String userEmail) {
+
+        // identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        List<Object[]> topMeals = orderItemRepository.findTop5PopularMealsInLast7DaysByBranch(branchId);
+
+        Long totalSold = orderItemRepository.getTotalItemsSoldInLast7DaysByBranch(branchId);
 
         // avoid division by zero
         // return empty list if no meals sold in last 7 days
@@ -86,50 +115,72 @@ public class KitchenServiceImpl implements KitchenService {
 
     // peak hours
     @Override
-    public List<PeakHourDTO> getPeakHoursInLast7Days() {
-        // initialize the map with zero counts for all time slots
-        Map<String, Integer> peakHourMap = new LinkedHashMap<>();
-        peakHourMap.put("8AM-10AM", 0);
-        peakHourMap.put("10AM-12PM", 0);
-        peakHourMap.put("12PM-2PM", 0);
-        peakHourMap.put("2PM-4PM", 0);
-        peakHourMap.put("4PM-6PM", 0);
-        peakHourMap.put("6PM-8PM", 0);
-        peakHourMap.put("8PM-10PM", 0);
+    public List<PeakHourDTO> getPeakHoursInLast7Days(String userEmail) {
 
-        // fetch raw data from the database (Hour, Count)
-        List<Object[]> rawData = orderRepository.findOrderCountByHour();
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // map the count from the database to the corresponding time bucket (slot)
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        // Initialize the 7 time slots with 0 orders each
+        List<PeakHourDTO> dtos = new ArrayList<>();
+        dtos.add(new PeakHourDTO("8AM-10AM", 0));
+        dtos.add(new PeakHourDTO("10AM-12PM", 0));
+        dtos.add(new PeakHourDTO("12PM-2PM", 0));
+        dtos.add(new PeakHourDTO("2PM-4PM", 0));
+        dtos.add(new PeakHourDTO("4PM-6PM", 0));
+        dtos.add(new PeakHourDTO("6PM-8PM", 0));
+        dtos.add(new PeakHourDTO("8PM-10PM", 0));
+
+        // Fetch raw data from database: row[0] = Hour (0-23), row[1] = Order Count
+        List<Object[]> rawData = orderRepository.findOrderCountByHourByBranch(branchId);
+
+        // Map each database row into the correct time slot
         for (Object[] row : rawData) {
             int hour = ((Number) row[0]).intValue();
             int count = ((Number) row[1]).intValue();
 
-            String slot = null;
-            if (hour >= 8 && hour < 10) slot = "8AM-10AM";
-            else if (hour >= 10 && hour < 12) slot = "10AM-12PM";
-            else if (hour >= 12 && hour < 14) slot = "12PM-2PM";
-            else if (hour >= 14 && hour < 16) slot = "2PM-4PM";
-            else if (hour >= 16 && hour < 18) slot = "4PM-6PM";
-            else if (hour >= 18 && hour < 20) slot = "6PM-8PM";
-            else if (hour >= 20 && hour < 22) slot = "8PM-10PM";
-
-            if (slot != null) {
-                peakHourMap.put(slot, peakHourMap.get(slot) + count);
+            if (hour >= 8 && hour < 10) {
+                dtos.get(0).setOrdersCount(dtos.get(0).getOrdersCount() + count);
+            } else if (hour >= 10 && hour < 12) {
+                dtos.get(1).setOrdersCount(dtos.get(1).getOrdersCount() + count);
+            } else if (hour >= 12 && hour < 14) {
+                dtos.get(2).setOrdersCount(dtos.get(2).getOrdersCount() + count);
+            } else if (hour >= 14 && hour < 16) {
+                dtos.get(3).setOrdersCount(dtos.get(3).getOrdersCount() + count);
+            } else if (hour >= 16 && hour < 18) {
+                dtos.get(4).setOrdersCount(dtos.get(4).getOrdersCount() + count);
+            } else if (hour >= 18 && hour < 20) {
+                dtos.get(5).setOrdersCount(dtos.get(5).getOrdersCount() + count);
+            } else if (hour >= 20 && hour < 22) {
+                dtos.get(6).setOrdersCount(dtos.get(6).getOrdersCount() + count);
             }
         }
-
-        // convert the Map to a DTO list for the response
-        List<PeakHourDTO> dtos = new ArrayList<>();
-        peakHourMap.forEach((time, mealsCount) -> dtos.add(new PeakHourDTO(time, mealsCount)));
 
         return dtos;
     }
 
+
+
     // inventory alerts
     @Override
-    public List<InventoryDetailsDTO> getInventoryAlerts() {
-        List<InventoryItem> items = inventoryItemRepository.findAll(); //no need to write native query
+    public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
+
+        // identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);  //no need to write native query
+
         List<InventoryDetailsDTO> alerts = new ArrayList<>();
 
         for (InventoryItem item : items) {
@@ -140,7 +191,6 @@ public class KitchenServiceImpl implements KitchenService {
             // send to the dashboard if only current amount <= Reorder level
             if (current <= reorder) {
                 String level = (current <= reorder / 2) ? "CRITICAL" : "LOW";
-
                 // Percentage calculation
                 double percentage = (max > 0) ? (current / max) * 100 : 0;
 
@@ -158,9 +208,17 @@ public class KitchenServiceImpl implements KitchenService {
         return alerts;
     }
 
+
     //get orderCard details
     @Override
-    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status) {
+    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) { // Added email parameter
+
+        // Added logic to identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
 
         // Define the time range: Only fetch orders starting from today's midnight
         LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
@@ -171,7 +229,7 @@ public class KitchenServiceImpl implements KitchenService {
                 : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
         // Retrieve sorted orders from today
-        List<Order> orders = orderRepository.findByStatusAndStatusUpdatedAtAfter(status, startOfToday, sort);
+        List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(branchId, status, startOfToday, sort);
 
         // Initialize a list to hold the DTOs for the frontend
         List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
@@ -201,10 +259,20 @@ public class KitchenServiceImpl implements KitchenService {
         return orderCardDetailsDTOS;
     }
 
+
     //get all inventory details
     @Override
-    public List<InventoryDetailsDTO> getAllInventoryItems() {
-        List<InventoryItem> items = inventoryItemRepository.findAll();
+    public List<InventoryDetailsDTO> getAllInventoryItems(String userEmail) {
+
+        // Find the logged-in user and their branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Fetch ONLY items for this specific branch
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(staff.getBranch().getId());
+
         // can be used same InventoryDetailsDTO for this
         List<InventoryDetailsDTO> dtoList = new ArrayList<>();
 
@@ -263,34 +331,60 @@ public class KitchenServiceImpl implements KitchenService {
         chefRequestRepository.save(chefRequest);
     }
 
+
     //update item count in the inventory
     @Override
-    @Transactional // Important when updating the database!
-    public void updateInventoryStock(UpdateStockDTO updateDTO) {
+    @Transactional // Important when updating the database
+    public void updateInventoryStock(UpdateStockDTO updateDTO, String userEmail) {
 
-        // find the inventory item by its name
-        InventoryItem item = inventoryItemRepository.findByName(updateDTO.getItemName())
-                .orElseThrow(() -> new RuntimeException("Inventory item not found: " + updateDTO.getItemName()));
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // find the inventory item by its name AND branchId
+        InventoryItem item = inventoryItemRepository.findByNameAndBranchId(updateDTO.getItemName(), branchId)
+                .orElseThrow(() -> new RuntimeException("Inventory item not found in your branch: " + updateDTO.getItemName()));
+
         // update the quantity
         item.setQuantity(updateDTO.getNewQuantity());
-        // 3. save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
+
+        // save it back (in the entity already has @PreUpdate to automatically set the lastUpdated time)
         inventoryItemRepository.save(item);
     }
 
+
     //get order details
     @Override
-    public OrderDetailsDTO getOrderDetails(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+    public OrderDetailsDTO getOrderDetails(Long orderId, String userEmail) {
 
-        List<OrderItemDetailsDTO> itemDTOs = order.getItems().stream()
-                .map(item -> new OrderItemDetailsDTO(
-                        item.getId(),
-                        item.getItemName(),
-                        item.getQuantity(),
-                        item.getStatus().toString(),
-                        item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
-                )).toList();
+        // Identify the branch of the logged-in user
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Find the order ONLY if it belongs to this branch
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
+
+        List<OrderItemDetailsDTO> itemDTOs = new ArrayList<>(); // Create a new list
+
+        for (OrderItem item : order.getItems()) { // Loop through each item in the order
+            // Create the DTO manually for each item
+            OrderItemDetailsDTO dto = new OrderItemDetailsDTO(
+                    item.getId(),
+                    item.getItemName(),
+                    item.getQuantity(),
+                    item.getStatus().toString(),
+                    item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
+            );
+            itemDTOs.add(dto); // Add it to our list
+        }
 
         return new OrderDetailsDTO(
                 order.getId(),
@@ -302,6 +396,7 @@ public class KitchenServiceImpl implements KitchenService {
                 itemDTOs //list of items
         );
     }
+
 
     //get all available Line chefs from the same branch of the logged-in Chief Chef to assign them to prepare meals
     @Override
@@ -347,47 +442,90 @@ public class KitchenServiceImpl implements KitchenService {
         Staff chef = staffRepository.findById(chefStaffId)
                 .orElseThrow(() -> new RuntimeException("Chef not found"));
 
+        // Security Check to prevent cross-branch assignment
+        Long orderBranchId = item.getOrder().getBranch().getId();
+        Long chefBranchId = chef.getBranch().getId();
+
+        if (!orderBranchId.equals(chefBranchId)) {
+            throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
+        }
+
         // Link the chef to the meal and save
         item.setAssignedChef(chef);
         orderItemRepository.save(item);
     }
 
-    //get all the Line Chefs Who is not checked in yet
+
+    // Get all line chefs details
     @Override
-    public List<ChefCheckInDTO> getLineChefsForCheckIn(String userEmail) {
-        // Get logged-in Chief Chef
-        User user = userRepository.findByEmail(userEmail)
+    public List<ChefDetailsDTO> getChefDetailsToday(String chiefChefEmail) {
+        // Identify the logged-in Chief Chef and their branch
+        User chiefChef = userRepository.findByEmail(chiefChefEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        Staff currentStaff = staffRepository.findByUser(user)
+        Staff currentStaff = staffRepository.findByUser(chiefChef)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
-        // Fetch line chefs who haven't checked in today at this branch from database
-        List<Staff> staffList = staffRepository.findLineChefsNotCheckedInToday(currentStaff.getBranch().getId(), LocalDate.now());
+        // because branch id is provided for only staf members.
+        Long branchId = currentStaff.getBranch().getId();
 
-        // Create a new empty list for our DTOs
-        List<ChefCheckInDTO> checkInList = new ArrayList<>();
+        // Fetch all line chefs registered at this branch
+        List<Staff> lineChefs = staffRepository.findAllActiveLineChefsByBranch(branchId);
 
-        // Loop through each Staff and convert to ChefCheckInDTO
-        for (Staff s : staffList) {
-            ChefCheckInDTO dto = new ChefCheckInDTO();
-            dto.setId(s.getId());
-            dto.setFullName(s.getUser().getFullName());
+        List<ChefDetailsDTO> dtoList = new ArrayList<>();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
 
-            // Add to our list
-            checkInList.add(dto);
+        for (Staff chef : lineChefs) {
+            // Only process ACTIVE staff members ---
+            // If a chef is terminated or suspended (not ACTIVE), we skip them entirely
+            if (chef.getEmploymentStatus() != EmploymentStatus.ACTIVE) {
+                continue;
+            }
+
+            // Look for today's attendance record for this specific chef
+            Optional<ChefAttendance> attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chef.getId(), LocalDate.now());
+
+            // Format Clock-In Time
+            String clockIn = (attendance.isPresent() && attendance.get().getClockInTime() != null)
+                    ? attendance.get().getClockInTime().format(timeFormatter)
+                    : "---"; // Not Checked In yet
+
+            // Format Clock-Out Time
+            String clockOut = (attendance.isPresent() && attendance.get().getClockOutTime() != null)
+                    ? attendance.get().getClockOutTime().format(timeFormatter)
+                    : "---"; // Still working or not checked in
+
+            // Determine Work Status
+            // If there is an attendance record, use its status (e.g., AVAILABLE, COOKING, UNAVAILABLE)
+            // If they haven't checked in at all, we just mark them as UNAVAILABLE
+            String status = attendance.isPresent()
+                    ? attendance.get().getWorkStatus().toString()
+                    : "UNAVAILABLE";
+
+            // Count how many meals this chef finished today
+            long mealsToday = orderItemRepository.countMealsPreparedToday(chef.getId(), startOfToday);
+
+            // Map all data to the DTO
+            dtoList.add(new ChefDetailsDTO(
+                    chef.getId(),
+                    chef.getUser().getFullName(),
+                    clockIn,
+                    clockOut,
+                    status,
+                    mealsToday
+            ));
         }
-
-        // Return the final list
-        return checkInList;
+        return dtoList;
     }
+
 
     // save check in attendance record
     @Override
     @Transactional // This is important because we are saving to the database
     public void checkInChef(Long chefId) {
 
-        // 1. Try to find if there is ALREADY an attendance record for today
+        // Try to find if there is ALREADY an attendance record for today
         Optional<ChefAttendance> existingRecord = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now());
 
         if (existingRecord.isPresent()) {
@@ -400,10 +538,11 @@ public class KitchenServiceImpl implements KitchenService {
 
             // If they are OFF_DUTY, it means they already finished their shift for today
             if (record.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
-                throw new RuntimeException("Cannot chek-in for today. Chef has already completed their shift for today!");
+                throw new RuntimeException("Cannot check-in for today. Chef has already completed their shift for today!");
             }
         }
-        // 2. If no record exists at all, proceed with the normal check-in
+        // If no record exists at all, proceed with the normal check-in
+        // now we have to find that chef is in the staff list
         Staff chef = staffRepository.findById(chefId)
                 .orElseThrow(() -> new RuntimeException("Chef not found"));
 
@@ -432,6 +571,11 @@ public class KitchenServiceImpl implements KitchenService {
             throw new RuntimeException("Chef has already checked out for today!");
         }
 
+        // Safety Check. cannot check out while cooking
+        if (attendance.getWorkStatus() == ChefWorkStatus.COOKING) {
+            throw new RuntimeException("Cannot check-out while a meal is in preparation!");
+        }
+
         // Update the fields
         attendance.setClockOutTime(LocalDateTime.now()); // Record date and time when they left
         attendance.setAttendanceStatus(ChefAttendanceStatus.OFF_DUTY); // They are no longer on duty
@@ -441,13 +585,47 @@ public class KitchenServiceImpl implements KitchenService {
         chefAttendanceRepository.save(attendance);
     }
 
+    // update the work status of a chef
+    @Override
+    @Transactional
+    public void updateChefWorkStatus(Long chefId, ChefWorkStatus newStatus) {
+        // Find today's attendance for this chef
+        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(chefId, LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("Chef is not checked in today!. Cannot update status."));
+
+        // cannot update the status if the chef is already checked out
+        if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
+            throw new RuntimeException("Cannot update status! Chef has already checked out for today.");
+        }
+
+        // cannot update the status manually to unavailable status.
+        // I do not provide this option in the frontend. but this is just an extra safety check.
+        if (newStatus == ChefWorkStatus.UNAVAILABLE) {
+            throw new RuntimeException("Cannot set status to UNAVAILABLE manually! Use Check-out instead.");
+        }
+
+        // Update the status
+        attendance.setWorkStatus(newStatus);
+
+        // Save the change
+        chefAttendanceRepository.save(attendance);
+    }
+
     // hold an order and update the order status to ON_HOLD with a reason, also update all items inside this order to ON_HOLD as well
     @Override
     @Transactional
-    public void holdOrder(Long orderId, String holdReason) {
-        // Find the order
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found with ID: " + orderId));
+    public void holdOrder(Long orderId, String holdReason, String userEmail) {
+
+        // Identify the branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Long branchId = staff.getBranch().getId();
+
+        // Find the order ONLY if it belongs to this branch
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
 
         // Update Order Status and Reason
         order.setStatus(OrderStatus.ON_HOLD);
@@ -462,6 +640,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Save the order (This will save the items too because of Cascade)
         orderRepository.save(order);
     }
+
 
     //update meal status, order status, and chef work status when start preparing a meal
     @Override
@@ -484,8 +663,7 @@ public class KitchenServiceImpl implements KitchenService {
         // Update the Parent Order Status to PREPARING
         Order order = item.getOrder();
         if (order.getStatus() == OrderStatus.PENDING) {
-            order.setStatus(OrderStatus.PREPARING);
-            order.setStatusUpdatedAt(LocalDateTime.now());
+            order.updateStatus(OrderStatus.PREPARING);
             orderRepository.save(order);
         }
 
@@ -541,13 +719,121 @@ public class KitchenServiceImpl implements KitchenService {
 
         // If everything is done, Order becomes COMPLETED
         if (allFinished) {
-            order.setStatus(OrderStatus.COMPLETED);
-            order.setStatusUpdatedAt(LocalDateTime.now());
+            order.updateStatus(OrderStatus.COMPLETED);
             orderRepository.save(order);
         }
 
         // Return the status in the DTO
         return new MealCompletionResponseDTO(order.getStatus().toString());
+    }
+
+    //create a kitchen alert for the receptionist
+    @Override
+    @Transactional
+    public void createKitchenAlert(CreateAlertRequestDTO dto, String userEmail) {
+        // Find the logged-in user
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Find the Staff profile (to get their branch and staff ID)
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Map DTO to Entity and Save
+        KitchenAlert alert = KitchenAlert.builder()
+                .branch(staff.getBranch())
+                .reportedBy(staff) //cannot send id directly (private Staff reportedBy)
+                .message(dto.getMessage())
+                .type(dto.getType())
+                .isResolved(false)
+                .build();
+
+        kitchenAlertRepository.save(alert);
+    }
+
+    //display all unresolved kitchen alerts
+    @Override
+    public List<ActiveAlertDTO> getActiveAlerts(String userEmail) {
+        // Find the logged-in user and their branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Fetch unresolved alerts for this branch from the database
+        List<KitchenAlert> alerts = kitchenAlertRepository.findByBranchIdAndIsResolvedFalseOrderByCreatedAtDesc(staff.getBranch().getId());
+
+        List<ActiveAlertDTO> activeAlertDTOs = new ArrayList<>();
+
+        for (KitchenAlert alert : alerts) {
+
+            // Calculate the time difference (in minutes) between alert creation and current time
+            long minutes = java.time.Duration.between(alert.getCreatedAt(), LocalDateTime.now()).toMinutes();
+
+            // If less than 60 minutes, show in minutes (e.g., 10m). Otherwise, show in hours (e.g., 2h).
+            String timeAgo = minutes < 60 ? minutes + "m" : (minutes / 60) + "h";
+
+            ActiveAlertDTO dto = new ActiveAlertDTO(
+                    alert.getId(),
+                    alert.getMessage(),
+                    alert.getType(),
+                    timeAgo
+            );
+
+            activeAlertDTOs.add(dto);
+        }
+        return activeAlertDTOs;
+    }
+
+    //resolve kitchen alerts
+    @Override
+    @Transactional
+    public void resolveAlert(Long alertId, String userEmail) {
+        // Find the alert
+        KitchenAlert alert = kitchenAlertRepository.findById(alertId)
+                .orElseThrow(() -> new RuntimeException("Alert not found"));
+
+        // SAFETY CHECK: Ensure it's not already resolved
+        if (alert.isResolved()) {
+            throw new RuntimeException("This alert has already been resolved");
+        }
+
+        // Find the staff member who is resolving it
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        // Mark as resolved and save the audit data
+        alert.setResolved(true);
+        alert.setResolvedBy(staff);
+        alert.setResolvedAt(LocalDateTime.now());
+
+        kitchenAlertRepository.save(alert);
+    }
+
+    // get details for chef dashboard stats (total chefs, on-duty, off-duty, available)
+    @Override
+    public ChefDashboardStatsDTO getChefDashboardStats(String userEmail) {
+
+        // Identify Branch
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        LocalDate today = LocalDate.now();
+
+        // Fetch Counts
+        long total = staffRepository.countActiveLineChefsByBranch(branchId);
+        long onDuty = chefAttendanceRepository.countChefsByAttendanceStatusToday(today, branchId, ChefAttendanceStatus.ON_DUTY);
+        long offDuty = chefAttendanceRepository.countChefsByAttendanceStatusToday(today, branchId, ChefAttendanceStatus.OFF_DUTY);
+        long available = chefAttendanceRepository.countChefsByWorkStatusToday(today, branchId, ChefWorkStatus.AVAILABLE);
+
+        return new ChefDashboardStatsDTO(total, onDuty, offDuty, available);
     }
 
 }

@@ -31,6 +31,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     void deleteByBranchIdAndNameIn(Long branchId, List<String> names);
 
+    List<MenuItem> findByBranchIdAndStatus(Long targetBranchId, MenuItemStatus active);
     boolean existsByCategoryIdAndIsAvailableTrue(Long categoryId);
 
     boolean existsByCategoryId(Long categoryId);
@@ -61,4 +62,20 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
 
     @Query("SELECT COUNT(DISTINCT mi.subCategory) FROM MenuItem mi WHERE mi.subCategory IS NOT NULL")
     long countDistinctSubCategory();
+
+    @Query("""
+        SELECT m, 
+               COALESCE(AVG(r.rating), 0.0), 
+               COUNT(r.id)
+        FROM MenuItem m
+        LEFT JOIN Review r ON r.orderItem.menuItem.id = m.id
+        WHERE m.branch.id = :branchId 
+          AND m.status = :status 
+          AND m.isAvailable = true
+        GROUP BY m.id
+    """)
+    List<Object[]> findMenuItemsWithReviewStats(
+        @Param("branchId") Long branchId, 
+        @Param("status") MenuItemStatus status
+    );
 }

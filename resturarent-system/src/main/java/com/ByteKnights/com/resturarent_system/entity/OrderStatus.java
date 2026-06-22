@@ -11,7 +11,10 @@ public enum OrderStatus {
     ARRIVED, // when delivery arrive targeted location
     SERVED,
     COMPLETED,
-    ON_HOLD
+    ON_HOLD,
+    REFUNDED,
+    APPROVED
+
 }
 
 /*
@@ -23,7 +26,13 @@ public enum OrderStatus {
  * order or send back to the kitchen
  * COMPLETED // order is completed - cooking done
  * CANCELLED // order is cancelled by receiptionist or user
+ */
+/*
  * PLACED // just placed by customer
- * CANCELLED // order is cancelled by user,receiptionist or auto cacelld cause error
- * SERVED // is the last state of order receiptionist and delivery person should update this to served
-*/
+ * CANCELLED // order is cancelled by user,receiptionist or auto cacelld cause
+ * error
+ */
+/*
+ * SERVED // is the last state of order receiptionist and delivery person should
+ * update this to served
+ */
