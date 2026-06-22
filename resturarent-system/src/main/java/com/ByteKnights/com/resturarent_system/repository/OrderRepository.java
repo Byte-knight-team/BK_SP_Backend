@@ -26,6 +26,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         long countByBranchIdAndStatus(Long branchId, OrderStatus status);
 
+        long countByStatusAndCreatedAtAfter(OrderStatus status, LocalDateTime startOfToday);
+
         long countByStatusIn(Collection<OrderStatus> statuses);
 
         long countByBranchId(Long branchId);

@@ -195,12 +195,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     private long countOrdersForScope(Long adminBranchId, OrderStatus status) {
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
         // Null branch means global scope (SUPER_ADMIN or non-ADMIN context).
         if (adminBranchId == null) {
-            return orderRepository.countByStatus(status);
+            return orderRepository.countByStatusAndCreatedAtAfter(status, startOfToday);
         }
         // ADMIN users are strictly constrained to their assigned branch.
-        return orderRepository.countByBranchIdAndStatus(adminBranchId, status);
+        return orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(adminBranchId, status, startOfToday);
     }
 
     private Long resolveCurrentAdminBranchIdOrNull() {
