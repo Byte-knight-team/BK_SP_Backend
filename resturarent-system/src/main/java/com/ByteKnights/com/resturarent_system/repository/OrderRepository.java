@@ -218,4 +218,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("branchId") Long branchId,
                         @Param("start") LocalDateTime start,
                         @Param("end") LocalDateTime end);
+
+        // ───────────────────────── Customer Statistics Dashboard ─────────────────────────
+
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
+                        "FROM Order o WHERE o.customer.id = :cid " +
+                        "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
+                        "com.ByteKnights.com.resturarent_system.entity.OrderStatus.REJECTED)")
+        List<Object[]> findLifetimeFinancials(@Param("cid") Long customerId);
+
+        @Query(value = "SELECT DATE_FORMAT(created_at, '%Y-%m') AS m, SUM(final_amount) " +
+                        "FROM orders WHERE customer_id = :cid AND status NOT IN ('CANCELLED','REJECTED') " +
+                        "AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) GROUP BY m ORDER BY m",
+                        nativeQuery = true)
+        List<Object[]> findMonthlySpendingTrend(@Param("cid") Long customerId);
+
+        @Query("SELECT o.orderType, COUNT(o) FROM Order o WHERE o.customer.id = :cid " +
+                        "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
+                        "com.ByteKnights.com.resturarent_system.entity.OrderStatus.REJECTED) GROUP BY o.orderType")
+        List<Object[]> findOrderTypeCounts(@Param("cid") Long customerId);
 }
+

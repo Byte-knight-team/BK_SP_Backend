@@ -8,7 +8,9 @@ import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundExceptio
 import com.ByteKnights.com.resturarent_system.repository.CustomerRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
+import com.ByteKnights.com.resturarent_system.repository.ReviewImageRepository;
 import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
+import com.ByteKnights.com.resturarent_system.service.ReviewImageStorageService;
 import com.ByteKnights.com.resturarent_system.service.impl.ReviewServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +46,12 @@ class ReviewServiceTest {
     @Mock
     private OrderItemRepository orderItemRepository;
 
+    @Mock
+    private ReviewImageRepository reviewImageRepository;
+
+    @Mock
+    private ReviewImageStorageService reviewImageStorageService;
+
     @InjectMocks
     private ReviewServiceImpl reviewService;
 
@@ -77,6 +85,7 @@ class ReviewServiceTest {
         assertEquals(2L, result.get(1).getReviewId());
         assertEquals(1L, result.get(2).getReviewId());
         assertEquals("Newest review", result.get(0).getComment());
+        assertEquals("Chamari Perera", result.get(0).getCustomerName());
 
         verify(reviewRepository, times(1)).findRecentOrderReviews(PageRequest.of(0, 3));
     }
@@ -99,13 +108,11 @@ class ReviewServiceTest {
         reviewService.submitReview("94770000001", 30L, request);
 
         // Assert
-        verify(reviewRepository, times(1)).save(argThat(review ->
-                review.getCustomer().equals(customer)
-                        && review.getOrder().equals(servedOrder)
-                        && review.getRating().equals(5)
-                        && "Great food and service".equals(review.getComment())
-                        && review.getOrderItem() == null
-        ));
+        verify(reviewRepository, times(1)).save(argThat(review -> review.getCustomer().equals(customer)
+                && review.getOrder().equals(servedOrder)
+                && review.getRating().equals(5)
+                && "Great food and service".equals(review.getComment())
+                && review.getOrderItem() == null));
         verify(orderItemRepository, never()).findById(anyLong());
     }
 
@@ -126,8 +133,7 @@ class ReviewServiceTest {
         // Act + Assert
         CheckoutException exception = assertThrows(
                 CheckoutException.class,
-                () -> reviewService.submitReview("94770000001", 30L, request)
-        );
+                () -> reviewService.submitReview("94770000001", 30L, request));
 
         assertEquals("An order review already exists.", exception.getMessage());
         verify(reviewRepository, never()).save(any(Review.class));
@@ -151,8 +157,7 @@ class ReviewServiceTest {
         // Act + Assert
         CheckoutException exception = assertThrows(
                 CheckoutException.class,
-                () -> reviewService.submitReview("94770000001", 31L, request)
-        );
+                () -> reviewService.submitReview("94770000001", 31L, request));
 
         assertEquals("You can only review completed orders.", exception.getMessage());
         verify(reviewRepository, never()).save(any(Review.class));
@@ -168,8 +173,7 @@ class ReviewServiceTest {
         // Act + Assert
         ResourceNotFoundException exception = assertThrows(
                 ResourceNotFoundException.class,
-                () -> reviewService.submitReview("missing@test.com", 30L, request)
-        );
+                () -> reviewService.submitReview("missing@test.com", 30L, request));
 
         assertEquals("Customer not found", exception.getMessage());
         verify(orderRepository, never()).findByIdAndCustomerId(anyLong(), anyLong());

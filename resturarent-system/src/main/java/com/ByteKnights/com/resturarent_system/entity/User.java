@@ -40,6 +40,9 @@ public class User {
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
 
+    @Column(name = "profile_picture_key", length = 512)
+    private String profilePictureKey;
+
     @Builder.Default
     @Column(nullable = false)
     private Boolean isActive = true;
