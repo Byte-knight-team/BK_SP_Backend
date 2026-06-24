@@ -1,0 +1,145 @@
+package com.ByteKnights.com.resturarent_system.service.impl;
+
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
+import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
+import com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus;
+import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
+import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.entity.User;
+import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
+import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
+import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.service.KitchenInventoryService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class KitchenInventoryServiceImpl implements KitchenInventoryService {
+
+    private final InventoryItemRepository inventoryItemRepository;
+    private final ChefRequestRepository chefRequestRepository;
+    private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
+
+    @Override
+    public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(branchId);
+
+        List<InventoryDetailsDTO> alerts = new ArrayList<>();
+
+        for (InventoryItem item : items) {
+            double current = item.getQuantity().doubleValue();
+            double reorder = item.getReorderLevel().doubleValue();
+            double max = item.getMaxStock().doubleValue();
+
+            if (current <= reorder) {
+                String level = (current <= reorder / 2) ? "CRITICAL" : "LOW";
+                double percentage = (max > 0) ? (current / max) * 100 : 0;
+
+                alerts.add(new InventoryDetailsDTO(
+                        item.getName(),
+                        Math.round(percentage * 100.0) / 100.0,
+                        max,
+                        current,
+                        item.getUnit(),
+                        level
+                ));
+            }
+        }
+        return alerts;
+    }
+
+    @Override
+    public List<InventoryDetailsDTO> getAllInventoryItems(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        List<InventoryItem> items = inventoryItemRepository.findByBranchId(staff.getBranch().getId());
+
+        List<InventoryDetailsDTO> dtoList = new ArrayList<>();
+
+        String warningLevel;
+
+        for (InventoryItem item : items) {
+            double current = item.getQuantity().doubleValue();
+            double max = item.getMaxStock().doubleValue();
+            double reorder = item.getReorderLevel().doubleValue();
+
+            if (current <= reorder) {
+                warningLevel = (current <= reorder / 2) ? "CRITICAL" : "LOW";
+            } else {
+                warningLevel = "OK";
+            }
+            double percentage = (max > 0) ? (current / max) * 100 : 0;
+
+            dtoList.add(new InventoryDetailsDTO(
+                    item.getName(),
+                    Math.round(percentage * 100.0) / 100.0,
+                    max,
+                    current,
+                    item.getUnit(),
+                    warningLevel
+            ));
+        }
+        return dtoList;
+    }
+
+    @Override
+    public void createRequest(InventoryRequestDTO requestDTO, String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        ChefRequest chefRequest = ChefRequest.builder()
+                .branch(staff.getBranch())
+                .chefName(user.getFullName())
+                .itemName(requestDTO.getItemName())
+                .requestedQuantity(requestDTO.getRequestedQuantity())
+                .unit(requestDTO.getUnit())
+                .chefNote(requestDTO.getChefNote())
+                .requestType(requestDTO.getRequestType())
+                .status(ChefRequestStatus.PENDING)
+                .build();
+
+        chefRequestRepository.save(chefRequest);
+    }
+
+    @Override
+    @Transactional
+    public void updateInventoryStock(UpdateStockDTO updateDTO, String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        InventoryItem item = inventoryItemRepository.findByNameAndBranchId(updateDTO.getItemName(), branchId)
+                .orElseThrow(() -> new RuntimeException("Inventory item not found in your branch: " + updateDTO.getItemName()));
+
+        item.setQuantity(updateDTO.getNewQuantity());
+        inventoryItemRepository.save(item);
+    }
+}
