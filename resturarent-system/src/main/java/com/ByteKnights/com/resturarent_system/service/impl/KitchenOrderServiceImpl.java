@@ -12,6 +12,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -28,6 +29,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final ChefAttendanceRepository chefAttendanceRepository;
+    private final MenuItemIngredientRepository menuItemIngredientRepository;
+    private final InventoryItemRepository inventoryItemRepository;
 
     @Override
     public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) {
@@ -44,7 +47,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                 ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
                 : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
-        List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(branchId, status, startOfToday, sort);
+        List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(
+                branchId, status, startOfToday, sort);
 
         List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
@@ -54,7 +58,6 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
             for (OrderItem item : order.getItems()) {
                 totalQty += item.getQuantity();
             }
-
             orderCardDetailsDTOS.add(new OrderCardDetailsDTO(
                     order.getId(),
                     order.getStatus().name(),
@@ -79,16 +82,14 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                 .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
 
         List<OrderItemDetailsDTO> itemDTOs = new ArrayList<>();
-
         for (OrderItem item : order.getItems()) {
-            OrderItemDetailsDTO dto = new OrderItemDetailsDTO(
+            itemDTOs.add(new OrderItemDetailsDTO(
                     item.getId(),
                     item.getItemName(),
                     item.getQuantity(),
                     item.getStatus().toString(),
                     item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
-            );
-            itemDTOs.add(dto);
+            ));
         }
 
         return new OrderDetailsDTO(
@@ -110,10 +111,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         Staff chef = staffRepository.findById(chefStaffId)
                 .orElseThrow(() -> new RuntimeException("Chef not found"));
 
-        Long orderBranchId = item.getOrder().getBranch().getId();
-        Long chefBranchId = chef.getBranch().getId();
-
-        if (!orderBranchId.equals(chefBranchId)) {
+        if (!item.getOrder().getBranch().getId().equals(chef.getBranch().getId())) {
             throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
         }
 
@@ -131,6 +129,50 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
             throw new RuntimeException("Cannot start meal: No chef assigned yet!");
         }
 
+        // --- STOCK CHECK ---
+        // If this order item has a linked menu item with a defined recipe,
+        // verify there is enough stock for every ingredient before starting
+        if (item.getMenuItem() != null) {
+            List<MenuItemIngredient> ingredients =
+                    menuItemIngredientRepository.findByMenuItemId(item.getMenuItem().getId());
+
+            if (!ingredients.isEmpty()) {
+                // Build a readable error message listing every ingredient that is short
+                List<String> shortages = new ArrayList<>();
+
+                for (MenuItemIngredient ingredient : ingredients) {
+                    // Total needed = quantity per serving × number of servings ordered
+                    BigDecimal needed = ingredient.getQuantityRequired()
+                            .multiply(BigDecimal.valueOf(item.getQuantity()));
+
+                    InventoryItem stock = ingredient.getInventoryItem();
+                    BigDecimal available = stock.getQuantity() != null ? stock.getQuantity() : BigDecimal.ZERO;
+
+                    if (available.compareTo(needed) < 0) {
+                        shortages.add(String.format("%s: need %.3f %s, have %.3f %s",
+                                stock.getName(), needed, stock.getUnit(), available, stock.getUnit()));
+                    }
+                }
+
+                // If any shortages found, throw an error with full details for the frontend
+                if (!shortages.isEmpty()) {
+                    throw new RuntimeException("INSUFFICIENT_STOCK:" + String.join("|", shortages));
+                }
+
+                // --- STOCK DEDUCTION ---
+                // All stock checks passed — deduct the required quantities
+                for (MenuItemIngredient ingredient : ingredients) {
+                    BigDecimal needed = ingredient.getQuantityRequired()
+                            .multiply(BigDecimal.valueOf(item.getQuantity()));
+
+                    InventoryItem stock = ingredient.getInventoryItem();
+                    stock.setQuantity(stock.getQuantity().subtract(needed));
+                    inventoryItemRepository.save(stock);
+                }
+            }
+        }
+
+        // --- PROCEED WITH MEAL START ---
         item.setStatus(OrderItemStatus.PREPARING);
         item.setCookingStartedAt(LocalDateTime.now());
         orderItemRepository.save(item);
@@ -146,7 +188,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                 .orElseThrow(() -> new RuntimeException("Chef attendance record not found for today"));
 
         if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
-            throw new RuntimeException("Cannot start: Chef " + item.getAssignedChef().getUser().getFullName() + " has already checked out!");
+            throw new RuntimeException("Cannot start: Chef " +
+                    item.getAssignedChef().getUser().getFullName() + " has already checked out!");
         }
         if (attendance.getWorkStatus() == ChefWorkStatus.ON_BREAK) {
             throw new RuntimeException("Cannot start: Chef is currently on a break.");
@@ -174,13 +217,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         chefAttendanceRepository.save(attendance);
 
         Order order = item.getOrder();
-        boolean allFinished = true;
-        for (OrderItem items : order.getItems()) {
-            if (items.getStatus() != OrderItemStatus.READY) {
-                allFinished = false;
-                break;
-            }
-        }
+        boolean allFinished = order.getItems().stream()
+                .allMatch(i -> i.getStatus() == OrderItemStatus.READY);
 
         if (allFinished) {
             order.updateStatus(OrderStatus.COMPLETED);
