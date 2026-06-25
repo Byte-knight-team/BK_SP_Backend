@@ -12,7 +12,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -29,8 +28,6 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final ChefAttendanceRepository chefAttendanceRepository;
-    private final MenuItemIngredientRepository menuItemIngredientRepository;
-    private final InventoryItemRepository inventoryItemRepository;
 
     @Override
     public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) {
@@ -127,49 +124,6 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
 
         if (item.getAssignedChef() == null) {
             throw new RuntimeException("Cannot start meal: No chef assigned yet!");
-        }
-
-        // --- STOCK CHECK ---
-        // If this order item has a linked menu item with a defined recipe,
-        // verify there is enough stock for every ingredient before starting
-        if (item.getMenuItem() != null) {
-            List<MenuItemIngredient> ingredients =
-                    menuItemIngredientRepository.findByMenuItemId(item.getMenuItem().getId());
-
-            if (!ingredients.isEmpty()) {
-                // Build a readable error message listing every ingredient that is short
-                List<String> shortages = new ArrayList<>();
-
-                for (MenuItemIngredient ingredient : ingredients) {
-                    // Total needed = quantity per serving × number of servings ordered
-                    BigDecimal needed = ingredient.getQuantityRequired()
-                            .multiply(BigDecimal.valueOf(item.getQuantity()));
-
-                    InventoryItem stock = ingredient.getInventoryItem();
-                    BigDecimal available = stock.getQuantity() != null ? stock.getQuantity() : BigDecimal.ZERO;
-
-                    if (available.compareTo(needed) < 0) {
-                        shortages.add(String.format("%s: need %.3f %s, have %.3f %s",
-                                stock.getName(), needed, stock.getUnit(), available, stock.getUnit()));
-                    }
-                }
-
-                // If any shortages found, throw an error with full details for the frontend
-                if (!shortages.isEmpty()) {
-                    throw new RuntimeException("INSUFFICIENT_STOCK:" + String.join("|", shortages));
-                }
-
-                // --- STOCK DEDUCTION ---
-                // All stock checks passed — deduct the required quantities
-                for (MenuItemIngredient ingredient : ingredients) {
-                    BigDecimal needed = ingredient.getQuantityRequired()
-                            .multiply(BigDecimal.valueOf(item.getQuantity()));
-
-                    InventoryItem stock = ingredient.getInventoryItem();
-                    stock.setQuantity(stock.getQuantity().subtract(needed));
-                    inventoryItemRepository.save(stock);
-                }
-            }
         }
 
         // --- PROCEED WITH MEAL START ---
