@@ -192,6 +192,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         com.ByteKnights.com.resturarent_system.entity.OrderType orderType,
                         OrderStatus status);
 
+        @EntityGraph(attributePaths = "items")
+        List<Order> findByBranchIdAndStatusAndOrderTypeIn(
+                Long branchId,
+                OrderStatus status,
+                List<OrderType> orderTypes);
+
+
         List<Order> findByStatus(OrderStatus status, Sort sort);
 
         List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
