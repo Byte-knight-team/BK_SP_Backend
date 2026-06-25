@@ -57,6 +57,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
             }
             orderCardDetailsDTOS.add(new OrderCardDetailsDTO(
                     order.getId(),
+                    order.getOrderNumber(),
                     order.getStatus().name(),
                     order.getStatusUpdatedAt() != null ? order.getStatusUpdatedAt().format(formatter) : null,
                     totalQty

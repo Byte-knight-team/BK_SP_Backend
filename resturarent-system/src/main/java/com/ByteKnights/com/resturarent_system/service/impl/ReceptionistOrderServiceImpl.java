@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,11 +43,16 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         Long branchId = getBranchId(userEmail);
         OrderStatus orderStatus = OrderStatus.valueOf(status);
 
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay   = LocalDate.now().atTime(23, 59, 59);
+
         List<Order> orders = orderRepository
-                .findByBranchIdAndStatusAndOrderTypeIn(
+                .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
                         branchId,
                         orderStatus,
-                        List.of(OrderType.QR, OrderType.ONLINE_PICKUP));
+                        List.of(OrderType.QR, OrderType.ONLINE_PICKUP),
+                        startOfDay,
+                        endOfDay);
 
         List<ReceptionistOrderSummaryDTO> result = new ArrayList<>();
         for (Order order : orders) {
