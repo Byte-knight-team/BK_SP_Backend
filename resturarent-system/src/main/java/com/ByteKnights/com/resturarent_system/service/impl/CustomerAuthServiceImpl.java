@@ -13,6 +13,7 @@ import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.CustomerJwtService;
 import com.ByteKnights.com.resturarent_system.service.CustomerAuthService;
+import com.ByteKnights.com.resturarent_system.service.ProfileImageStorageService;
 import com.ByteKnights.com.resturarent_system.entity.QrSession;
 import com.ByteKnights.com.resturarent_system.repository.QrSessionRepository;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final PasswordEncoder passwordEncoder;
     private final CustomerJwtService customerJwtService;
     private final SmsService smsService;
+    private final ProfileImageStorageService profileImageStorageService;
 
 
     public CustomerAuthServiceImpl(UserRepository userRepository,
@@ -48,7 +50,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                                    QrSessionRepository qrSessionRepository,
                                    PasswordEncoder passwordEncoder,
                                    CustomerJwtService customerJwtService,
-                                SmsService smsService) {
+                                SmsService smsService,
+                                ProfileImageStorageService profileImageStorageService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.customerRepository = customerRepository;
@@ -56,6 +59,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.passwordEncoder = passwordEncoder;
         this.customerJwtService = customerJwtService;
         this.smsService = smsService;
+        this.profileImageStorageService = profileImageStorageService;
     }
 
     //register function
@@ -161,9 +165,16 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String normalizedRole = normalizeRole(user.getRole().getName());
         String token = customerJwtService.generateToken(user.getId(), user.getEmail(), normalizedRole);
 
+        String profilePictureUrl = null;
+        if (user.getProfilePictureKey() != null) {
+            profilePictureUrl = profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey());
+        }
+
         //return response
         return CustomerLoginResponseData.builder()
                 .token(token)
+                .username(user.getUsername())
+                .profilePictureUrl(profilePictureUrl)
                 .build();
     }
 
@@ -206,8 +217,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customerRepository.save(customer);
 
         // 4. Send SMS
-        //smsService.sendOtpSms(phone, otpCode);
-        System.out.println(otpCode);
+        smsService.sendOtpSms(phone, otpCode);
+        //System.out.println(otpCode);
     }
 
     @Override
@@ -252,8 +263,15 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String tokenSubject = user.getEmail() != null ? user.getEmail() : user.getPhone();
         String token = customerJwtService.generateToken(user.getId(), tokenSubject, normalizedRole);
 
+        String profilePictureUrl = null;
+        if (user.getProfilePictureKey() != null) {
+            profilePictureUrl = profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey());
+        }
+
         return CustomerLoginResponseData.builder()
                 .token(token)
+                .username(user.getUsername())
+                .profilePictureUrl(profilePictureUrl)
                 .build();
     }
 
