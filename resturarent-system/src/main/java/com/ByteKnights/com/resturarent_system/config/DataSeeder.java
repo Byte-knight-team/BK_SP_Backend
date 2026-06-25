@@ -128,6 +128,10 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege receptionistTableUpdate = createPrivilege("RECEPTIONIST_TABLE_UPDATE");
                 Privilege receptionistReservationCreate = createPrivilege("RECEPTIONIST_RESERVATION_CREATE");
                 Privilege receptionistReservationUpdate = createPrivilege("RECEPTIONIST_RESERVATION_UPDATE");
+                Privilege receptionistOrderView = createPrivilege("RECEPTIONIST_ORDER_VIEW");
+                Privilege receptionistOrderUpdate = createPrivilege("RECEPTIONIST_ORDER_UPDATE");
+                Privilege receptionistPaymentCollect = createPrivilege("RECEPTIONIST_PAYMENT_COLLECT");
+
 
                 /*
                  * All known system privileges.
@@ -184,7 +188,10 @@ public class DataSeeder implements CommandLineRunner {
                                 receptionistTableView,
                                 receptionistTableUpdate,
                                 receptionistReservationCreate,
-                                receptionistReservationUpdate
+                                receptionistReservationUpdate,
+                                receptionistOrderView,
+                                receptionistOrderUpdate,
+                                receptionistPaymentCollect
                 );
 
                 /*
@@ -247,7 +254,10 @@ public class DataSeeder implements CommandLineRunner {
                                 receptionistTableView,
                                 receptionistTableUpdate,
                                 receptionistReservationCreate,
-                                receptionistReservationUpdate));
+                                receptionistReservationUpdate,
+                                receptionistOrderView,
+                                receptionistOrderUpdate,
+                                receptionistPaymentCollect));
 
                 createRoleWithDefaultPermissions("DELIVERY", Set.of(
                                 updateDeliveryStatus,
