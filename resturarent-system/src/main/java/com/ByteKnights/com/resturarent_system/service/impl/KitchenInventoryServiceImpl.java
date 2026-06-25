@@ -53,6 +53,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 double percentage = (max > 0) ? (current / max) * 100 : 0;
 
                 alerts.add(new InventoryDetailsDTO(
+                        item.getId(),
                         item.getName(),
                         Math.round(percentage * 100.0) / 100.0,
                         max,
@@ -92,6 +93,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
             double percentage = (max > 0) ? (current / max) * 100 : 0;
 
             dtoList.add(new InventoryDetailsDTO(
+                    item.getId(),
                     item.getName(),
                     Math.round(percentage * 100.0) / 100.0,
                     max,
