@@ -78,6 +78,10 @@ public class OrderServiceImpl implements OrderService {
                 // 2. Resolve Branch & Table
                 Branch branch = branchRepository.findById(request.getBranchId())
                                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found"));
+                                
+                if (branch.getStatus() != BranchStatus.ACTIVE) {
+                        throw new CheckoutException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
+                }
 
                 RestaurantTable table = null;
                 if (OrderType.QR.name().equals(request.getOrderType())) {
