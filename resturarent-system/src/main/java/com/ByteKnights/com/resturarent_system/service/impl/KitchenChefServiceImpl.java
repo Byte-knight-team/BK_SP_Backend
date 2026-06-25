@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.AvailableChefDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ChefDashboardStatsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ChefDetailsDTO;
 import com.ByteKnights.com.resturarent_system.entity.*;
@@ -94,6 +95,32 @@ public class KitchenChefServiceImpl implements KitchenChefService {
             ));
         }
         return dtoList;
+    }
+
+    @Override
+    public List<AvailableChefDTO> getAvailableChefs(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        List<ChefAttendance> records = chefAttendanceRepository.findAvailableLineChefsForBranch(
+                LocalDate.now(),
+                branchId,
+                ChefAttendanceStatus.ON_DUTY,
+                List.of(ChefWorkStatus.AVAILABLE)
+        );
+
+        return records.stream()
+                .map(ca -> new AvailableChefDTO(
+                        ca.getStaff().getId(),
+                        ca.getStaff().getUser().getFullName(),
+                        ca.getWorkStatus().name()
+                ))
+                .toList();
     }
 
     @Override
