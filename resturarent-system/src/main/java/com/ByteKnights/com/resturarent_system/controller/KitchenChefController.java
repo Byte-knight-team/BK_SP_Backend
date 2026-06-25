@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateWorkStatusDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.AvailableChefDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ChefDashboardStatsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ChefDetailsDTO;
 import com.ByteKnights.com.resturarent_system.service.KitchenChefService;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
 
+
 @RestController
 @RequestMapping("/api/v1/kitchen")
 @CrossOrigin
@@ -21,6 +23,13 @@ import java.util.List;
 public class KitchenChefController {
 
     private final KitchenChefService kitchenChefService;
+
+    @GetMapping("/available-chefs")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_ASSIGN')")
+    public ResponseEntity<StandardResponse> getAvailableChefs(Principal principal) {
+        List<AvailableChefDTO> chefs = kitchenChefService.getAvailableChefs(principal.getName());
+        return new ResponseEntity<>(new StandardResponse(200, "Success", chefs), HttpStatus.OK);
+    }
 
     @GetMapping("/chefs/stats")
     @PreAuthorize("hasAuthority('KITCHEN_VIEW_STATS')")
