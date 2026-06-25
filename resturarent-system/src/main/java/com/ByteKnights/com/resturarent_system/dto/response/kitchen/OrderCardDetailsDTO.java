@@ -9,7 +9,8 @@ import lombok.NoArgsConstructor;
 @Data
 public class OrderCardDetailsDTO {
     private Long id;
+    private String orderNumber; // e.g. "ORD-CD5C6E" — used for display, consistent with receptionist view
     private String status;
-    private String time;    // ex: "10:30 AM"
+    private String time;        // ex: "10:30 AM"
     private int itemCount;
 }

@@ -198,6 +198,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 OrderStatus status,
                 List<OrderType> orderTypes);
 
+        @EntityGraph(attributePaths = "items")
+        List<Order> findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
+                Long branchId,
+                OrderStatus status,
+                List<OrderType> orderTypes,
+                java.time.LocalDateTime start,
+                java.time.LocalDateTime end);
+
 
         List<Order> findByStatus(OrderStatus status, Sort sort);
 
