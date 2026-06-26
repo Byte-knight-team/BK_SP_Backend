@@ -140,7 +140,7 @@ public class OrderServiceImpl implements OrderService {
                         
                         if (invItem.getQuantity() == null || invItem.getQuantity().compareTo(required) < 0) {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, 
-                                                "Insufficient stock to prepare this order. Not enough " + invItem.getName() + ".");
+                                                "Insufficient stock to prepare this order.");
                         }
                 }
 
