@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @Data
 //same DTO use to display inventory alerts and display inventory table
 public class InventoryDetailsDTO {
+    private Long id;
     private String name;
     private double percentage;
     private double maxStock; //initial count

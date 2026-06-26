@@ -58,6 +58,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Online Menu Customization**: Per-branch menus with time-based availability, seasonal items, and promotional offerings.
 - **Kitchen Workflow Optimization**: Assign chefs to orders (QR or online), track preparation time, prioritize orders, and mark completion.
 - **Staff Invitation System**: Invite staff members with predefined roles; track acceptance/rejection and shift assignments.
+- **AWS S3 Integration**: Securely upload, store, and retrieve dynamic media such as customer profile pictures and menu item reviews via presigned URLs.
 - **Payment Integration**:can Support for multiple payment gateways for both QR-based and online orders.
 - **Delivery Management**: Route optimization and real-time tracking for online delivery orders.
 - **Exception Handling**: Robust error handling with detailed audit trails for order cancellations, modifications, and disputes.
@@ -139,6 +140,12 @@ SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
 # QR Code Configuration
 QR_CODE_SIZE=300
 
+# AWS S3 Cloud Infrastructure
+AWS_S3_BUCKET_NAME=your-bucket-name
+AWS_REGION=ap-south-1
+AWS_ACCESS_KEY_ID=your-aws-access-key
+AWS_SECRET_ACCESS_KEY=your-aws-secret-key
+
 # Application Profiles
 SPRING_PROFILES_ACTIVE=dev
 ```
@@ -165,6 +172,12 @@ jwt.expiration=${JWT_EXPIRATION_MS:86400000}
 
 logging.level.root=${LOGGING_LEVEL_ROOT:INFO}
 logging.level.com.bk.restaurant=${LOGGING_LEVEL_COM_BK_RESTAURANT:DEBUG}
+
+# AWS S3 Cloud Infrastructure Configuration
+aws.s3.bucket-name=${AWS_S3_BUCKET_NAME:bucket-name}
+aws.s3.region=${AWS_REGION:ap-south-1}
+aws.s3.access-key=${AWS_ACCESS_KEY_ID:dummy-key}
+aws.s3.secret-key=${AWS_SECRET_ACCESS_KEY:dummy-key}
 ```
 
 #### (Alternative) Load `.env` via Maven
@@ -367,15 +380,14 @@ Check SQL dialect in `.env` matches your database:
 
 ## Maintainers
 
-For questions or issues, contact the backend team listed in the project documentation.
+For questions or issues, contact the backend team.
 
 ---
 
 ## License
 
-(Add license information if applicable.)
 
 ---
 
-**Last Updated**: April 2026
+**Last Updated**: June 2026
 

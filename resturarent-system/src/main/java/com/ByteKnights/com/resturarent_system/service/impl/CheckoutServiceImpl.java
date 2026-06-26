@@ -45,10 +45,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutCalculateResponse calculateOrderTotals(String userIdentifier, CheckoutCalculateRequest request) {
         return buildReceiptMath(userIdentifier, request);
     }
-
-    // ========================================================================
     // THE CORE MATH ENGINE (THE HELPER)
-    // ========================================================================
     private CheckoutCalculateResponse buildReceiptMath(String userIdentifier, CheckoutCalculateRequest request) {
 
         // 1. Fetch Configs (500 Internal Server Error if these are missing, as the
@@ -56,6 +53,13 @@ public class CheckoutServiceImpl implements CheckoutService {
         SystemConfig sysConfig = systemConfigRepository.findFirstByOrderByIdAsc()
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "System configuration is missing"));
+
+        Branch branch = branchRepository.findById(request.getBranchId())
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Branch not found"));
+        
+        if (branch.getStatus() != BranchStatus.ACTIVE) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
+        }
 
         BranchConfig branchConfig = branchConfigRepository.findByBranchId(request.getBranchId())
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
@@ -162,7 +166,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 8. Calculate Earned Points
         Integer pointsEarned = 0;
         if (sysConfig.isLoyaltyEnabled() && sysConfig.getPointsPerAmount().compareTo(BigDecimal.ZERO) > 0) {
-            // e.g., For every $10 (amountPerPoint), earn 1 point (pointsPerAmount)
+            // e.g., For every $x (amountPerPoint), earn y point (pointsPerAmount)
             BigDecimal multiplier = finalTotal.divide(sysConfig.getAmountPerPoint(), 0, RoundingMode.DOWN);
             pointsEarned = multiplier.multiply(sysConfig.getPointsPerAmount()).intValue();
         }
@@ -183,9 +187,6 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 9. Fetch Branch Details for Pickup
         BranchDetailResponse branchDetails = null;
         if ("ONLINE_PICKUP".equalsIgnoreCase(request.getOrderType())) {
-            Branch branch = branchRepository.findById(request.getBranchId())
-                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch details not found"));
-            
             branchDetails = BranchDetailResponse.builder()
                     .name(branch.getName())
                     .address(branch.getAddress())
@@ -215,7 +216,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     // --- Private Validators ---
-
+    //validate coupon
     private Coupon validateAndGetCoupon(String code, BigDecimal subtotal) {
         Coupon coupon = couponRepository.findByCode(code)
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Invalid coupon code"));

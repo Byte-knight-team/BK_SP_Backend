@@ -39,6 +39,13 @@ import static org.mockito.Mockito.*;
 
 /*
  * Unit tests for RoleService.
+<<<<<<< HEAD
+=======
+ *
+ * These tests cover the governance / RBAC role-management logic.
+ * Repositories and audit logging are mocked, so these tests do not use the real
+ * database.
+>>>>>>> dev_2
  */
 @ExtendWith(MockitoExtension.class)
 class RoleServiceTest {
@@ -82,8 +89,7 @@ class RoleServiceTest {
         Role result = roleService.createRole(
                 " cashier ",
                 " Handles cashier operations ",
-                new BigDecimal("55000")
-        );
+                new BigDecimal("55000"));
 
         // Assert
         assertNotNull(result);
@@ -95,11 +101,25 @@ class RoleServiceTest {
         verify(roleRepository, times(1)).findByName("CASHIER");
         verify(roleRepository, times(1)).save(any(Role.class));
 
+<<<<<<< HEAD
         /*
          * Current RoleService does not audit role creation.
          * If you add ROLE_CREATED audit logging later, update this test.
          */
         verifyNoInteractions(auditLogService);
+=======
+        verify(auditLogService, times(1)).logCurrentUserAction(
+                eq(AuditModule.RBAC),
+                eq(AuditEventType.ROLE_CREATED),
+                eq(AuditStatus.SUCCESS),
+                eq(AuditSeverity.INFO),
+                eq(AuditTargetType.ROLE),
+                eq(10L),
+                isNull(),
+                eq("Role created successfully"),
+                isNull(),
+                anyMap());
+>>>>>>> dev_2
     }
 
     @Test
@@ -112,8 +132,7 @@ class RoleServiceTest {
         // Act + Assert
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
-                () -> roleService.createRole("cashier", "Duplicate role", BigDecimal.ZERO)
-        );
+                () -> roleService.createRole("cashier", "Duplicate role", BigDecimal.ZERO));
 
         assertEquals("Role already exists", exception.getMessage());
 
@@ -130,8 +149,7 @@ class RoleServiceTest {
         // Act + Assert
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
-                () -> roleService.createRole("cashier", "Cashier role", new BigDecimal("-1000"))
-        );
+                () -> roleService.createRole("cashier", "Cashier role", new BigDecimal("-1000")));
 
         assertEquals("Base salary cannot be negative", exception.getMessage());
 
@@ -178,8 +196,7 @@ class RoleServiceTest {
         Role receptionistRole = buildRole(5L, "RECEPTIONIST", "Front desk", new BigDecimal("60000.00"));
 
         when(roleRepository.findAll()).thenReturn(
-                List.of(superAdminRole, adminRole, customerRole, chefRole, receptionistRole)
-        );
+                List.of(superAdminRole, adminRole, customerRole, chefRole, receptionistRole));
         when(userRepository.countByRoleAndIsActiveTrue(any(Role.class))).thenReturn(0L);
 
         // Act
@@ -209,8 +226,7 @@ class RoleServiceTest {
         // Act + Assert
         AccessDeniedException exception = assertThrows(
                 AccessDeniedException.class,
-                () -> roleService.getRoleSummaryById(1L)
-        );
+                () -> roleService.getRoleSummaryById(1L));
 
         assertEquals("ADMIN cannot access this role", exception.getMessage());
 
@@ -351,8 +367,7 @@ class RoleServiceTest {
                 isNull(),
                 eq("Role updated successfully"),
                 anyMap(),
-                anyMap()
-        );
+                anyMap());
     }
 
     @Test
@@ -369,8 +384,7 @@ class RoleServiceTest {
         // Act + Assert
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
-                () -> roleService.updateRole(2L, request)
-        );
+                () -> roleService.updateRole(2L, request));
 
         assertEquals("Core roles cannot be renamed", exception.getMessage());
 
@@ -389,8 +403,7 @@ class RoleServiceTest {
         // Act + Assert
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
-                () -> roleService.deleteRole(3L)
-        );
+                () -> roleService.deleteRole(3L));
 
         assertEquals("Core roles cannot be deleted", exception.getMessage());
 
@@ -410,8 +423,7 @@ class RoleServiceTest {
         // Act + Assert
         RuntimeException exception = assertThrows(
                 RuntimeException.class,
-                () -> roleService.deleteRole(10L)
-        );
+                () -> roleService.deleteRole(10L));
 
         assertEquals("Cannot delete role because it is assigned to one or more users", exception.getMessage());
 
@@ -448,8 +460,7 @@ class RoleServiceTest {
                 isNull(),
                 eq("Role deleted successfully"),
                 anyMap(),
-                isNull()
-        );
+                isNull());
     }
 
     /*
@@ -457,12 +468,10 @@ class RoleServiceTest {
      * RoleService reads ROLE_SUPER_ADMIN / ROLE_ADMIN from authorities.
      */
     private void setAuthenticatedRole(String roleName) {
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        "test-user",
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_" + roleName))
-                );
+        UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                "test-user",
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + roleName)));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }

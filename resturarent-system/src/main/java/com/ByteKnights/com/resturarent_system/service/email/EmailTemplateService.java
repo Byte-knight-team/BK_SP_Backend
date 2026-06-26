@@ -35,4 +35,24 @@ public class EmailTemplateService {
     public String getStaffInviteSubject() {
         return "Your Staff Account Credentials";
     }
+
+    /*
+     * Subject line for customer password reset email.
+     */
+    public String getCustomerPasswordResetSubject() {
+        return "CraveHouse - Customer Password Reset";
+    }
+
+    /*
+     * Builds the email body for customer password reset.
+     */
+    public String buildCustomerPasswordResetEmailBody(String resetLink) {
+        return "Hello,\n\n" +
+               "We received a request to reset your password for your CraveHouse Customer account.\n\n" +
+               "Please click the link below to set a new password. This link is valid for 15 minutes.\n\n" +
+               resetLink + "\n\n" +
+               "If you did not request a password reset, please ignore this email.\n\n" +
+               "Regards,\n" +
+               "CraveHouse Team";
+    }
 }

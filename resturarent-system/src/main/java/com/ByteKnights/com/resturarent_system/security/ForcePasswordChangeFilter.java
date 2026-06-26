@@ -67,6 +67,21 @@
                 User freshUser = userRepository.findByEmail(email).orElse(null);
 
                 if (freshUser != null) {
+<<<<<<< HEAD
+=======
+                    String role = freshUser.getRole() != null ? freshUser.getRole().getName() : null;
+
+                    // This filter is for staff onboarding only.
+                    // Customer accounts should not be blocked from browsing checkout/orders.
+                    boolean isCustomer = role != null && (
+                            "CUSTOMER".equalsIgnoreCase(role) ||
+                            "ROLE_CUSTOMER".equalsIgnoreCase(role));
+
+                    if (isCustomer) {
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+>>>>>>> dev_2
 
                     // Always enforce first password change for users with passwordChanged == false
                     if (!Boolean.TRUE.equals(freshUser.getPasswordChanged())) {

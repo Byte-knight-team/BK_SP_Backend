@@ -32,6 +32,18 @@ public class JwtService {
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
 
+<<<<<<< HEAD
+=======
+    /*
+     * Old token generator kept for safety.
+     * If any old code still calls generateToken(userId, email, role),
+     * it will still work and branch values will be null.
+     */
+    public String generateToken(Long userId, String email, String role) {
+        return generateToken(userId, email, role, null, null, null);
+    }
+
+>>>>>>> dev_2
     /*
      * Generates a staff JWT token after successful login.
      */
@@ -41,6 +53,22 @@ public class JwtService {
             String role,
             Long branchId,
             String branchName) {
+<<<<<<< HEAD
+=======
+        return generateToken(userId, email, role, branchId, branchName, null);
+    }
+
+    /*
+     * Full token generator with fullName support.
+     */
+    public String generateToken(
+            Long userId,
+            String email,
+            String role,
+            Long branchId,
+            String branchName,
+            String fullName) {
+>>>>>>> dev_2
         Map<String, Object> claims = new HashMap<>();
 
         /*
@@ -50,6 +78,9 @@ public class JwtService {
         claims.put("userId", userId);
         claims.put("branchId", branchId);
         claims.put("branchName", branchName);
+        if (fullName != null) {
+            claims.put("fullName", fullName);
+        }
 
         /*
          * Build and sign the JWT token.
