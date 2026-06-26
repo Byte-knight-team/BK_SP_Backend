@@ -6,6 +6,7 @@ import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.ManagerDriverService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -24,6 +25,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         private final OrderRepository orderRepository;
         private final StaffRepository staffRepository;
         private final DeliveryRepository deliveryRepository;
+        private final WebSocketNotificationService webSocketNotificationService;
 
         @Override
         @Transactional(readOnly = true)
@@ -182,6 +184,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 // Update Order status
                 order.setStatus(OrderStatus.OUT_FOR_DELIVERY);
                 orderRepository.save(order);
+                webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 
         private Long resolveBranchId(Long targetBranchId, Long userId) {

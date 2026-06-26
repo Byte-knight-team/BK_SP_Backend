@@ -33,4 +33,25 @@ public class WebSocketNotificationService {
         log.info("Broadcasting kitchen alert to {}: {}", destination, alertDTO.getMessage());
         messagingTemplate.convertAndSend(destination, alertDTO);
     }
+
+    /**
+     * Broadcast an order status update to a specific customer's order topic.
+     *
+     * Topic: /topic/order/{orderId}/status
+     * Subscribers: Customer Order Confirmation Page
+     *
+     * @param orderId   The order ID to scope the broadcast
+     * @param newStatus The new status of the order (e.g. "PREPARING")
+     */
+    public void broadcastOrderStatusUpdate(Long orderId, String newStatus) {
+        String destination = "/topic/order/" + orderId + "/status";
+        log.info("Broadcasting order status update to {}: {}", destination, newStatus);
+        
+        // Wrap the status in a simple JSON structure
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderId", String.valueOf(orderId));
+        payload.put("orderStatus", newStatus);
+        
+        messagingTemplate.convertAndSend(destination, payload);
+    }
 }

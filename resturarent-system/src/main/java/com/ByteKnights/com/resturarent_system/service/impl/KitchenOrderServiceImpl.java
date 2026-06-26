@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderItemDeta
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.KitchenOrderService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final ChefAttendanceRepository chefAttendanceRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     @Override
     public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) {
@@ -136,6 +138,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         if (order.getStatus() == OrderStatus.PENDING) {
             order.updateStatus(OrderStatus.PREPARING);
             orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 
         ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
@@ -178,6 +181,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         if (allFinished) {
             order.updateStatus(OrderStatus.COMPLETED);
             orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 
         return new MealCompletionResponseDTO(order.getStatus().toString());
@@ -206,5 +210,6 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         }
 
         orderRepository.save(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
     }
 }

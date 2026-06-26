@@ -17,6 +17,7 @@ import java.util.Map;
 import com.ByteKnights.com.resturarent_system.service.CheckoutService;
 import com.ByteKnights.com.resturarent_system.service.OrderService;
 import com.ByteKnights.com.resturarent_system.service.QrSessionService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +48,7 @@ public class OrderServiceImpl implements OrderService {
         private final MenuItemIngredientRepository menuItemIngredientRepository;
         private final InventoryItemRepository inventoryItemRepository;
         private final InventoryTransactionRepository inventoryTransactionRepository;
+        private final WebSocketNotificationService webSocketNotificationService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -57,7 +59,8 @@ public class OrderServiceImpl implements OrderService {
                         LoyaltyTransactionRepository loyaltyTransactionRepository,
                         MenuItemIngredientRepository menuItemIngredientRepository,
                         InventoryItemRepository inventoryItemRepository,
-                        InventoryTransactionRepository inventoryTransactionRepository) {
+                        InventoryTransactionRepository inventoryTransactionRepository,
+                        WebSocketNotificationService webSocketNotificationService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -73,6 +76,7 @@ public class OrderServiceImpl implements OrderService {
                 this.menuItemIngredientRepository = menuItemIngredientRepository;
                 this.inventoryItemRepository = inventoryItemRepository;
                 this.inventoryTransactionRepository = inventoryTransactionRepository;
+                this.webSocketNotificationService = webSocketNotificationService;
         }
 
         @Override
@@ -274,6 +278,8 @@ public class OrderServiceImpl implements OrderService {
                 paymentRepository.save(payment);
 
                 // 10. Map Items and Return Detailed Response
+                webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+
                 return OrderPlacementResponse.builder()
                                 .orderId(savedOrder.getId())
                                 .orderNumber(savedOrder.getOrderNumber())
@@ -561,5 +567,6 @@ public class OrderServiceImpl implements OrderService {
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelReason(cancelReason);
                 orderRepository.save(order);
+                webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 }
