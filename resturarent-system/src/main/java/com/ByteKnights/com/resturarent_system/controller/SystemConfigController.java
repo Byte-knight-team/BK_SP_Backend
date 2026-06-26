@@ -11,8 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/admin/config")
 public class SystemConfigController {
@@ -32,8 +30,7 @@ public class SystemConfigController {
     @PutMapping("/global")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<GlobalConfigResponse> updateGlobalConfig(
-            @Valid @RequestBody UpdateGlobalConfigRequest request
-    ) {
+            @Valid @RequestBody UpdateGlobalConfigRequest request) {
         return ResponseEntity.ok(systemConfigService.updateGlobalConfig(request));
     }
 
@@ -47,8 +44,7 @@ public class SystemConfigController {
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<BranchConfigResponse> updateBranchConfig(
             @PathVariable Long branchId,
-            @Valid @RequestBody UpdateBranchConfigRequest request
-    ) {
+            @Valid @RequestBody UpdateBranchConfigRequest request) {
         return ResponseEntity.ok(systemConfigService.updateBranchConfig(branchId, request));
     }
 
