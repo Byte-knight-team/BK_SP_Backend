@@ -33,4 +33,24 @@ public class WebSocketNotificationService {
         log.info("Broadcasting kitchen alert to {}: {}", destination, alertDTO.getMessage());
         messagingTemplate.convertAndSend(destination, alertDTO);
     }
+
+    /**
+     * Broadcast a new order notification to all kitchen clients in the same branch.
+     *
+     * Topic: /topic/branch/{branchId}/kitchen-orders
+     * Subscribers: Kitchen order management page
+     *
+     * @param branchId    The branch ID to scope the broadcast
+     * @param orderNumber The order number e.g. "ORD-CD5C6E"
+     */
+    public void broadcastNewKitchenOrder(Long branchId, String orderNumber) {
+        String destination = "/topic/branch/" + branchId + "/kitchen-orders";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "orderNumber", orderNumber,
+                "message", "New order received: " + orderNumber
+        );
+        log.info("Broadcasting new kitchen order to {}: {}", destination, orderNumber);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
 }

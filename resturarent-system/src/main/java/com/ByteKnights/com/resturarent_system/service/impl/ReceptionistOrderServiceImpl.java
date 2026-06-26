@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.receptionist.*;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistOrderService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,12 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final StaffRepository staffRepository;
     private final MenuItemIngredientRepository menuItemIngredientRepository;
     private final InventoryItemRepository inventoryItemRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
+    private final CustomerRepository customerRepository;
+    private final LoyaltyTransactionRepository loyaltyTransactionRepository;
+    private final CouponUsageRepository couponUsageRepository;
+    private final CouponRepository couponRepository;
+
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -196,6 +203,10 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         order.updateStatus(OrderStatus.PENDING);
         orderRepository.save(order);
+
+        // Notify kitchen in real-time via WebSocket
+        Long branchId = order.getBranch().getId();
+        webSocketNotificationService.broadcastNewKitchenOrder(branchId, order.getOrderNumber());
     }
 
     // ── HOLD ─────────────────────────────────────────────────────────────
@@ -211,16 +222,77 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         orderRepository.save(order);
     }
 
-    // ── CANCEL ───────────────────────────────────────────────────────────
+    // ── CANCEL (with loyalty rollback + coupon restock, same as customer cancel) ──
     @Override
     @Transactional
     public void cancelOrder(Long orderId, String reason, String userEmail) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
+        if (order.getStatus() == OrderStatus.PREPARING
+                || order.getStatus() == OrderStatus.COMPLETED
+                || order.getStatus() == OrderStatus.CANCELLED) {
+            throw new RuntimeException(
+                    "Cannot cancel an order that is already preparing, completed, or cancelled.");
+        }
+
+        Customer customer = order.getCustomer();
+
+        // Rollback loyalty points if not already refunded
+        if (!loyaltyTransactionRepository.existsByOrderAndTransactionType(order, LoyaltyTransactionType.REFUND)) {
+            int currentPoints = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+            int redeemedPoints = order.getRewardPointsRedeemed() != null ? order.getRewardPointsRedeemed() : 0;
+            int earnedPoints   = order.getRewardPointsEarned()   != null ? order.getRewardPointsEarned()   : 0;
+
+            if (redeemedPoints > 0) {
+                customer.setLoyaltyPoints(currentPoints + redeemedPoints);
+                currentPoints = customer.getLoyaltyPoints();
+
+                loyaltyTransactionRepository.save(LoyaltyTransaction.builder()
+                        .customer(customer)
+                        .order(order)
+                        .transactionType(LoyaltyTransactionType.REFUND)
+                        .points(redeemedPoints)
+                        .description("Refunded redeemed points for cancelled order " + order.getOrderNumber())
+                        .build());
+            }
+
+            if (earnedPoints > 0) {
+                int pointsToReverse = Math.min(currentPoints, earnedPoints);
+                customer.setLoyaltyPoints(Math.max(0, currentPoints - pointsToReverse));
+
+                loyaltyTransactionRepository.save(LoyaltyTransaction.builder()
+                        .customer(customer)
+                        .order(order)
+                        .transactionType(LoyaltyTransactionType.REFUND)
+                        .points(-pointsToReverse)
+                        .description("Reversed earned points for cancelled order " + order.getOrderNumber())
+                        .build());
+            }
+        }
+
+        // Restock used coupon and remove usage record
+        if (order.getAppliedCouponCode() != null && !order.getAppliedCouponCode().isBlank()) {
+            couponUsageRepository.findByOrder(order).ifPresent(couponUsageRepository::delete);
+
+            couponRepository.findByCode(order.getAppliedCouponCode()).ifPresent(coupon -> {
+                int usedCount = coupon.getUsedCount() != null ? coupon.getUsedCount() : 0;
+                coupon.setUsedCount(Math.max(0, usedCount - 1));
+                couponRepository.save(coupon);
+            });
+        }
+
+        // Deduct from customer total spent
+        if (order.getFinalAmount() != null && customer.getTotalSpent() != null) {
+            customer.setTotalSpent(
+                    customer.getTotalSpent().subtract(order.getFinalAmount()).max(BigDecimal.ZERO));
+        }
+
+        customerRepository.save(customer);
+
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelReason(reason);
-        order.setStatusUpdatedAt(java.time.LocalDateTime.now());
+        order.setStatusUpdatedAt(LocalDateTime.now());
         orderRepository.save(order);
     }
 

@@ -192,6 +192,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         com.ByteKnights.com.resturarent_system.entity.OrderType orderType,
                         OrderStatus status);
 
+        // Counts today's orders for this branch that have unpaid cash (paymentStatus = PENDING)
+        // Used by receptionist dashboard "Cash Due" KPI card
+        long countByBranchIdAndPaymentStatusAndOrderTypeInAndCreatedAtBetween(
+                Long branchId,
+                PaymentStatus paymentStatus,
+                List<OrderType> orderTypes,
+                LocalDateTime start,
+                LocalDateTime end);
+
+
         @EntityGraph(attributePaths = "items")
         List<Order> findByBranchIdAndStatusAndOrderTypeIn(
                 Long branchId,
