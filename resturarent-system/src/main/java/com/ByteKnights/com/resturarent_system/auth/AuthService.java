@@ -206,14 +206,21 @@ public class AuthService {
         }
 
         /*
+<<<<<<< HEAD
          * Generate JWT token with user, role, and branch details.
+=======
+         * We generate a jwt token for the user using the generateToken method of
+         * JwtService.
+         * The token is valid for 08 hours.
+>>>>>>> dev_2
          */
         String token = jwtService.generateToken(
                 user.getId(),
                 user.getEmail(),
                 user.getRole().getName(),
                 branchId,
-                branchName);
+                branchName,
+                user.getFullName());
 
         /*
          * Store non-sensitive login details for audit logging.

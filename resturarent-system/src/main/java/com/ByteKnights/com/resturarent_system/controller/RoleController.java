@@ -67,8 +67,14 @@ public class RoleController {
                 : null;
 
         /*
+<<<<<<< HEAD
             baseSalary is optional and can be saved as 0.00 if not sent
         */
+=======
+         * baseSalary is optional.
+         * If it is not sent, RoleService will save it as 0.00.
+         */
+>>>>>>> dev_2
         BigDecimal baseSalary = parseBigDecimal(payload.get("baseSalary"));
 
         Role createdRole = roleService.createRole(name, description, baseSalary);
@@ -93,10 +99,15 @@ public class RoleController {
     */
     @PutMapping("/{roleId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
+<<<<<<< HEAD
     public ResponseEntity<Role> updateRole(
             @PathVariable Long roleId,
             @RequestBody UpdateRoleRequest request
     ) {
+=======
+    public ResponseEntity<Role> updateRole(@PathVariable Long roleId,
+            @RequestBody UpdateRoleRequest request) {
+>>>>>>> dev_2
         return ResponseEntity.ok(roleService.updateRole(roleId, request));
     }
 
@@ -111,10 +122,19 @@ public class RoleController {
     }
 
     /*
+<<<<<<< HEAD
         Converts incoming JSON number/string values into BigDecimal safely.
         "baseSalary": 60000, "baseSalary": "60000"
         
     */
+=======
+     * Converts incoming JSON number/string values into BigDecimal safely.
+     * 
+     * Accepted:
+     * "baseSalary": 60000
+     * "baseSalary": "60000"
+     */
+>>>>>>> dev_2
     private BigDecimal parseBigDecimal(Object value) {
         if (value == null || value.toString().trim().isEmpty()) {
             return null;

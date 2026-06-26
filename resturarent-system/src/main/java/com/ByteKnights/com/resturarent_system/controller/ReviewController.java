@@ -1,15 +1,22 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.ReviewImagePresignRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.ReviewSubmissionRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.customer.ReviewImagePresignResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.ReviewResponse;
 import com.ByteKnights.com.resturarent_system.service.ReviewService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.List;
+
+import com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemReviewsResponse;
 
 @RestController
-@RequestMapping("/api/v1/orders/{orderId}/reviews")
+@RequestMapping("/api/v1")
 @CrossOrigin
 public class ReviewController {
 
@@ -19,14 +26,39 @@ public class ReviewController {
         this.reviewService = reviewService;
     }
 
-    @PostMapping
+    @PostMapping("/reviews/images/presign")
+    public ResponseEntity<ApiResponse<List<ReviewImagePresignResponse>>> createReviewImageUploadUrls(
+            @Valid @RequestBody ReviewImagePresignRequest request,
+            Principal principal) {
+        String userIdentifier = principal.getName();
+        List<ReviewImagePresignResponse> uploadUrls = reviewService.createReviewImageUploadUrls(userIdentifier,
+                request.getFiles());
+        return ResponseEntity.ok(ApiResponse.success("Review image upload URLs generated successfully", uploadUrls));
+    }
+
+    @PostMapping("/orders/{orderId}/reviews")
     public ResponseEntity<ApiResponse<String>> submitReview(
             @PathVariable Long orderId,
-            @RequestBody ReviewSubmissionRequest request,
+            @Valid @RequestBody ReviewSubmissionRequest request,
             Principal principal) {
-        
+
         String userIdentifier = principal.getName();
         reviewService.submitReview(userIdentifier, orderId, request);
         return ResponseEntity.ok(ApiResponse.success("Review submitted successfully", null));
+    }
+
+    @GetMapping("/reviews/recent")
+    public ResponseEntity<ApiResponse<List<ReviewResponse>>> getRecentReviews() {
+        List<ReviewResponse> reviews = reviewService.getRecentReviews();
+        return ResponseEntity.ok(ApiResponse.success("Recent reviews fetched successfully", reviews));
+    }
+
+    @GetMapping("/menu-items/{menuItemId}/reviews")
+    public ResponseEntity<ApiResponse<MenuItemReviewsResponse>> getMenuItemReviews(
+            @PathVariable Long menuItemId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        MenuItemReviewsResponse response = reviewService.getMenuItemReviews(menuItemId, page, size);
+        return ResponseEntity.ok(ApiResponse.success("Menu item reviews fetched successfully", response));
     }
 }

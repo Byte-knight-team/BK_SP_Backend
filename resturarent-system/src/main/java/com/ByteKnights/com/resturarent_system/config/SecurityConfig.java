@@ -45,13 +45,16 @@ public class SecurityConfig {
                                                                 "/api/v1/qr-sessions/**",
                                                                 "/api/v1/menu/customer",
                                                                 "/api/v1/auth/customer",
+                                                                "/api/v1/reviews/recent",
+                                                                "/api/v1/menu-items/*/reviews",
                                                                 "/api/tables",
                                                                 "/api/tables/**",
                                                                 "/api/auth/staff/login",
                                                                 "/swagger-ui/**",
                                                                 "/swagger-ui.html",
                                                                 "/api-docs/**",
-                                                                "/v3/api-docs/**")
+                                                                "/v3/api-docs/**",
+                                                                "/ws/**")        // WebSocket handshake endpoint
                                                 .permitAll()
 
                                                 /*

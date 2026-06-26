@@ -20,9 +20,19 @@ public class CorsConfig {
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
 
+<<<<<<< HEAD
         // Load allowed frontend origins from env
         List<String> origins = Arrays.asList(allowedOrigins.split(","));
         config.setAllowedOrigins(origins);
+=======
+        // Frontend origins (Vite dev server and production)
+        config.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "http://localhost:5174",
+                "http://localhost:5175",
+                "https://cravehouse.netlify.app"
+        ));
+>>>>>>> dev_2
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

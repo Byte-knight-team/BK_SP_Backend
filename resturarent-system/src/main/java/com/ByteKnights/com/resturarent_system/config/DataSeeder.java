@@ -77,13 +77,25 @@ public class DataSeeder implements CommandLineRunner {
                 // Delivery
                 Privilege updateDeliveryStatus = createPrivilege("UPDATE_DELIVERY_STATUS");
                 Privilege viewDelivery = createPrivilege("VIEW_DELIVERY");
+                Privilege manageDeliveryStatus = createPrivilege("MANAGE_DELIVERY_STATUS");
 
                 // Branch / reports / profile
                 Privilege viewBranch = createPrivilege("VIEW_BRANCH");
                 Privilege viewReports = createPrivilege("VIEW_REPORTS");
                 Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
 
+<<<<<<< HEAD
                 // QR permissions
+=======
+                // Manager Dashboard & Modules
+                Privilege viewDashboard = createPrivilege("VIEW_DASHBOARD");
+                Privilege viewAnalytics = createPrivilege("VIEW_ANALYTICS");
+                Privilege viewSales = createPrivilege("VIEW_SALES");
+                Privilege viewStaff = createPrivilege("VIEW_STAFF");
+                Privilege manageDrivers = createPrivilege("MANAGE_DRIVERS");
+
+                // QR & restaurant table permissions
+>>>>>>> dev_2
                 Privilege createQrcode = createPrivilege("CREATE_QRCODE");
                 Privilege regenerateQrcode = createPrivilege("REGENERATE_QRCODE");
                 Privilege revokeQrcode = createPrivilege("REVOKE_QRCODE");
@@ -108,6 +120,19 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege kitchenAlertView = createPrivilege("KITCHEN_ALERT_VIEW");
                 Privilege kitchenAlertResolve = createPrivilege("KITCHEN_ALERT_RESOLVE");
 
+<<<<<<< HEAD
+=======
+                // RECEPTIONIST
+                Privilege receptionistTableView = createPrivilege("RECEPTIONIST_TABLE_VIEW");
+                Privilege receptionistTableUpdate = createPrivilege("RECEPTIONIST_TABLE_UPDATE");
+                Privilege receptionistReservationCreate = createPrivilege("RECEPTIONIST_RESERVATION_CREATE");
+                Privilege receptionistReservationUpdate = createPrivilege("RECEPTIONIST_RESERVATION_UPDATE");
+                Privilege receptionistOrderView = createPrivilege("RECEPTIONIST_ORDER_VIEW");
+                Privilege receptionistOrderUpdate = createPrivilege("RECEPTIONIST_ORDER_UPDATE");
+                Privilege receptionistPaymentCollect = createPrivilege("RECEPTIONIST_PAYMENT_COLLECT");
+
+
+>>>>>>> dev_2
                 /*
                  * All known system privileges.
                  */
@@ -128,9 +153,15 @@ public class DataSeeder implements CommandLineRunner {
                                 viewCustomer,
                                 updateDeliveryStatus,
                                 viewDelivery,
+                                manageDeliveryStatus,
                                 viewBranch,
                                 viewReports,
                                 viewOwnProfile,
+                                viewDashboard,
+                                viewAnalytics,
+                                viewSales,
+                                viewStaff,
+                                manageDrivers,
                                 createQrcode,
                                 regenerateQrcode,
                                 revokeQrcode,
@@ -149,7 +180,15 @@ public class DataSeeder implements CommandLineRunner {
                                 kitchenChefManage,
                                 kitchenAlertCreate,
                                 kitchenAlertView,
-                                kitchenAlertResolve);
+                                kitchenAlertResolve,
+                                receptionistTableView,
+                                receptionistTableUpdate,
+                                receptionistReservationCreate,
+                                receptionistReservationUpdate,
+                                receptionistOrderView,
+                                receptionistOrderUpdate,
+                                receptionistPaymentCollect
+                );
 
                 /*
                  * For normal roles, default permissions are added ONLY when the role is first created.
@@ -169,7 +208,12 @@ public class DataSeeder implements CommandLineRunner {
                                 viewBranch,
                                 manageOrders,
                                 viewReports,
-                                viewCustomer));
+                                viewCustomer,
+                                viewDashboard,
+                                viewAnalytics,
+                                viewSales,
+                                viewStaff,
+                                manageDrivers));
 
                 createRoleWithDefaultPermissions("CHEF", Set.of(
                                 manageMenu,
@@ -186,13 +230,19 @@ public class DataSeeder implements CommandLineRunner {
                                 kitchenAlertResolve));
 
                 createRoleWithDefaultPermissions("RECEPTIONIST", Set.of(
-                                createOrders,
-                                manageReservations,
-                                viewCustomer));
+                                viewCustomer,
+                                receptionistTableView,
+                                receptionistTableUpdate,
+                                receptionistReservationCreate,
+                                receptionistReservationUpdate,
+                                receptionistOrderView,
+                                receptionistOrderUpdate,
+                                receptionistPaymentCollect));
 
                 createRoleWithDefaultPermissions("DELIVERY", Set.of(
                                 updateDeliveryStatus,
-                                viewDelivery));
+                                viewDelivery,
+                                manageDeliveryStatus));
 
                 createRoleWithDefaultPermissions("CUSTOMER", Set.of(
                                 viewOwnOrders,

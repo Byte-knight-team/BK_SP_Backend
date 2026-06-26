@@ -65,4 +65,25 @@ public class SmtpEmailService implements EmailService {
          */
         mailSender.send(message);
     }
+
+    @Override
+    public void sendCustomerPasswordResetEmail(String toEmail, String resetLink) {
+        if (!toEmail.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+            throw new IllegalArgumentException("Invalid email format: " + toEmail);
+        }
+
+        if (emailTestingService.isForceFail()) {
+            throw new RuntimeException("Forced email failure for testing");
+        }
+
+        String subject = templateService.getCustomerPasswordResetSubject();
+        String body = templateService.buildCustomerPasswordResetEmailBody(resetLink);
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(toEmail);
+        message.setSubject(subject);
+        message.setText(body);
+
+        mailSender.send(message);
+    }
 }

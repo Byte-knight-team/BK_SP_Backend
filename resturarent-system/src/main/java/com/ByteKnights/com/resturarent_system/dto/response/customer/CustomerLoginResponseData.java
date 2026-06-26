@@ -9,4 +9,6 @@ import lombok.Setter;
 @Builder
 public class CustomerLoginResponseData {
     private String token;
+    private String profilePictureUrl;
+    private String username;
 }
