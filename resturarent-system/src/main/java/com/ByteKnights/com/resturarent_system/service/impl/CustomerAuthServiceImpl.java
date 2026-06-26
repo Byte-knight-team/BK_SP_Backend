@@ -377,6 +377,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         // Generate token and save
         passwordResetTokenRepository.deleteByUser(user); // Clear old token if exists
+        passwordResetTokenRepository.flush(); // Force hibernate to execute delete before insert
 
         String tokenStr = java.util.UUID.randomUUID().toString();
         PasswordResetToken resetToken = PasswordResetToken.builder()
