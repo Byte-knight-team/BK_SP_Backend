@@ -8,6 +8,7 @@ import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         private final DeliveryRepository deliveryRepository;
         private final OrderRepository orderRepository;
         private final StaffRepository staffRepository;
+        private final WebSocketNotificationService webSocketNotificationService;
 
         @Override
         @Transactional(readOnly = true)
@@ -120,6 +122,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         // because the Delivery -> Order relationship has no cascade.
                         delivery.getOrder().setStatus(OrderStatus.SERVED);
                         orderRepository.save(delivery.getOrder());
+                        webSocketNotificationService.broadcastOrderStatusUpdate(delivery.getOrder().getId(), delivery.getOrder().getStatus().name());
                 }
 
                 deliveryRepository.save(delivery);

@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.receptionist.*;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistOrderService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final StaffRepository staffRepository;
     private final MenuItemIngredientRepository menuItemIngredientRepository;
     private final InventoryItemRepository inventoryItemRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -196,6 +198,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         order.updateStatus(OrderStatus.PENDING);
         orderRepository.save(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
     }
 
     // ── HOLD ─────────────────────────────────────────────────────────────
@@ -209,6 +212,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.setHoldReason(reason);
         order.setStatusUpdatedAt(java.time.LocalDateTime.now());
         orderRepository.save(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
     }
 
     // ── CANCEL ───────────────────────────────────────────────────────────
@@ -222,6 +226,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.setCancelReason(reason);
         order.setStatusUpdatedAt(java.time.LocalDateTime.now());
         orderRepository.save(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
     }
 
     // ── COLLECT CASH PAYMENT ─────────────────────────────────────────────
@@ -248,6 +253,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         order.updateStatus(OrderStatus.SERVED);
         orderRepository.save(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
     }
 
     // ── SERVE ONE ITEM (QR dine-in) ──────────────────────────────────────
@@ -268,6 +274,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         if (allServed) {
             order.updateStatus(OrderStatus.SERVED);
             orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
     }
 }
