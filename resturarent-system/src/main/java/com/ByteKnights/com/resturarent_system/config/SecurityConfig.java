@@ -54,7 +54,7 @@ public class SecurityConfig {
                                                                 "/swagger-ui.html",
                                                                 "/api-docs/**",
                                                                 "/v3/api-docs/**",
-                                                                "/ws/**")        // WebSocket handshake endpoint
+                                                                "/ws/**") // WebSocket handshake endpoint
                                                 .permitAll()
 
                                                 /*
@@ -121,6 +121,14 @@ public class SecurityConfig {
                                                  * Email testing.
                                                  */
                                                 .requestMatchers("/api/email-testing/**")
+                                                .hasRole("SUPER_ADMIN")
+
+                                                /*
+                                                 * Super Admin customer management.
+                                                 * Only SUPER_ADMIN can view, activate, and deactivate customer
+                                                 * accounts.
+                                                 */
+                                                .requestMatchers("/api/admin/customers", "/api/admin/customers/**")
                                                 .hasRole("SUPER_ADMIN")
 
                                                 /*

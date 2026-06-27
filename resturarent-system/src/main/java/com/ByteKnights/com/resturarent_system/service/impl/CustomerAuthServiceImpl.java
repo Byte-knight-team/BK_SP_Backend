@@ -34,9 +34,10 @@ import java.util.regex.Pattern;
 @Service
 public class CustomerAuthServiceImpl implements CustomerAuthService {
 
-    //initialize email and pattern regexes
+    // initialize email and pattern regexes
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
-    private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
+    private static final Pattern PASSWORD_PATTERN = Pattern
+            .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -53,15 +54,15 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private String customerFrontendBaseUrl;
 
     public CustomerAuthServiceImpl(UserRepository userRepository,
-                                   RoleRepository roleRepository,
-                                   CustomerRepository customerRepository,
-                                   QrSessionRepository qrSessionRepository,
-                                   PasswordEncoder passwordEncoder,
-                                   CustomerJwtService customerJwtService,
-                                   SmsService smsService,
-                                   ProfileImageStorageService profileImageStorageService,
-                                   PasswordResetTokenRepository passwordResetTokenRepository,
-                                   EmailService emailService) {
+            RoleRepository roleRepository,
+            CustomerRepository customerRepository,
+            QrSessionRepository qrSessionRepository,
+            PasswordEncoder passwordEncoder,
+            CustomerJwtService customerJwtService,
+            SmsService smsService,
+            ProfileImageStorageService profileImageStorageService,
+            PasswordResetTokenRepository passwordResetTokenRepository,
+            EmailService emailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.customerRepository = customerRepository;
@@ -74,7 +75,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.emailService = emailService;
     }
 
-    //register function
+    // register function
     @Override
     @Transactional
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
@@ -84,12 +85,12 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String normalizedPhone = request.getPhone().trim();
         String normalizedUsername = request.getUsername().trim();
 
-        //Check if email already exsist
+        // Check if email already exsist
         if (userRepository.findByEmail(normalizedEmail).isPresent()) {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Email already exists");
         }
 
-        //Check if Username exists
+        // Check if Username exists
         if (userRepository.findByUsername(normalizedUsername).isPresent()) {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Username already exists");
         }
@@ -101,11 +102,24 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         if (existingUserOpt.isPresent()) {
             User existingUser = existingUserOpt.get();
-            // If the user has an email, it's a real, fully registered account. Block them.
+
+            /*
+             * If this phone belongs to a deactivated customer/ghost account,
+             * do not allow registration to reactivate it.
+             */
+            ensureCustomerAccountActive(existingUser);
+
+            /*
+             * If the user has an email, it is a real, fully registered account.
+             */
             if (existingUser.getEmail() != null && !existingUser.getEmail().isEmpty()) {
-                throw new CustomerAuthException(HttpStatus.CONFLICT, "Phone number already exists and is linked to an account.");
+                throw new CustomerAuthException(HttpStatus.CONFLICT,
+                        "Phone number already exists and is linked to an account.");
             } else {
-                // No email means it's a QR Ghost Account! We will upgrade it.
+                /*
+                 * No email means this is a QR ghost account.
+                 * Upgrade it into a registered customer account.
+                 */
                 user = existingUser;
                 isGhostAccount = true;
             }
@@ -127,8 +141,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         // Save the User
         User savedUser = userRepository.save(user);
 
-        // 5. If it's a brand new user, create the Customer profile. 
-        // (If it was a ghost account (mean mobile used in restuarent), the Customer profile already exists!)
+        // 5. If it's a brand new user, create the Customer profile.
+        // (If it was a ghost account (mean mobile used in restuarent), the Customer
+        // profile already exists!)
         if (!isGhostAccount) {
             Customer customer = Customer.builder()
                     .user(savedUser)
@@ -136,34 +151,31 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             customerRepository.save(customer);
         }
 
-        //getting role entity for customer from database
+        // getting role entity for customer from database
         Role customerRole = findCustomerRole();
 
-
-        //create jwt token
+        // create jwt token
         String normalizedRole = normalizeRole(customerRole.getName());
         String token = customerJwtService.generateToken(savedUser.getId(), savedUser.getEmail(), normalizedRole);
 
-        //returning response
+        // returning response
         return CustomerRegisterResponseData.builder()
                 .token(token)
                 .build();
     }
 
-    //login method
+    // login method
 
     @Override
     @Transactional(readOnly = true)
     public CustomerLoginResponseData login(CustomerLoginRequest request) {
         validateLoginRequest(request);
 
-        //validating user and password
+        // validating user and password
         User user = userRepository.findByEmail(request.getEmail().trim().toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid username or password"));
 
-        if (user.getIsActive() == false) {
-            throw new CustomerAuthException(HttpStatus.FORBIDDEN, "Account is deactivated");
-        }
+        ensureCustomerAccountActive(user);
 
         if (!isCustomerUser(user)) {
             throw new CustomerAuthException(HttpStatus.FORBIDDEN, "Only customers can login");
@@ -173,7 +185,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
         }
 
-        //create jwt token
+        // create jwt token
         String normalizedRole = normalizeRole(user.getRole().getName());
         String token = customerJwtService.generateToken(user.getId(), user.getEmail(), normalizedRole);
 
@@ -182,7 +194,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             profilePictureUrl = profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey());
         }
 
-        //return response
+        // return response
         return CustomerLoginResponseData.builder()
                 .token(token)
                 .username(user.getUsername())
@@ -206,21 +218,34 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         Customer customer;
 
         if (user == null) {
-            // First time this phone has scanned a QR code! Create a guest profile.
+            /*
+             * First time this phone has scanned a QR code.
+             * Create a guest customer profile.
+             */
             Role customerRole = findCustomerRole();
             user = User.builder()
                     .username("Guest_" + System.currentTimeMillis())
                     .phone(phone.trim())
-                    .password(passwordEncoder.encode(otpCode)) // Dummy password
+                    .password(passwordEncoder.encode(otpCode))
                     .role(customerRole)
                     .isActive(true)
                     .build();
+
             user = userRepository.save(user);
 
-            customer = Customer.builder().user(user).phoneVerified(false).build();
+            customer = Customer.builder()
+                    .user(user)
+                    .phoneVerified(false)
+                    .build();
         } else {
+            /*
+             * Existing deactivated customers must not receive OTP.
+             */
+            ensureCustomerAccountActive(user);
+
             customer = customerRepository.findByUser(user)
-                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Customer profile missing"));
+                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
+                            "Customer profile missing"));
         }
 
         // 3. Save OTP to customer profile
@@ -230,7 +255,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         // 4. Send SMS
         smsService.sendOtpSms(phone, otpCode);
-        //System.out.println(otpCode);
+        // System.out.println(otpCode);
     }
 
     @Override
@@ -243,8 +268,14 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         User user = userRepository.findByPhone(phone.trim())
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
 
+        /*
+         * Deactivated users must not verify OTP.
+         */
+        ensureCustomerAccountActive(user);
+
         Customer customer = customerRepository.findByUser(user)
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Customer profile missing"));
+                .orElseThrow(
+                        () -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Customer profile missing"));
 
         // 1. Check validity
         if (customer.getOtpCode() == null || !customer.getOtpCode().equals(code.trim())) {
@@ -261,17 +292,18 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customerRepository.save(customer);
 
         if (sessionId != null) {
-        QrSession qrSession = qrSessionRepository.findById(sessionId).orElse(null);
-        if (qrSession != null && qrSession.getCustomer() == null) {
-            qrSession.setCustomer(customer);
-            qrSessionRepository.save(qrSession);
+            QrSession qrSession = qrSessionRepository.findById(sessionId).orElse(null);
+            if (qrSession != null && qrSession.getCustomer() == null) {
+                qrSession.setCustomer(customer);
+                qrSessionRepository.save(qrSession);
+            }
         }
-    }
 
         // 3. Issue JWT Token so they can place the order!
         String normalizedRole = normalizeRole(user.getRole().getName());
         // Use email if available, otherwise use phone for JWT subject
-        // This ensures Principal.getName() returns a valid identifier for profile lookups
+        // This ensures Principal.getName() returns a valid identifier for profile
+        // lookups
         String tokenSubject = user.getEmail() != null ? user.getEmail() : user.getPhone();
         String token = customerJwtService.generateToken(user.getId(), tokenSubject, normalizedRole);
 
@@ -287,7 +319,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .build();
     }
 
-    //helper method for validation
+    // helper method for validation
 
     private void validateRegisterRequest(CustomerRegisterRequest request) {
         if (request == null
@@ -319,8 +351,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
     }
 
-
-    //method to get role from database
+    // method to get role from database
     private Role findCustomerRole() {
         Optional<Role> roleOptional = roleRepository.findByName("ROLE_CUSTOMER");
         if (roleOptional.isPresent()) {
@@ -328,7 +359,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
 
         return roleRepository.findByName("CUSTOMER")
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
+                .orElseThrow(
+                        () -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
     }
 
     private String normalizeRole(String roleName) {
@@ -342,7 +374,16 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         return isBlank(address) ? null : address.trim();
     }
 
-    //method to if login user is a customer
+    /*
+     * Deactivated customers must not continue customer auth flows.
+     */
+    private void ensureCustomerAccountActive(User user) {
+        if (user == null || !Boolean.TRUE.equals(user.getIsActive())) {
+            throw new CustomerAuthException(HttpStatus.FORBIDDEN, "Account is deactivated");
+        }
+    }
+
+    // method to if login user is a customer
     private boolean isCustomerUser(User user) {
         if (user == null || user.getRole() == null || isBlank(user.getRole().getName())) {
             return false;
@@ -369,11 +410,17 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
 
         User user = userRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "No customer account found with this email"));
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND,
+                        "No customer account found with this email"));
 
         if (!isCustomerUser(user)) {
             throw new CustomerAuthException(HttpStatus.FORBIDDEN, "Invalid account type for this operation");
         }
+
+        /*
+         * Deactivated customers must not start forgot-password flow.
+         */
+        ensureCustomerAccountActive(user);
 
         // Generate token and save
         passwordResetTokenRepository.deleteByUser(user); // Clear old token if exists
@@ -384,7 +431,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .user(user)
                 .expiryDate(LocalDateTime.now().plusMinutes(15))
                 .build();
-        
+
         passwordResetTokenRepository.save(resetToken);
 
         // Construct reset link
@@ -400,9 +447,10 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         if (newPassword == null || newPassword.trim().isEmpty()) {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Password cannot be empty");
         }
-        
+
         if (!PASSWORD_PATTERN.matcher(newPassword).matches()) {
-            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character");
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                    "Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character");
         }
 
         PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
@@ -414,6 +462,13 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
 
         User user = resetToken.getUser();
+
+        /*
+         * If the account was deactivated after the reset link was created,
+         * do not allow password reset to continue.
+         */
+        ensureCustomerAccountActive(user);
+
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
