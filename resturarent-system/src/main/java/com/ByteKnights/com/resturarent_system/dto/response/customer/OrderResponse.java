@@ -52,6 +52,7 @@ public class OrderResponse {
         private Integer quantity;
         private BigDecimal unitPrice;
         private BigDecimal subtotal;
+        private String kitchenNotes;
         private Boolean isReviewed;
     }
 }

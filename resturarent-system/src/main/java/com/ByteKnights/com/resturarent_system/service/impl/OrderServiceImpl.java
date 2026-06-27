@@ -117,7 +117,7 @@ public class OrderServiceImpl implements OrderService {
                 Map<Long, BigDecimal> requiredIngredients = new HashMap<>();
                 Map<Long, InventoryItem> inventoryItemCache = new HashMap<>();
                 
-                for (CheckoutCalculateRequest.CartItemRequest itemReq : request.getItems()) {
+                for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
                         MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId())
                                         .orElseThrow(() -> new ResourceNotFoundException("Menu item not found"));
                                         
@@ -154,7 +154,13 @@ public class OrderServiceImpl implements OrderService {
                 calcRequest.setBranchId(request.getBranchId());
                 calcRequest.setCouponCode(request.getCouponCode());
                 calcRequest.setRedeemLoyaltyPoints(request.getRedeemLoyaltyPoints());
-                calcRequest.setItems(request.getItems());
+                calcRequest.setItems(request.getItems().stream()
+                                .map(item -> {
+                                        CheckoutCalculateRequest.CartItemRequest calcItem = new CheckoutCalculateRequest.CartItemRequest();
+                                        calcItem.setMenuItemId(item.getMenuItemId());
+                                        calcItem.setQuantity(item.getQuantity());
+                                        return calcItem;
+                                }).collect(Collectors.toList()));
 
                 CheckoutCalculateResponse trustedMath = checkoutService.calculateOrderTotals(userIdentifier,
                                 calcRequest);
@@ -187,7 +193,7 @@ public class OrderServiceImpl implements OrderService {
                 }
 
                 // 5. Add Items to Order
-                for (CheckoutCalculateRequest.CartItemRequest itemReq : request.getItems()) {
+                for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
                         MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId()).orElseThrow();
                         OrderItem orderItem = new OrderItem();
                         orderItem.setMenuItem(dbItem);
@@ -195,6 +201,7 @@ public class OrderServiceImpl implements OrderService {
                         orderItem.setQuantity(itemReq.getQuantity());
                         orderItem.setUnitPrice(dbItem.getPrice());
                         orderItem.setSubtotal(dbItem.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+                        orderItem.setKitchenNotes(itemReq.getKitchenNote());
                         order.addItem(orderItem);
                 }
 
@@ -303,6 +310,7 @@ public class OrderServiceImpl implements OrderService {
                                                 .isReviewed(order.getReviews().stream().anyMatch(
                                                                 r -> r.getOrderItem() != null && r.getOrderItem()
                                                                                 .getId().equals(item.getId())))
+                                                .kitchenNotes(item.getKitchenNotes())
                                                 .build())
                                 .collect(Collectors.toList());
 
