@@ -84,9 +84,6 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege viewReports = createPrivilege("VIEW_REPORTS");
                 Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
 
-<<<<<<< HEAD
-                // QR permissions
-=======
                 // Manager Dashboard & Modules
                 Privilege viewDashboard = createPrivilege("VIEW_DASHBOARD");
                 Privilege viewAnalytics = createPrivilege("VIEW_ANALYTICS");
@@ -95,7 +92,6 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege manageDrivers = createPrivilege("MANAGE_DRIVERS");
 
                 // QR & restaurant table permissions
->>>>>>> dev_2
                 Privilege createQrcode = createPrivilege("CREATE_QRCODE");
                 Privilege regenerateQrcode = createPrivilege("REGENERATE_QRCODE");
                 Privilege revokeQrcode = createPrivilege("REVOKE_QRCODE");
@@ -120,8 +116,6 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege kitchenAlertView = createPrivilege("KITCHEN_ALERT_VIEW");
                 Privilege kitchenAlertResolve = createPrivilege("KITCHEN_ALERT_RESOLVE");
 
-<<<<<<< HEAD
-=======
                 // RECEPTIONIST
                 Privilege receptionistTableView = createPrivilege("RECEPTIONIST_TABLE_VIEW");
                 Privilege receptionistTableUpdate = createPrivilege("RECEPTIONIST_TABLE_UPDATE");
@@ -132,7 +126,6 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege receptionistPaymentCollect = createPrivilege("RECEPTIONIST_PAYMENT_COLLECT");
 
 
->>>>>>> dev_2
                 /*
                  * All known system privileges.
                  */

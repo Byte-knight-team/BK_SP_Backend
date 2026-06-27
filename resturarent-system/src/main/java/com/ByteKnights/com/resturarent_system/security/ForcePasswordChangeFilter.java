@@ -67,8 +67,6 @@
                 User freshUser = userRepository.findByEmail(email).orElse(null);
 
                 if (freshUser != null) {
-<<<<<<< HEAD
-=======
                     String role = freshUser.getRole() != null ? freshUser.getRole().getName() : null;
 
                     // This filter is for staff onboarding only.
@@ -81,7 +79,6 @@
                         filterChain.doFilter(request, response);
                         return;
                     }
->>>>>>> dev_2
 
                     // Always enforce first password change for users with passwordChanged == false
                     if (!Boolean.TRUE.equals(freshUser.getPasswordChanged())) {
