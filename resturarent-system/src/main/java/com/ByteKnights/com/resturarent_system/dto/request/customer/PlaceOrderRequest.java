@@ -14,7 +14,7 @@ public class PlaceOrderRequest {
     // Identical cart data for the Zero-Trust calculation
     private String couponCode;
     private Integer redeemLoyaltyPoints;
-    private List<CheckoutCalculateRequest.CartItemRequest> items;
+    private List<PlaceOrderItemRequest> items;
 
     // Final Checkout Details
     private String contactName;
@@ -23,4 +23,11 @@ public class PlaceOrderRequest {
     private String deliveryAddress;
     private String kitchenNotes;
     private PaymentMethod paymentMethod; // CASH or CARD
+
+    @Data
+    public static class PlaceOrderItemRequest {
+        private Long menuItemId;
+        private Integer quantity;
+        private String kitchenNote;
+    }
 }
