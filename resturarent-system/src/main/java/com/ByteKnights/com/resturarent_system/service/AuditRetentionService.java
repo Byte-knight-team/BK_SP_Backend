@@ -10,17 +10,17 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 
 /*
- * Handles audit retention.
+ * Handles audit log retention.
  *
- * Rule:
- * Keep recent audit logs in the database.
- * Archive logs older than configured months.
- * Delete old database logs only after archive export succeeds.
+ * Main rule:
+ * Old audit logs must be archived first.
+ * Database rows are deleted only after archive storage succeeds.
  */
 @Service
 @RequiredArgsConstructor
@@ -30,37 +30,49 @@ public class AuditRetentionService {
 
     private final AuditLogRepository auditLogRepository;
     private final AuditArchiveService auditArchiveService;
+    private final AuditS3ArchiveService auditS3ArchiveService;
 
     /*
-     * Whether the retention job is enabled.
+     * Enables or disables audit retention.
      */
     @Value("${audit.retention.enabled:true}")
     private boolean retentionEnabled;
 
     /*
-     * Number of months to keep in the active database.
-     * Default: 3 months.
+     * Number of days to keep audit logs in the active database.
+     *
+     * Example:
+     * 45 = around 1.5 months
+     * 90 = around 3 months
      */
-    @Value("${audit.retention.active-months:3}")
-    private int activeMonths;
+    @Value("${audit.retention.active-days:90}")
+    private int activeDays;
 
     /*
-     * Maximum number of old logs to process in one scheduler run.
-     * This prevents the job from loading too much data at once.
+     * Number of old logs processed in one scheduler run.
      */
     @Value("${audit.retention.batch-size:500}")
     private int batchSize;
 
     /*
-     * Folder where archive JSON files will be saved.
+     * Temporary local folder used before uploading to S3.
      */
     @Value("${audit.retention.archive-folder:audit-archives}")
     private String archiveFolder;
 
     /*
-     * Runs automatically based on cron expression from application.properties.
+     * Storage mode.
      *
-     * Default cron:
+     * local = keep archive file locally
+     * s3    = upload archive file to AWS S3
+     */
+    @Value("${audit.retention.storage:local}")
+    private String archiveStorage;
+
+    /*
+     * Runs automatically using cron expression.
+     *
+     * Default:
      * Every Sunday at 2:00 AM.
      */
     @Scheduled(cron = "${audit.retention.cron:0 0 2 * * SUN}")
@@ -70,7 +82,6 @@ public class AuditRetentionService {
 
     /*
      * Main retention process.
-     * This method can also be called manually from tests.
      */
     public void runRetention() {
         if (!retentionEnabled) {
@@ -78,9 +89,10 @@ public class AuditRetentionService {
             return;
         }
 
-        try {
-            LocalDateTime cutoffDate = LocalDateTime.now().minusMonths(activeMonths);
+        Path localArchiveFile = null;
 
+        try {
+            LocalDateTime cutoffDate = LocalDateTime.now().minusDays(activeDays);
             int safeBatchSize = Math.max(1, batchSize);
 
             List<AuditLog> oldLogs = auditLogRepository.findByCreatedAtBeforeOrderByCreatedAtAsc(
@@ -94,13 +106,37 @@ public class AuditRetentionService {
             }
 
             /*
-             * Export first.
-             * If this fails, the code jumps to catch block and nothing is deleted.
+             * Step 1:
+             * Export old audit logs into a temporary local JSON file.
              */
-            Path archiveFile = auditArchiveService.exportAuditLogsToJson(oldLogs, archiveFolder);
+            localArchiveFile = auditArchiveService.exportAuditLogsToJson(oldLogs, archiveFolder);
 
             /*
-             * Delete only after archive file is successfully created.
+             * Step 2:
+             * Upload archive to S3 if S3 storage is enabled.
+             *
+             * If this fails, an exception is thrown.
+             * That means database delete will not happen.
+             */
+            String s3ObjectKey = null;
+
+            if (isS3Storage()) {
+                s3ObjectKey = auditS3ArchiveService.uploadAuditArchive(localArchiveFile);
+
+                log.info(
+                        "Audit archive uploaded to S3 successfully. s3ObjectKey={}",
+                        s3ObjectKey
+                );
+            } else {
+                log.info(
+                        "Audit archive stored locally. archiveFile={}",
+                        localArchiveFile
+                );
+            }
+
+            /*
+             * Step 3:
+             * Delete old database rows only after archive storage succeeds.
              */
             List<Long> idsToDelete = oldLogs.stream()
                     .map(AuditLog::getId)
@@ -109,19 +145,61 @@ public class AuditRetentionService {
             auditLogRepository.deleteAllByIdInBatch(idsToDelete);
 
             log.info(
-                    "Audit retention completed. archivedCount={}, deletedCount={}, archiveFile={}",
+                    "Audit retention completed. archivedCount={}, deletedCount={}, storage={}, archiveFile={}, s3ObjectKey={}",
                     oldLogs.size(),
                     idsToDelete.size(),
-                    archiveFile
+                    archiveStorage,
+                    localArchiveFile,
+                    s3ObjectKey
             );
+
+            /*
+             * Step 4:
+             * If S3 is used, local file is temporary.
+             * Delete it after successful S3 upload and DB delete.
+             */
+            if (isS3Storage()) {
+                deleteTemporaryLocalFile(localArchiveFile);
+            }
 
         } catch (Exception ex) {
             /*
              * Important:
-             * Do not throw the exception.
-             * The scheduler should not crash the application.
+             * Do not crash the backend if retention fails.
+             * Also, database delete only happens after archive storage succeeds.
              */
-            log.error("Audit retention failed. No audit logs were deleted unless archive export succeeded.", ex);
+            log.error(
+                    "Audit retention failed. Old audit logs were not deleted unless archive storage succeeded.",
+                    ex
+            );
+        }
+    }
+
+    private boolean isS3Storage() {
+        return archiveStorage != null && archiveStorage.trim().equalsIgnoreCase("s3");
+    }
+
+    /*
+     * Deletes temporary local archive file after successful S3 upload.
+     */
+    private void deleteTemporaryLocalFile(Path localArchiveFile) {
+        if (localArchiveFile == null) {
+            return;
+        }
+
+        try {
+            Files.deleteIfExists(localArchiveFile);
+            log.info("Temporary local audit archive file deleted. file={}", localArchiveFile);
+        } catch (Exception ex) {
+            /*
+             * Do not fail retention here.
+             * Archive already exists in S3 and database cleanup already completed.
+             */
+            log.warn(
+                    "Failed to delete temporary local audit archive file. file={}",
+                    localArchiveFile,
+                    ex
+            );
         }
     }
 }
