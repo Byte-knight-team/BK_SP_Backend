@@ -2,12 +2,18 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateAlertRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ActiveAlertDTO;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.KitchenAlert;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.repository.KitchenAlertRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.KitchenAlertService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +35,7 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final WebSocketNotificationService webSocketNotificationService;
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
@@ -53,7 +62,25 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
                 savedAlert.getType(),
                 "0m"
         );
+
         webSocketNotificationService.broadcastKitchenAlert(staff.getBranch().getId(), alertDTO);
+
+        /*
+         * Manual audit is used because this method returns void.
+         * The audit log stores which staff member created the alert and the alert details.
+         */
+        auditLogService.logCurrentUserAction(
+                AuditModule.KITCHEN,
+                AuditEventType.KITCHEN_ALERT_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.KITCHEN_ALERT,
+                savedAlert.getId(),
+                staff.getBranch().getId(),
+                "Kitchen alert created successfully",
+                null,
+                buildKitchenAlertAuditSnapshot(savedAlert)
+        );
     }
 
     @Override
@@ -64,7 +91,8 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
-        List<KitchenAlert> alerts = kitchenAlertRepository.findByBranchIdAndIsResolvedFalseOrderByCreatedAtDesc(staff.getBranch().getId());
+        List<KitchenAlert> alerts = kitchenAlertRepository
+                .findByBranchIdAndIsResolvedFalseOrderByCreatedAtDesc(staff.getBranch().getId());
 
         List<ActiveAlertDTO> activeAlertDTOs = new ArrayList<>();
 
@@ -78,8 +106,10 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
                     alert.getType(),
                     timeAgo
             );
+
             activeAlertDTOs.add(dto);
         }
+
         return activeAlertDTOs;
     }
 
@@ -99,10 +129,77 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
         Staff staff = staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
+        /*
+         * Branch safety check:
+         * Staff should resolve only alerts that belong to their own branch.
+         */
+        Long staffBranchId = staff.getBranch().getId();
+        Long alertBranchId = alert.getBranch() != null ? alert.getBranch().getId() : null;
+
+        if (alertBranchId == null || !alertBranchId.equals(staffBranchId)) {
+            throw new RuntimeException("You cannot resolve an alert from another branch");
+        }
+
+        /*
+         * Manual audit is required because we need old/new resolved status,
+         * resolvedBy, and resolvedAt values.
+         */
+        Map<String, Object> oldValues = buildKitchenAlertAuditSnapshot(alert);
+
         alert.setResolved(true);
         alert.setResolvedBy(staff);
         alert.setResolvedAt(LocalDateTime.now());
 
-        kitchenAlertRepository.save(alert);
+        KitchenAlert savedAlert = kitchenAlertRepository.save(alert);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.KITCHEN,
+                AuditEventType.KITCHEN_ALERT_RESOLVED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.KITCHEN_ALERT,
+                savedAlert.getId(),
+                staffBranchId,
+                "Kitchen alert resolved successfully",
+                oldValues,
+                buildKitchenAlertAuditSnapshot(savedAlert)
+        );
+    }
+
+    /*
+     * Builds a safe audit snapshot for kitchen alerts.
+     */
+    private Map<String, Object> buildKitchenAlertAuditSnapshot(KitchenAlert alert) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (alert == null) {
+            return snapshot;
+        }
+
+        Staff reportedBy = alert.getReportedBy();
+        Staff resolvedBy = alert.getResolvedBy();
+
+        snapshot.put("alertId", alert.getId());
+        snapshot.put("branchId", alert.getBranch() != null ? alert.getBranch().getId() : null);
+        snapshot.put("branchName", alert.getBranch() != null ? alert.getBranch().getName() : null);
+        snapshot.put("message", alert.getMessage());
+        snapshot.put("type", alert.getType());
+        snapshot.put("resolved", alert.isResolved());
+        snapshot.put("createdAt", alert.getCreatedAt());
+        snapshot.put("resolvedAt", alert.getResolvedAt());
+
+        snapshot.put("reportedByStaffId", reportedBy != null ? reportedBy.getId() : null);
+        snapshot.put("reportedByUserId",
+                reportedBy != null && reportedBy.getUser() != null ? reportedBy.getUser().getId() : null);
+        snapshot.put("reportedByName",
+                reportedBy != null && reportedBy.getUser() != null ? reportedBy.getUser().getFullName() : null);
+
+        snapshot.put("resolvedByStaffId", resolvedBy != null ? resolvedBy.getId() : null);
+        snapshot.put("resolvedByUserId",
+                resolvedBy != null && resolvedBy.getUser() != null ? resolvedBy.getUser().getId() : null);
+        snapshot.put("resolvedByName",
+                resolvedBy != null && resolvedBy.getUser() != null ? resolvedBy.getUser().getFullName() : null);
+
+        return snapshot;
     }
 }
