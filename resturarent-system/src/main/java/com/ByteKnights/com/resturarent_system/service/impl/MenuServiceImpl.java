@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.ApproveMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.DeleteMenuItemRequest;
@@ -88,6 +89,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional(readOnly = true)
     public long getSubCategoryCount() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
         if (adminBranchId != null) {
             return menuItemRepository.countDistinctSubCategoryByBranchId(adminBranchId);
         } else {
@@ -99,6 +101,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional(readOnly = true)
     public long getMenuItemCount() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
         if (adminBranchId != null) {
             return menuItemRepository.countByBranchId(adminBranchId);
         } else {
@@ -110,6 +113,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional(readOnly = true)
     public long getAvailableItemCount() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
         if (adminBranchId != null) {
             return menuItemRepository.countByBranchIdAndIsAvailableTrue(adminBranchId);
         } else {
@@ -118,12 +122,20 @@ public class MenuServiceImpl implements MenuService {
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.MENU,
+            eventType = AuditEventType.MENU_ITEM_CREATED,
+            targetType = AuditTargetType.MENU_ITEM,
+            description = "Menu item created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public MenuItemResponse createMenuItem(CreateMenuItemRequest request) {
         Long branchId = resolveCurrentUserBranchId();
         Branch branch = findBranchOrThrow(branchId);
         MenuCategory category = findCategoryOrThrow(request.getCategoryId());
         String validatedName = validateAndNormalizeRequiredName(request.getName());
+
         validatePriceRange(request.getPrice());
         validateRequiredPreparationTime(request.getPreparationTime());
 
@@ -166,22 +178,9 @@ public class MenuServiceImpl implements MenuService {
         MenuItem saved = menuItemRepository.save(menuItem);
 
         /*
-         * Manual audit is used because we want clean menu item JSON in newValuesJson.
-         * This also captures whether the item was created as PENDING or directly ACTIVE.
+         * AOP audit is used here because this is a simple create action.
+         * captureResultAsNewValue = false keeps JSON storage small.
          */
-        auditLogService.logCurrentUserAction(
-                AuditModule.MENU,
-                AuditEventType.MENU_ITEM_CREATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.MENU_ITEM,
-                saved.getId(),
-                getMenuItemBranchId(saved),
-                "Menu item created successfully",
-                null,
-                buildMenuItemAuditSnapshot(saved)
-        );
-
         return mapToResponse(saved);
     }
 
@@ -258,6 +257,7 @@ public class MenuServiceImpl implements MenuService {
         if (branchId == null) {
             branchId = resolveCurrentAdminBranchIdOrNull();
         }
+
         return menuItemRepository.findDistinctSubCategories(branchId, categoryId);
     }
 
@@ -419,6 +419,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String rejectionReason = request != null ? request.getRejectionReason() : null;
+
         if (rejectionReason == null || rejectionReason.isBlank()) {
             throw new InvalidOperationException("Rejection reason is required");
         }
@@ -572,6 +573,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedName = name.trim();
+
         if (normalizedName.length() < 3) {
             throw new InvalidOperationException("Name must be at least 3 characters");
         }
@@ -613,6 +615,7 @@ public class MenuServiceImpl implements MenuService {
         if (preparationTime == null) {
             throw new InvalidOperationException("Preparation time is required");
         }
+
         validatePreparationTime(preparationTime);
     }
 
@@ -622,11 +625,13 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedImageUrl = imageUrl.trim();
+
         if (normalizedImageUrl.isEmpty()) {
             return null;
         }
 
         URI parsedUri;
+
         try {
             parsedUri = URI.create(normalizedImageUrl);
         } catch (IllegalArgumentException ex) {
@@ -634,6 +639,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String scheme = parsedUri.getScheme();
+
         if (scheme == null
                 || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
                 || parsedUri.getHost() == null) {
@@ -649,6 +655,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedDescription = description.trim();
+
         if (normalizedDescription.isEmpty()) {
             return null;
         }
@@ -662,6 +669,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedSubCategory = subCategory.trim();
+
         if (normalizedSubCategory.isEmpty()) {
             throw new InvalidOperationException("Sub category must not be blank");
         }
@@ -671,9 +679,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         // Convert to title case: lowercase first, then capitalize first letter of each word
-        normalizedSubCategory = toTitleCase(normalizedSubCategory);
-
-        return normalizedSubCategory;
+        return toTitleCase(normalizedSubCategory);
     }
 
     private String toTitleCase(String input) {
