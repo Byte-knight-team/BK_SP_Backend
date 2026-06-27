@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
@@ -118,6 +119,13 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.KITCHEN,
+            eventType = AuditEventType.CHEF_REQUEST_CREATED,
+            targetType = AuditTargetType.CHEF_REQUEST,
+            description = "Chef inventory request created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public void createRequest(InventoryRequestDTO requestDTO, String userEmail) {
         User user = userRepository.findByEmail(userEmail)
@@ -137,24 +145,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 .status(ChefRequestStatus.PENDING)
                 .build();
 
-        ChefRequest savedRequest = chefRequestRepository.save(chefRequest);
-
-        /*
-         * Manual audit is used because this method returns void.
-         * This keeps the created chef request ID, branch ID, and request details in audit_logs.
-         */
-        auditLogService.logCurrentUserAction(
-                AuditModule.KITCHEN,
-                AuditEventType.CHEF_REQUEST_CREATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.CHEF_REQUEST,
-                savedRequest.getId(),
-                staff.getBranch().getId(),
-                "Chef inventory request created successfully",
-                null,
-                buildChefRequestAuditSnapshot(savedRequest)
-        );
+        chefRequestRepository.save(chefRequest);
     }
 
     @Override
@@ -174,7 +165,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 ));
 
         /*
-         * Manual audit is required because this is an update operation.
+         * Manual audit is required because this is an important stock update.
          * We capture the stock value before and after the quantity change.
          */
         Map<String, Object> oldValues = buildInventoryItemAuditSnapshot(item);
@@ -195,31 +186,6 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 oldValues,
                 buildInventoryItemAuditSnapshot(savedItem)
         );
-    }
-
-    /*
-     * Builds a safe audit snapshot for a chef inventory request.
-     * We store only useful fields instead of saving the full entity object.
-     */
-    private Map<String, Object> buildChefRequestAuditSnapshot(ChefRequest request) {
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-
-        if (request == null) {
-            return snapshot;
-        }
-
-        snapshot.put("chefRequestId", request.getId());
-        snapshot.put("branchId", request.getBranch() != null ? request.getBranch().getId() : null);
-        snapshot.put("branchName", request.getBranch() != null ? request.getBranch().getName() : null);
-        snapshot.put("chefName", request.getChefName());
-        snapshot.put("itemName", request.getItemName());
-        snapshot.put("requestedQuantity", request.getRequestedQuantity());
-        snapshot.put("unit", request.getUnit());
-        snapshot.put("chefNote", request.getChefNote());
-        snapshot.put("requestType", request.getRequestType());
-        snapshot.put("status", request.getStatus() != null ? request.getStatus().name() : null);
-
-        return snapshot;
     }
 
     /*

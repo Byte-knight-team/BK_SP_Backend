@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.CreateAlertRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ActiveAlertDTO;
 import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
@@ -38,6 +39,14 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
     private final AuditLogService auditLogService;
 
     @Override
+    @Auditable(
+            module = AuditModule.KITCHEN,
+            eventType = AuditEventType.KITCHEN_ALERT_CREATED,
+            targetType = AuditTargetType.KITCHEN_ALERT,
+            successSeverity = AuditSeverity.WARN,
+            description = "Kitchen alert created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public void createKitchenAlert(CreateAlertRequestDTO dto, String userEmail) {
         User user = userRepository.findByEmail(userEmail)
@@ -64,23 +73,6 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
         );
 
         webSocketNotificationService.broadcastKitchenAlert(staff.getBranch().getId(), alertDTO);
-
-        /*
-         * Manual audit is used because this method returns void.
-         * The audit log stores which staff member created the alert and the alert details.
-         */
-        auditLogService.logCurrentUserAction(
-                AuditModule.KITCHEN,
-                AuditEventType.KITCHEN_ALERT_CREATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.WARN,
-                AuditTargetType.KITCHEN_ALERT,
-                savedAlert.getId(),
-                staff.getBranch().getId(),
-                "Kitchen alert created successfully",
-                null,
-                buildKitchenAlertAuditSnapshot(savedAlert)
-        );
     }
 
     @Override
