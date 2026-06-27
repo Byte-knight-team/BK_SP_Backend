@@ -16,4 +16,5 @@ public class CustomerProfileResponse {
     private String address;
     private Integer loyaltyPoints;
     private String memberSince;
+    private String profilePictureUrl;
 }

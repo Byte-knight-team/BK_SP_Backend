@@ -13,8 +13,13 @@ import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.CustomerJwtService;
 import com.ByteKnights.com.resturarent_system.service.CustomerAuthService;
+import com.ByteKnights.com.resturarent_system.service.ProfileImageStorageService;
 import com.ByteKnights.com.resturarent_system.entity.QrSession;
+import com.ByteKnights.com.resturarent_system.entity.PasswordResetToken;
 import com.ByteKnights.com.resturarent_system.repository.QrSessionRepository;
+import com.ByteKnights.com.resturarent_system.repository.PasswordResetTokenRepository;
+import com.ByteKnights.com.resturarent_system.service.email.EmailService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -40,6 +45,13 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final QrSessionRepository qrSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final CustomerJwtService customerJwtService;
+    private final SmsService smsService;
+    private final ProfileImageStorageService profileImageStorageService;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EmailService emailService;
+
+    @Value("${app.frontend.customer-base-url:https://cravehouse.netlify.app}")
+    private String customerFrontendBaseUrl;
 
     public CustomerAuthServiceImpl(UserRepository userRepository,
             RoleRepository roleRepository,
@@ -47,14 +59,20 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             QrSessionRepository qrSessionRepository,
             PasswordEncoder passwordEncoder,
             CustomerJwtService customerJwtService,
-            SmsService smsService) {
+            SmsService smsService,
+            ProfileImageStorageService profileImageStorageService,
+            PasswordResetTokenRepository passwordResetTokenRepository,
+            EmailService emailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.customerRepository = customerRepository;
         this.qrSessionRepository = qrSessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.customerJwtService = customerJwtService;
-
+        this.smsService = smsService;
+        this.profileImageStorageService = profileImageStorageService;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
+        this.emailService = emailService;
     }
 
     // register function
@@ -161,9 +179,16 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String normalizedRole = normalizeRole(user.getRole().getName());
         String token = customerJwtService.generateToken(user.getId(), user.getEmail(), normalizedRole);
 
+        String profilePictureUrl = null;
+        if (user.getProfilePictureKey() != null) {
+            profilePictureUrl = profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey());
+        }
+
         // return response
         return CustomerLoginResponseData.builder()
                 .token(token)
+                .username(user.getUsername())
+                .profilePictureUrl(profilePictureUrl)
                 .build();
     }
 
@@ -207,8 +232,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customerRepository.save(customer);
 
         // 4. Send SMS
-        // smsService.sendOtpSms(phone, otpCode);
-        System.out.println(otpCode);
+        smsService.sendOtpSms(phone, otpCode);
+        // System.out.println(otpCode);
     }
 
     @Override
@@ -255,8 +280,15 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String tokenSubject = user.getEmail() != null ? user.getEmail() : user.getPhone();
         String token = customerJwtService.generateToken(user.getId(), tokenSubject, normalizedRole);
 
+        String profilePictureUrl = null;
+        if (user.getProfilePictureKey() != null) {
+            profilePictureUrl = profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey());
+        }
+
         return CustomerLoginResponseData.builder()
                 .token(token)
+                .username(user.getUsername())
+                .profilePictureUrl(profilePictureUrl)
                 .build();
     }
 
@@ -331,5 +363,68 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    @Override
+    @Transactional
+    public void forgotPassword(String email) {
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        if (!EMAIL_PATTERN.matcher(normalizedEmail).matches()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Invalid email format");
+        }
+
+        User user = userRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND,
+                        "No customer account found with this email"));
+
+        if (!isCustomerUser(user)) {
+            throw new CustomerAuthException(HttpStatus.FORBIDDEN, "Invalid account type for this operation");
+        }
+
+        // Generate token and save
+        passwordResetTokenRepository.deleteByUser(user); // Clear old token if exists
+
+        String tokenStr = java.util.UUID.randomUUID().toString();
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+                .token(tokenStr)
+                .user(user)
+                .expiryDate(LocalDateTime.now().plusMinutes(15))
+                .build();
+
+        passwordResetTokenRepository.save(resetToken);
+
+        // Construct reset link
+        String resetLink = customerFrontendBaseUrl + "/reset-password?token=" + tokenStr;
+
+        // Send email
+        emailService.sendCustomerPasswordResetEmail(normalizedEmail, resetLink);
+    }
+
+    @Override
+    @Transactional
+    public void resetPassword(String token, String newPassword) {
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Password cannot be empty");
+        }
+
+        if (!PASSWORD_PATTERN.matcher(newPassword).matches()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                    "Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one number, and one special character");
+        }
+
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.BAD_REQUEST, "Invalid password reset token"));
+
+        if (resetToken.isExpired()) {
+            passwordResetTokenRepository.delete(resetToken);
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Password reset token has expired");
+        }
+
+        User user = resetToken.getUser();
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        // Delete token after successful reset
+        passwordResetTokenRepository.delete(resetToken);
     }
 }

@@ -13,4 +13,8 @@ public interface CustomerAuthService {
     CustomerLoginResponseData verifyOtp(String phone, String code, Long sessionId);
 
     public void requestOtp(String phone);
+
+    void forgotPassword(String email);
+
+    void resetPassword(String token, String newPassword);
 }

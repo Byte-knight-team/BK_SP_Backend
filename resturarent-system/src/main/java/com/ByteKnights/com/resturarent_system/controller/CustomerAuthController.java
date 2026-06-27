@@ -5,6 +5,8 @@ import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerLogin
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerOtpRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerOtpVerifyRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerRegisterRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerForgotPasswordRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerResetPasswordRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerLoginResponseData;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerRegisterResponseData;
 import com.ByteKnights.com.resturarent_system.service.CustomerAuthService;
@@ -52,5 +54,17 @@ public class CustomerAuthController {
     public ResponseEntity<ApiResponse<CustomerLoginResponseData>> verifyOtp(@RequestBody CustomerOtpVerifyRequest request) {
         CustomerLoginResponseData responseData = customerAuthService.verifyOtp(request.getPhone(), request.getCode(), request.getSessionId());
         return ResponseEntity.ok(ApiResponse.success("Phone verified successfully.", responseData));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse<Object>> forgotPassword(@RequestBody CustomerForgotPasswordRequest request) {
+        customerAuthService.forgotPassword(request.getEmail());
+        return ResponseEntity.ok(ApiResponse.success("If an account exists, a password reset link has been sent to your email.", null));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse<Object>> resetPassword(@RequestBody CustomerResetPasswordRequest request) {
+        customerAuthService.resetPassword(request.getToken(), request.getNewPassword());
+        return ResponseEntity.ok(ApiResponse.success("Password has been reset successfully.", null));
     }
 }

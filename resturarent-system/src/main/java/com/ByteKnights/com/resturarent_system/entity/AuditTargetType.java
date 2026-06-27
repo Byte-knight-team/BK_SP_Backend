@@ -19,5 +19,6 @@ public enum AuditTargetType {
     INVENTORY_ITEM,
     CHEF_REQUEST,
     DELIVERY,
+    KITCHEN_ALERT,
     REPORT
 }

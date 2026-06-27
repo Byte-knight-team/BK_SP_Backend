@@ -33,13 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Standalone controller-layer tests for StaffController.
- *
- * These tests check staff API endpoint mappings, request JSON,
- * response JSON, and whether StaffController calls StaffService correctly.
- *
- * This does not load the full Spring Boot application context.
- * That avoids unrelated security filter/database dependencies during controller testing.
+ * Standalone controller layer tests for StaffController.
  */
 @ExtendWith(MockitoExtension.class)
 class StaffControllerTest {

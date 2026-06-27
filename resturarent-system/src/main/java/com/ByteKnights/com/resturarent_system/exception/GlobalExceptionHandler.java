@@ -20,7 +20,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus())
                 .body(ApiResponse.error(ex.getMessage()));
     }
-
     @ExceptionHandler(QrSessionException.class)
     public ResponseEntity<ApiResponse<Object>> handleQrSessionException(QrSessionException ex) {
         log.warn("QR session error: {}", ex.getMessage(), ex);
@@ -28,6 +27,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    //Used when resource not found, user, menu, branch not found
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(ResourceNotFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage(), ex);
@@ -35,6 +35,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    //Used when resource already exists, duplicate resources
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<ApiResponse<Object>> handleDuplicateResourceException(DuplicateResourceException ex) {
         log.warn("Duplicate resource: {}", ex.getMessage(), ex);
@@ -42,6 +43,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    //Used when invalid operation is performed, violates business logic
     @ExceptionHandler(InvalidOperationException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidOperationException(InvalidOperationException ex) {
         log.warn("Invalid operation: {}", ex.getMessage(), ex);
@@ -49,12 +51,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    //Used when user tries to access something they don't have permission to access
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("Access Denied"));
     }
 
+    //Used when runtime exception occurs
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Object>> handleRuntimeException(RuntimeException ex) {
         log.error("Unhandled runtime exception: {}", ex.getMessage(), ex);
