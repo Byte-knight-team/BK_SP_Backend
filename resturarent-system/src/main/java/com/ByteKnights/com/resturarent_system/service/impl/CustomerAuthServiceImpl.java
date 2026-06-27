@@ -298,7 +298,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 qrSessionRepository.save(qrSession);
             }
         }
-
+     
         // 3. Issue JWT Token so they can place the order!
         String normalizedRole = normalizeRole(user.getRole().getName());
         // Use email if available, otherwise use phone for JWT subject
