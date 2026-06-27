@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.repository;
 
 import com.ByteKnights.com.resturarent_system.entity.OrderItem;
+import com.ByteKnights.com.resturarent_system.entity.OrderItemStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -47,6 +48,9 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     @Query("SELECT COUNT(oi) FROM OrderItem oi WHERE oi.assignedLineChef.id = :lineChefId " +
             "AND oi.status IN ('PENDING', 'PREPARING')")
     long countActiveItemsByLineChef(@Param("lineChefId") Long lineChefId);
+
+    // find all items assigned to a specific line chef with given statuses
+    List<OrderItem> findByAssignedLineChefIdAndStatusIn(Long lineChefId, List<OrderItemStatus> statuses);
 
 
 
