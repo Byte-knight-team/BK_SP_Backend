@@ -1,6 +1,5 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.MealCompletionResponseDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderCardDetailsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderDetailsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderItemDetailsDTO;
@@ -13,7 +12,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -124,72 +122,6 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                 item.getOrder().getOrderNumber(),
                 item.getItemName()
         );
-    }
-
-    @Override
-    @Transactional
-    public void startMeal(Long itemId) {
-        OrderItem item = orderItemRepository.findById(itemId)
-                .orElseThrow(() -> new RuntimeException("Meal item not found"));
-
-        if (item.getAssignedLineChef() == null) {
-            throw new RuntimeException("Cannot start meal: No line chef assigned yet!");
-        }
-
-        // --- PROCEED WITH MEAL START ---
-        item.setStatus(OrderItemStatus.PREPARING);
-        item.setCookingStartedAt(LocalDateTime.now());
-        orderItemRepository.save(item);
-
-        Order order = item.getOrder();
-        if (order.getStatus() == OrderStatus.PENDING) {
-            order.updateStatus(OrderStatus.PREPARING);
-            orderRepository.save(order);
-        }
-
-        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
-                        item.getAssignedLineChef().getId(), LocalDate.now())
-                .orElseThrow(() -> new RuntimeException("Chef attendance record not found for today"));
-
-        if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
-            throw new RuntimeException("Cannot start: Line chef " +
-                    item.getAssignedLineChef().getUser().getFullName() + " has already checked out!");
-        }
-        if (attendance.getWorkStatus() == ChefWorkStatus.ON_BREAK) {
-            throw new RuntimeException("Cannot start: Line chef is currently on a break.");
-        }
-
-        attendance.setWorkStatus(ChefWorkStatus.COOKING);
-        chefAttendanceRepository.save(attendance);
-    }
-
-    @Override
-    @Transactional
-    public MealCompletionResponseDTO completeMeal(Long itemId) {
-        OrderItem item = orderItemRepository.findById(itemId)
-                .orElseThrow(() -> new RuntimeException("Meal item not found"));
-
-        item.setStatus(OrderItemStatus.READY);
-        item.setCookingCompletedAt(LocalDateTime.now());
-        orderItemRepository.save(item);
-
-        ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
-                        item.getAssignedLineChef().getId(), LocalDate.now())
-                .orElseThrow(() -> new RuntimeException("Chef attendance not found"));
-
-        attendance.setWorkStatus(ChefWorkStatus.AVAILABLE);
-        chefAttendanceRepository.save(attendance);
-
-        Order order = item.getOrder();
-        boolean allFinished = order.getItems().stream()
-                .allMatch(i -> i.getStatus() == OrderItemStatus.READY);
-
-        if (allFinished) {
-            order.updateStatus(OrderStatus.COMPLETED);
-            orderRepository.save(order);
-        }
-
-        return new MealCompletionResponseDTO(order.getStatus().toString());
     }
 
     @Override
