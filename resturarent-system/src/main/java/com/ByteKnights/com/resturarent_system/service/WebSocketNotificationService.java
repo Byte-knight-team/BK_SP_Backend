@@ -7,7 +7,8 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Service responsible for broadcasting real-time notifications to connected clients
+ * Service responsible for broadcasting real-time notifications to connected
+ * clients
  * via WebSocket (STOMP protocol).
  *
  * Usage: Inject this service anywhere you need to push data to the frontend.
@@ -25,8 +26,8 @@ public class WebSocketNotificationService {
      * Topic: /topic/branch/{branchId}/alerts
      * Subscribers: Receptionist dashboard
      *
-     * @param branchId   The branch ID to scope the broadcast (no cross-branch leaks)
-     * @param alertDTO   The alert data to push
+     * @param branchId The branch ID to scope the broadcast (no cross-branch leaks)
+     * @param alertDTO The alert data to push
      */
     public void broadcastKitchenAlert(Long branchId, ActiveAlertDTO alertDTO) {
         String destination = "/topic/branch/" + branchId + "/alerts";
@@ -46,12 +47,12 @@ public class WebSocketNotificationService {
     public void broadcastOrderStatusUpdate(Long orderId, String newStatus) {
         String destination = "/topic/order/" + orderId + "/status";
         log.info("Broadcasting order status update to {}: {}", destination, newStatus);
-        
+
         // Wrap the status in a simple JSON structure
         java.util.Map<String, String> payload = new java.util.HashMap<>();
         payload.put("orderId", String.valueOf(orderId));
         payload.put("orderStatus", newStatus);
-        
+
         messagingTemplate.convertAndSend(destination, payload);
     }
 }

@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,10 +25,12 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     @Query("SELECT s FROM Staff s LEFT JOIN FETCH s.branch WHERE s.user.id = :userId")
     Optional<Staff> findByUserIdWithBranch(@Param("userId") Long userId);
 
-    long countByBranchIdAndUserRoleNameAndEmploymentStatus(Long branchId, String roleName, com.ByteKnights.com.resturarent_system.entity.EmploymentStatus status);
-    
-    long countByBranchIdAndUserRoleNameInAndEmploymentStatus(Long branchId, java.util.Collection<String> roleNames, com.ByteKnights.com.resturarent_system.entity.EmploymentStatus status);
-    
+    long countByBranchIdAndUserRoleNameAndEmploymentStatus(Long branchId, String roleName,
+            com.ByteKnights.com.resturarent_system.entity.EmploymentStatus status);
+
+    long countByBranchIdAndUserRoleNameInAndEmploymentStatus(Long branchId, java.util.Collection<String> roleNames,
+            com.ByteKnights.com.resturarent_system.entity.EmploymentStatus status);
+
     long countByBranchIdAndUserRoleName(Long branchId, String roleName);
 
     java.util.List<Staff> findByBranchIdAndUserRoleName(Long branchId, String roleName);
@@ -53,7 +54,6 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
 
     @Query("SELECT COUNT(s) FROM Staff s WHERE s.branch.id = :branchId AND s.user.role.name = 'LINE_CHEF' AND s.employmentStatus = 'ACTIVE'")
     long countActiveLineChefsByBranch(@Param("branchId") Long branchId);
-
 
     // --- Kitchen Queries END ---
 }

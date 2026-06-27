@@ -17,8 +17,6 @@ import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
-import com.ByteKnights.com.resturarent_system.repository.UserRepository;
-import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import org.springframework.stereotype.Service;
@@ -46,21 +44,15 @@ public class MenuServiceImpl implements MenuService {
     private final BranchRepository branchRepository;
     private final MenuCategoryRepository menuCategoryRepository;
     private final StaffRepository staffRepository;
-    private final UserRepository userRepository;
-    private final ReviewRepository reviewRepository;
 
     public MenuServiceImpl(MenuItemRepository menuItemRepository,
-                           BranchRepository branchRepository,
-                           MenuCategoryRepository menuCategoryRepository,
-                           StaffRepository staffRepository,
-                           UserRepository userRepository,
-                           ReviewRepository reviewRepository) {
+            BranchRepository branchRepository,
+            MenuCategoryRepository menuCategoryRepository,
+            StaffRepository staffRepository) {
         this.menuItemRepository = menuItemRepository;
         this.branchRepository = branchRepository;
         this.menuCategoryRepository = menuCategoryRepository;
         this.staffRepository = staffRepository;
-        this.userRepository = userRepository;
-        this.reviewRepository = reviewRepository;
     }
 
     @Override
@@ -119,7 +111,7 @@ public class MenuServiceImpl implements MenuService {
         validateRequiredPreparationTime(request.getPreparationTime());
 
         if (menuItemRepository.existsByBranchIdAndCategoryIdAndNameIgnoreCase(
-            branch.getId(), category.getId(), validatedName)) {
+                branch.getId(), category.getId(), validatedName)) {
             throw new InvalidOperationException("Menu item name already exists in this branch and category");
         }
 
@@ -129,7 +121,7 @@ public class MenuServiceImpl implements MenuService {
         MenuItem menuItem = MenuItem.builder()
                 .branch(branch)
                 .category(category)
-            .subCategory(validateAndNormalizeOptionalSubCategory(request.getSubCategory()))
+                .subCategory(validateAndNormalizeOptionalSubCategory(request.getSubCategory()))
                 .name(validatedName)
                 .description(validateAndNormalizeOptionalDescription(request.getDescription()))
                 .price(request.getPrice())
@@ -192,10 +184,11 @@ public class MenuServiceImpl implements MenuService {
         return mapToResponse(menuItem);
     }
 
-    //for customer menu - (dileepa)
+    // for customer menu - (dileepa)
     @Override
     @Transactional(readOnly = true)
-    public List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(Long branchId) {
+    public List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(
+            Long branchId) {
         // ENFORCE BUSINESS RULE: Default to Branch 1 for Online customers
         // only branch 1 is doing online services
         Long targetBranchId = (branchId != null) ? branchId : 1;
@@ -210,19 +203,19 @@ public class MenuServiceImpl implements MenuService {
             Long count = (Long) row[2];
 
             return com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse.builder()
-                .id(item.getId())
-                .name(item.getName())
-                .description(item.getDescription())
-                .price(item.getPrice())
-                .imageUrl(item.getImageUrl())
-                // Prevent NullPointerExceptions if a category was deleted
-                .categoryName(item.getCategory() != null ? item.getCategory().getName() : "Uncategorized")
-                .subCategory(item.getSubCategory())
-                .isAvailable(item.getIsAvailable())
-                .preparationTime(item.getPreparationTime())
-                .averageRating(avg > 0 ? avg : null) // Keep it null if there are no ratings
-                .ratingCount(count)
-                .build();
+                    .id(item.getId())
+                    .name(item.getName())
+                    .description(item.getDescription())
+                    .price(item.getPrice())
+                    .imageUrl(item.getImageUrl())
+                    // Prevent NullPointerExceptions if a category was deleted
+                    .categoryName(item.getCategory() != null ? item.getCategory().getName() : "Uncategorized")
+                    .subCategory(item.getSubCategory())
+                    .isAvailable(item.getIsAvailable())
+                    .preparationTime(item.getPreparationTime())
+                    .averageRating(avg > 0 ? avg : null) // Keep it null if there are no ratings
+                    .ratingCount(count)
+                    .build();
         }).collect(Collectors.toList());
     }
 
@@ -329,11 +322,10 @@ public class MenuServiceImpl implements MenuService {
         menuItemRepository.save(menuItem);
 
         return buildActionResponse(
-            "ACTIVE",
-            menuItem,
-            "Item approved and activated. Notification sent to chef.",
-            buildMenuDecisionNotificationPayload("APPROVED", menuItem, null)
-        );
+                "ACTIVE",
+                menuItem,
+                "Item approved and activated. Notification sent to chef.",
+                buildMenuDecisionNotificationPayload("APPROVED", menuItem, null));
     }
 
     @Override
@@ -360,11 +352,10 @@ public class MenuServiceImpl implements MenuService {
         menuItemRepository.save(menuItem);
 
         return buildActionResponse(
-            "REJECTED",
-            menuItem,
-            "Item rejected: " + rejectionReason.trim() + ". Notification sent to chef.",
-            buildMenuDecisionNotificationPayload("REJECTED", menuItem, rejectionReason.trim())
-        );
+                "REJECTED",
+                menuItem,
+                "Item rejected: " + rejectionReason.trim() + ". Notification sent to chef.",
+                buildMenuDecisionNotificationPayload("REJECTED", menuItem, rejectionReason.trim()));
     }
 
     @Override
@@ -380,9 +371,9 @@ public class MenuServiceImpl implements MenuService {
         menuItem.setIsAvailable(isAvailable);
         menuItemRepository.save(menuItem);
         return buildActionResponse(
-            isAvailable ? "AVAILABLE" : "UNAVAILABLE",
-            menuItem,
-            "Availability updated");
+                isAvailable ? "AVAILABLE" : "UNAVAILABLE",
+                menuItem,
+                "Availability updated");
     }
 
     @Override
@@ -532,7 +523,8 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Sub category must be less than 50 characters");
         }
 
-        // Convert to title case: lowercase first, then capitalize first letter of each word
+        // Convert to title case: lowercase first, then capitalize first letter of each
+        // word
         normalizedSubCategory = toTitleCase(normalizedSubCategory);
 
         return normalizedSubCategory;
@@ -567,8 +559,7 @@ public class MenuServiceImpl implements MenuService {
             String type,
             MenuItem menuItem,
             String message,
-            Map<String, Object> notificationPayload
-    ) {
+            Map<String, Object> notificationPayload) {
         return MenuItemActionResponse.builder()
                 .type(type)
                 .menuItemId(menuItem.getId())
@@ -674,8 +665,7 @@ public class MenuServiceImpl implements MenuService {
     private Map<String, Object> buildMenuDecisionNotificationPayload(
             String decision,
             MenuItem menuItem,
-            String rejectionReason
-    ) {
+            String rejectionReason) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("decision", decision);
         payload.put("menuItemId", menuItem.getId());
