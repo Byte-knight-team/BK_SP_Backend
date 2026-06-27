@@ -53,4 +53,25 @@ public class WebSocketNotificationService {
         messagingTemplate.convertAndSend(destination, payload);
     }
 
+    /**
+     * Notify a specific line chef that a new item has been assigned to them.
+     *
+     * Topic: /topic/line-chef/{lineChefUserId}/new-item
+     * Subscribers: Line chef dashboard
+     *
+     * @param lineChefUserId  The user ID of the line chef (for per-user topic scoping)
+     * @param orderNumber     The order the item belongs to
+     * @param itemName        The name of the assigned item
+     */
+    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName) {
+        String destination = "/topic/line-chef/" + lineChefUserId + "/new-item";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "orderNumber", orderNumber,
+                "itemName", itemName,
+                "message", "New item assigned: " + itemName + " (Order " + orderNumber + ")"
+        );
+        log.info("Broadcasting item assignment to line chef {}: {}", lineChefUserId, itemName);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
 }
