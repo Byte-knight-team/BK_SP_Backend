@@ -32,6 +32,4 @@ public class EffectiveBranchConfigResponse {
     private boolean pickupEnabled;
     private boolean dineInEnabled;
     private boolean branchActiveForOrders;
-
-    private List<OperatingHourItemResponse> operatingHours;
 }

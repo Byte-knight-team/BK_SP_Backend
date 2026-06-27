@@ -1,8 +1,14 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.ChefRequest;
 import com.ByteKnights.com.resturarent_system.entity.ChefRequestStatus;
 import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
@@ -12,13 +18,16 @@ import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.InventoryItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.KitchenInventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +37,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
     private final ChefRequestRepository chefRequestRepository;
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
+    private final AuditLogService auditLogService;
 
     @Override
     public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
@@ -63,6 +73,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 ));
             }
         }
+
         return alerts;
     }
 
@@ -90,6 +101,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
             } else {
                 warningLevel = "OK";
             }
+
             double percentage = (max > 0) ? (current / max) * 100 : 0;
 
             dtoList.add(new InventoryDetailsDTO(
@@ -102,10 +114,19 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                     warningLevel
             ));
         }
+
         return dtoList;
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.KITCHEN,
+            eventType = AuditEventType.CHEF_REQUEST_CREATED,
+            targetType = AuditTargetType.CHEF_REQUEST,
+            description = "Chef inventory request created successfully",
+            captureResultAsNewValue = false
+    )
+    @Transactional
     public void createRequest(InventoryRequestDTO requestDTO, String userEmail) {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -139,9 +160,53 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
         Long branchId = staff.getBranch().getId();
 
         InventoryItem item = inventoryItemRepository.findByNameAndBranchId(updateDTO.getItemName(), branchId)
-                .orElseThrow(() -> new RuntimeException("Inventory item not found in your branch: " + updateDTO.getItemName()));
+                .orElseThrow(() -> new RuntimeException(
+                        "Inventory item not found in your branch: " + updateDTO.getItemName()
+                ));
+
+        /*
+         * Manual audit is required because this is an important stock update.
+         * We capture the stock value before and after the quantity change.
+         */
+        Map<String, Object> oldValues = buildInventoryItemAuditSnapshot(item);
 
         item.setQuantity(updateDTO.getNewQuantity());
-        inventoryItemRepository.save(item);
+
+        InventoryItem savedItem = inventoryItemRepository.save(item);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.INVENTORY,
+                AuditEventType.INVENTORY_ITEM_CORRECTED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.INVENTORY_ITEM,
+                savedItem.getId(),
+                branchId,
+                "Inventory stock updated from kitchen successfully",
+                oldValues,
+                buildInventoryItemAuditSnapshot(savedItem)
+        );
+    }
+
+    /*
+     * Builds a safe audit snapshot for inventory item stock changes.
+     */
+    private Map<String, Object> buildInventoryItemAuditSnapshot(InventoryItem item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (item == null) {
+            return snapshot;
+        }
+
+        snapshot.put("inventoryItemId", item.getId());
+        snapshot.put("name", item.getName());
+        snapshot.put("quantity", item.getQuantity());
+        snapshot.put("unit", item.getUnit());
+        snapshot.put("reorderLevel", item.getReorderLevel());
+        snapshot.put("maxStock", item.getMaxStock());
+        snapshot.put("branchId", item.getBranch() != null ? item.getBranch().getId() : null);
+        snapshot.put("branchName", item.getBranch() != null ? item.getBranch().getName() : null);
+
+        return snapshot;
     }
 }
