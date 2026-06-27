@@ -38,10 +38,15 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     Long getTotalItemsSoldInLast7DaysByBranch(@Param("branchId") Long branchId);
 
 
-    // number of meals completed a chef today
-    @Query("SELECT COUNT(oi) FROM OrderItem oi WHERE oi.assignedChef.id = :chefId " +
+    // number of meals completed by a line chef today
+    @Query("SELECT COUNT(oi) FROM OrderItem oi WHERE oi.assignedLineChef.id = :chefId " +
             "AND oi.status = 'READY' AND oi.cookingCompletedAt >= :startOfToday")
     long countMealsPreparedToday(@Param("chefId") Long chefId, @Param("startOfToday") LocalDateTime startOfToday);
+
+    // number of active (in-progress) items currently assigned to a line chef
+    @Query("SELECT COUNT(oi) FROM OrderItem oi WHERE oi.assignedLineChef.id = :lineChefId " +
+            "AND oi.status IN ('PENDING', 'PREPARING')")
+    long countActiveItemsByLineChef(@Param("lineChefId") Long lineChefId);
 
 
 

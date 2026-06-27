@@ -86,7 +86,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                     item.getItemName(),
                     item.getQuantity(),
                     item.getStatus().toString(),
-                    item.getAssignedChef() != null ? item.getAssignedChef().getUser().getFullName() : "Not Assigned"
+                    item.getAssignedLineChef() != null ? item.getAssignedLineChef().getUser().getFullName() : "Not Assigned"
             ));
         }
 
@@ -113,7 +113,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
             throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
         }
 
-        item.setAssignedChef(chef);
+        item.setAssignedLineChef(chef);
         orderItemRepository.save(item);
     }
 
@@ -123,8 +123,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         OrderItem item = orderItemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Meal item not found"));
 
-        if (item.getAssignedChef() == null) {
-            throw new RuntimeException("Cannot start meal: No chef assigned yet!");
+        if (item.getAssignedLineChef() == null) {
+            throw new RuntimeException("Cannot start meal: No line chef assigned yet!");
         }
 
         // --- PROCEED WITH MEAL START ---
@@ -139,15 +139,15 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         }
 
         ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
-                        item.getAssignedChef().getId(), LocalDate.now())
+                        item.getAssignedLineChef().getId(), LocalDate.now())
                 .orElseThrow(() -> new RuntimeException("Chef attendance record not found for today"));
 
         if (attendance.getAttendanceStatus() == ChefAttendanceStatus.OFF_DUTY) {
-            throw new RuntimeException("Cannot start: Chef " +
-                    item.getAssignedChef().getUser().getFullName() + " has already checked out!");
+            throw new RuntimeException("Cannot start: Line chef " +
+                    item.getAssignedLineChef().getUser().getFullName() + " has already checked out!");
         }
         if (attendance.getWorkStatus() == ChefWorkStatus.ON_BREAK) {
-            throw new RuntimeException("Cannot start: Chef is currently on a break.");
+            throw new RuntimeException("Cannot start: Line chef is currently on a break.");
         }
 
         attendance.setWorkStatus(ChefWorkStatus.COOKING);
@@ -165,7 +165,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         orderItemRepository.save(item);
 
         ChefAttendance attendance = chefAttendanceRepository.findByStaffIdAndAttendanceDate(
-                        item.getAssignedChef().getId(), LocalDate.now())
+                        item.getAssignedLineChef().getId(), LocalDate.now())
                 .orElseThrow(() -> new RuntimeException("Chef attendance not found"));
 
         attendance.setWorkStatus(ChefWorkStatus.AVAILABLE);
