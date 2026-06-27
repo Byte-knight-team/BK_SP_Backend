@@ -12,5 +12,11 @@ public enum InventoryTransactionType {
     WASTAGE,
 
     /** Stock adjusted to fix data entry errors from previous updates. */
-    CORRECTION
+    CORRECTION,
+
+    /** Automated stock reduction when a customer order is successfully placed. */
+    ORDER_DEDUCT,
+
+    /** Automated stock restocking when an order is cancelled or rejected. */
+    ORDER_REFUND
 }

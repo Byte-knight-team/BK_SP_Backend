@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.dao.DataAccessException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -20,6 +21,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ex.getStatus())
                 .body(ApiResponse.error(ex.getMessage()));
     }
+
     @ExceptionHandler(QrSessionException.class)
     public ResponseEntity<ApiResponse<Object>> handleQrSessionException(QrSessionException ex) {
         log.warn("QR session error: {}", ex.getMessage(), ex);
@@ -27,7 +29,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    //Used when resource not found, user, menu, branch not found
+    // Used when resource not found, user, menu, branch not found
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Object>> handleResourceNotFoundException(ResourceNotFoundException ex) {
         log.warn("Resource not found: {}", ex.getMessage(), ex);
@@ -35,7 +37,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    //Used when resource already exists, duplicate resources
+    // Used when resource already exists, duplicate resources
     @ExceptionHandler(DuplicateResourceException.class)
     public ResponseEntity<ApiResponse<Object>> handleDuplicateResourceException(DuplicateResourceException ex) {
         log.warn("Duplicate resource: {}", ex.getMessage(), ex);
@@ -43,7 +45,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    //Used when invalid operation is performed, violates business logic
+    // Used when invalid operation is performed, violates business logic
     @ExceptionHandler(InvalidOperationException.class)
     public ResponseEntity<ApiResponse<Object>> handleInvalidOperationException(InvalidOperationException ex) {
         log.warn("Invalid operation: {}", ex.getMessage(), ex);
@@ -51,14 +53,28 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-    //Used when user tries to access something they don't have permission to access
+    // Used when user tries to access something they don't have permission to access
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Object>> handleAccessDeniedException(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error("Access Denied"));
     }
 
-    //Used when runtime exception occurs
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDataAccessException(DataAccessException ex) {
+        log.error("Database error occurred: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("An unexpected error occurred. Please try again later."));
+    }
+
+    @ExceptionHandler(NullPointerException.class)
+    public ResponseEntity<ApiResponse<Object>> handleNullPointerException(NullPointerException ex) {
+        log.error("Null pointer exception occurred", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("An unexpected error occurred. Please try again later."));
+    }
+
+    // Used when runtime exception occurs
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Object>> handleRuntimeException(RuntimeException ex) {
         log.error("Unhandled runtime exception: {}", ex.getMessage(), ex);
