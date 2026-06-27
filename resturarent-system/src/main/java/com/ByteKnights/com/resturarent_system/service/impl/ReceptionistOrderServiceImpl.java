@@ -87,6 +87,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                     order.getStatus().name(),
                     order.getPaymentStatus().name(),
                     order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
+                    order.getStatusUpdatedAt() != null ? order.getStatusUpdatedAt().format(FORMATTER) : "",
                     customerName,
                     customerPhone,
                     tableNumber,
@@ -145,49 +146,6 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 order.getHoldReason(),
                 order.getCancelReason()
         );
-    }
-
-    // ── STOCK CHECK (read-only) ──────────────────────────────────────────
-    @Override
-    public StockCheckResultDTO checkStock(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
-
-        List<StockCheckResultDTO.StockItemResult> results = new ArrayList<>();
-        boolean allSufficient = true;
-
-        for (OrderItem orderItem : order.getItems()) {
-            if (orderItem.getMenuItem() == null) continue;
-
-            List<MenuItemIngredient> ingredients =
-                    menuItemIngredientRepository.findByMenuItemId(orderItem.getMenuItem().getId());
-
-            if (ingredients.isEmpty()) continue;
-
-            List<String> shortages = new ArrayList<>();
-            for (MenuItemIngredient ing : ingredients) {
-                InventoryItem stock = ing.getInventoryItem();
-                BigDecimal needed = ing.getQuantityRequired()
-                        .multiply(BigDecimal.valueOf(orderItem.getQuantity()));
-                BigDecimal available = stock.getQuantity() != null ? stock.getQuantity() : BigDecimal.ZERO;
-
-                if (available.compareTo(needed) < 0) {
-                    shortages.add(String.format("%s: need %.3f %s, have %.3f %s",
-                            stock.getName(), needed, stock.getUnit(), available, stock.getUnit()));
-                }
-            }
-
-            boolean sufficient = shortages.isEmpty();
-            if (!sufficient) allSufficient = false;
-
-            results.add(new StockCheckResultDTO.StockItemResult(
-                    orderItem.getItemName(),
-                    sufficient,
-                    sufficient ? null : String.join(", ", shortages)
-            ));
-        }
-
-        return new StockCheckResultDTO(allSufficient, results);
     }
 
     // ── SEND TO KITCHEN: PLACED → PENDING ───────────────────────────────
