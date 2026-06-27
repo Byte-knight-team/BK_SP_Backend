@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuCategoryRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateMenuCategoryRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuCategoryResponse;
@@ -61,6 +62,13 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.MENU,
+            eventType = AuditEventType.MENU_CATEGORY_CREATED,
+            targetType = AuditTargetType.MENU_CATEGORY,
+            description = "Menu category created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public MenuCategoryResponse createCategory(CreateMenuCategoryRequest request) {
         String normalizedName = validateAndNormalizeRequiredName(request != null ? request.getName() : null);
@@ -80,34 +88,23 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         MenuCategory saved = menuCategoryRepository.save(category);
 
         /*
-         * Manual audit is used instead of @Auditable so the audit details modal
-         * can show clean category JSON in newValuesJson.
+         * AOP audit is used here because category create is a simple action.
+         * captureResultAsNewValue = false keeps audit JSON storage small.
          */
-        auditLogService.logCurrentUserAction(
-                AuditModule.MENU,
-                AuditEventType.MENU_CATEGORY_CREATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.MENU_CATEGORY,
-                saved.getId(),
-                null,
-                "Menu category created successfully",
-                null,
-                buildMenuCategoryAuditSnapshot(saved)
-        );
-
         return mapToResponse(saved, "Category created successfully");
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.MENU,
+            eventType = AuditEventType.MENU_CATEGORY_UPDATED,
+            targetType = AuditTargetType.MENU_CATEGORY,
+            description = "Menu category updated successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public MenuCategoryResponse updateCategory(Long id, UpdateMenuCategoryRequest request) {
         MenuCategory category = findCategoryOrThrow(id);
-
-        /*
-         * Capture the old category data before changing anything.
-         */
-        Map<String, Object> oldValues = buildMenuCategoryAuditSnapshot(category);
 
         if (request != null && request.getName() != null) {
             String normalizedName = validateAndNormalizeRequiredName(request.getName());
@@ -126,23 +123,9 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         MenuCategory updated = menuCategoryRepository.save(category);
 
         /*
-         * Manual audit is required because this is an update operation.
-         * oldValuesJson shows the previous category values.
-         * newValuesJson shows the updated category values.
+         * AOP audit is used here because category update is a simple action.
+         * No old/new JSON is stored to reduce audit storage.
          */
-        auditLogService.logCurrentUserAction(
-                AuditModule.MENU,
-                AuditEventType.MENU_CATEGORY_UPDATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.MENU_CATEGORY,
-                updated.getId(),
-                null,
-                "Menu category updated successfully",
-                oldValues,
-                buildMenuCategoryAuditSnapshot(updated)
-        );
-
         return mapToResponse(updated, "Category updated successfully");
     }
 
@@ -160,7 +143,8 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         }
 
         /*
-         * Capture old values before deleting because the entity will be removed.
+         * Delete stays manual because after deleting the entity,
+         * oldValuesJson is useful to show what category was removed.
          */
         Map<String, Object> oldValues = buildMenuCategoryAuditSnapshot(category);
 
@@ -168,10 +152,6 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
         menuCategoryRepository.delete(category);
 
-        /*
-         * For delete actions, oldValuesJson stores the deleted category.
-         * newValuesJson is null because the category no longer exists.
-         */
         auditLogService.logCurrentUserAction(
                 AuditModule.MENU,
                 AuditEventType.MENU_CATEGORY_DELETED,
@@ -237,8 +217,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     }
 
     /*
-     * Builds a safe audit snapshot for menu category create/update/delete.
-     * We store only useful fields instead of storing the full entity directly.
+     * Builds safe audit JSON for menu category delete.
      */
     private Map<String, Object> buildMenuCategoryAuditSnapshot(MenuCategory category) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
