@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.ApproveMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.DeleteMenuItemRequest;
@@ -7,6 +8,11 @@ import com.ByteKnights.com.resturarent_system.dto.request.admin.RejectMenuItemRe
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuItemActionResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuItemResponse;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
 import com.ByteKnights.com.resturarent_system.entity.MenuItem;
@@ -17,8 +23,11 @@ import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
-import com.ByteKnights.com.resturarent_system.service.MenuService;
+import com.ByteKnights.com.resturarent_system.repository.UserRepository;
+import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
+import com.ByteKnights.com.resturarent_system.service.MenuService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.Authentication;
@@ -44,15 +53,24 @@ public class MenuServiceImpl implements MenuService {
     private final BranchRepository branchRepository;
     private final MenuCategoryRepository menuCategoryRepository;
     private final StaffRepository staffRepository;
+    private final UserRepository userRepository;
+    private final ReviewRepository reviewRepository;
+    private final AuditLogService auditLogService;
 
     public MenuServiceImpl(MenuItemRepository menuItemRepository,
             BranchRepository branchRepository,
             MenuCategoryRepository menuCategoryRepository,
-            StaffRepository staffRepository) {
+            StaffRepository staffRepository,
+            UserRepository userRepository,
+            ReviewRepository reviewRepository,
+            AuditLogService auditLogService) {
         this.menuItemRepository = menuItemRepository;
         this.branchRepository = branchRepository;
         this.menuCategoryRepository = menuCategoryRepository;
         this.staffRepository = staffRepository;
+        this.userRepository = userRepository;
+        this.reviewRepository = reviewRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Override
@@ -71,6 +89,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional(readOnly = true)
     public long getSubCategoryCount() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
         if (adminBranchId != null) {
             return menuItemRepository.countDistinctSubCategoryByBranchId(adminBranchId);
         } else {
@@ -82,6 +101,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional(readOnly = true)
     public long getMenuItemCount() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
         if (adminBranchId != null) {
             return menuItemRepository.countByBranchId(adminBranchId);
         } else {
@@ -93,6 +113,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional(readOnly = true)
     public long getAvailableItemCount() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+
         if (adminBranchId != null) {
             return menuItemRepository.countByBranchIdAndIsAvailableTrue(adminBranchId);
         } else {
@@ -101,12 +122,14 @@ public class MenuServiceImpl implements MenuService {
     }
 
     @Override
+    @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_ITEM_CREATED, targetType = AuditTargetType.MENU_ITEM, description = "Menu item created successfully", captureResultAsNewValue = false)
     @Transactional
     public MenuItemResponse createMenuItem(CreateMenuItemRequest request) {
         Long branchId = resolveCurrentUserBranchId();
         Branch branch = findBranchOrThrow(branchId);
         MenuCategory category = findCategoryOrThrow(request.getCategoryId());
         String validatedName = validateAndNormalizeRequiredName(request.getName());
+
         validatePriceRange(request.getPrice());
         validateRequiredPreparationTime(request.getPreparationTime());
 
@@ -147,6 +170,11 @@ public class MenuServiceImpl implements MenuService {
         }
 
         MenuItem saved = menuItemRepository.save(menuItem);
+
+        /*
+         * AOP audit is used here because this is a simple create action.
+         * captureResultAsNewValue = false keeps JSON storage small.
+         */
         return mapToResponse(saved);
     }
 
@@ -193,7 +221,7 @@ public class MenuServiceImpl implements MenuService {
         // only branch 1 is doing online services
         Long targetBranchId = (branchId != null) ? branchId : 1;
 
-        // Fetch EVERYTHING (Items, Averages, Counts) in ONE single SQL query!
+        // Fetch EVERYTHING (Items, Averages, Counts) in ONE single SQL query
         List<Object[]> results = menuItemRepository.findMenuItemsWithReviewStats(targetBranchId, MenuItemStatus.ACTIVE);
 
         // Convert the database results into clean DTOs for React
@@ -225,6 +253,7 @@ public class MenuServiceImpl implements MenuService {
         if (branchId == null) {
             branchId = resolveCurrentAdminBranchIdOrNull();
         }
+
         return menuItemRepository.findDistinctSubCategories(branchId, categoryId);
     }
 
@@ -233,6 +262,11 @@ public class MenuServiceImpl implements MenuService {
     public MenuItemResponse updateMenuItem(Long id, UpdateMenuItemRequest request) {
         MenuItem menuItem = findMenuItemOrThrow(id);
         enforceCurrentUserBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
+
+        /*
+         * Capture old values before applying any update.
+         */
+        Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
 
         if (request.getBranchId() != null) {
             enforceCurrentUserBranchAccess(request.getBranchId());
@@ -295,6 +329,24 @@ public class MenuServiceImpl implements MenuService {
         }
 
         MenuItem updated = menuItemRepository.save(menuItem);
+
+        /*
+         * Manual audit is required because this is an update operation.
+         * oldValuesJson shows previous menu item data.
+         * newValuesJson shows updated menu item data.
+         */
+        auditLogService.logCurrentUserAction(
+                AuditModule.MENU,
+                AuditEventType.MENU_ITEM_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.MENU_ITEM,
+                updated.getId(),
+                getMenuItemBranchId(updated),
+                "Menu item updated successfully",
+                oldValues,
+                buildMenuItemAuditSnapshot(updated));
+
         return mapToResponse(updated);
     }
 
@@ -302,6 +354,7 @@ public class MenuServiceImpl implements MenuService {
     @Transactional
     public MenuItemActionResponse approveMenuItem(Long id, ApproveMenuItemRequest request) {
         ensureCurrentUserIsAdminForWorkflow();
+
         MenuItem menuItem = findMenuItemOrThrow(id);
         enforceCurrentUserBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
@@ -313,25 +366,45 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Cannot approve invalid menu item");
         }
 
+        /*
+         * Capture old values before approving.
+         */
+        Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
+
         // Approved items become ACTIVE and immediately available to customers.
         menuItem.setStatus(MenuItemStatus.ACTIVE);
         menuItem.setIsAvailable(true);
         menuItem.setApprovedAt(LocalDateTime.now());
         menuItem.setRejectedAt(null);
         menuItem.setRejectionReason(null);
-        menuItemRepository.save(menuItem);
+
+        MenuItem saved = menuItemRepository.save(menuItem);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.MENU,
+                AuditEventType.MENU_ITEM_APPROVED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.MENU_ITEM,
+                saved.getId(),
+                getMenuItemBranchId(saved),
+                "Menu item approved successfully",
+                oldValues,
+                buildMenuItemAuditSnapshot(saved)
+        );
 
         return buildActionResponse(
                 "ACTIVE",
-                menuItem,
+                saved,
                 "Item approved and activated. Notification sent to chef.",
-                buildMenuDecisionNotificationPayload("APPROVED", menuItem, null));
+                buildMenuDecisionNotificationPayload("APPROVED", saved, null));
     }
 
     @Override
     @Transactional
     public MenuItemActionResponse rejectMenuItem(Long id, RejectMenuItemRequest request) {
         ensureCurrentUserIsAdminForWorkflow();
+
         MenuItem menuItem = findMenuItemOrThrow(id);
         enforceCurrentUserBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
@@ -340,22 +413,42 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String rejectionReason = request != null ? request.getRejectionReason() : null;
+
         if (rejectionReason == null || rejectionReason.isBlank()) {
             throw new InvalidOperationException("Rejection reason is required");
         }
+
+        /*
+         * Capture old values before rejection.
+         */
+        Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
 
         menuItem.setStatus(MenuItemStatus.REJECTED);
         menuItem.setIsAvailable(false);
         menuItem.setRejectedAt(LocalDateTime.now());
         menuItem.setRejectionReason(rejectionReason.trim());
         menuItem.setApprovedAt(null);
-        menuItemRepository.save(menuItem);
+
+        MenuItem saved = menuItemRepository.save(menuItem);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.MENU,
+                AuditEventType.MENU_ITEM_REJECTED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.MENU_ITEM,
+                saved.getId(),
+                getMenuItemBranchId(saved),
+                "Menu item rejected successfully",
+                oldValues,
+                buildMenuItemAuditSnapshot(saved)
+        );
 
         return buildActionResponse(
                 "REJECTED",
-                menuItem,
+                saved,
                 "Item rejected: " + rejectionReason.trim() + ". Notification sent to chef.",
-                buildMenuDecisionNotificationPayload("REJECTED", menuItem, rejectionReason.trim()));
+                buildMenuDecisionNotificationPayload("REJECTED", saved, rejectionReason.trim()));
     }
 
     @Override
@@ -368,11 +461,33 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Cannot toggle availability if item is not ACTIVE");
         }
 
+        /*
+         * Capture old values before changing availability.
+         */
+        Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
+
         menuItem.setIsAvailable(isAvailable);
-        menuItemRepository.save(menuItem);
+
+        MenuItem saved = menuItemRepository.save(menuItem);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.MENU,
+                AuditEventType.MENU_ITEM_AVAILABILITY_CHANGED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.MENU_ITEM,
+                saved.getId(),
+                getMenuItemBranchId(saved),
+                isAvailable
+                        ? "Menu item marked as available"
+                        : "Menu item marked as unavailable",
+                oldValues,
+                buildMenuItemAuditSnapshot(saved)
+        );
+
         return buildActionResponse(
                 isAvailable ? "AVAILABLE" : "UNAVAILABLE",
-                menuItem,
+                saved,
                 "Availability updated");
     }
 
@@ -386,8 +501,31 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Cannot delete active item");
         }
 
-        MenuItemActionResponse response = buildActionResponse("DELETED", menuItem, "Menu item deleted successfully");
+        /*
+         * Capture old values before delete because the entity will be removed.
+         */
+        Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
+        Long branchId = getMenuItemBranchId(menuItem);
+
+        MenuItemActionResponse response = buildActionResponse(
+                "DELETED",
+                menuItem,
+                "Menu item deleted successfully");
+
         menuItemRepository.delete(menuItem);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.MENU,
+                AuditEventType.MENU_ITEM_DELETED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.MENU_ITEM,
+                id,
+                branchId,
+                "Menu item deleted successfully",
+                oldValues,
+                null);
+
         return response;
     }
 
@@ -425,6 +563,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedName = name.trim();
+
         if (normalizedName.length() < 3) {
             throw new InvalidOperationException("Name must be at least 3 characters");
         }
@@ -466,6 +605,7 @@ public class MenuServiceImpl implements MenuService {
         if (preparationTime == null) {
             throw new InvalidOperationException("Preparation time is required");
         }
+
         validatePreparationTime(preparationTime);
     }
 
@@ -475,11 +615,13 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedImageUrl = imageUrl.trim();
+
         if (normalizedImageUrl.isEmpty()) {
             return null;
         }
 
         URI parsedUri;
+
         try {
             parsedUri = URI.create(normalizedImageUrl);
         } catch (IllegalArgumentException ex) {
@@ -487,6 +629,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String scheme = parsedUri.getScheme();
+
         if (scheme == null
                 || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
                 || parsedUri.getHost() == null) {
@@ -502,6 +645,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedDescription = description.trim();
+
         if (normalizedDescription.isEmpty()) {
             return null;
         }
@@ -515,6 +659,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         String normalizedSubCategory = subCategory.trim();
+
         if (normalizedSubCategory.isEmpty()) {
             throw new InvalidOperationException("Sub category must not be blank");
         }
@@ -523,23 +668,23 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Sub category must be less than 50 characters");
         }
 
-        // Convert to title case: lowercase first, then capitalize first letter of each
-        // word
-        normalizedSubCategory = toTitleCase(normalizedSubCategory);
-
-        return normalizedSubCategory;
+        // Convert to title case: lowercase first, then capitalize first letter of each word
+        return toTitleCase(normalizedSubCategory);
     }
 
     private String toTitleCase(String input) {
         String[] words = input.toLowerCase().split("\\s+");
         StringBuilder result = new StringBuilder();
+
         for (int i = 0; i < words.length; i++) {
             if (i > 0) {
                 result.append(' ');
             }
+
             result.append(Character.toUpperCase(words[i].charAt(0)));
             result.append(words[i].substring(1));
         }
+
         return result.toString();
     }
 
@@ -548,6 +693,7 @@ public class MenuServiceImpl implements MenuService {
         boolean hasValidPrice = menuItem.getPrice() != null && menuItem.getPrice().compareTo(BigDecimal.ZERO) > 0;
         boolean hasValidCategory = menuItem.getCategory() != null;
         boolean hasValidPreparationTime = menuItem.getPreparationTime() != null && menuItem.getPreparationTime() > 0;
+
         return hasValidName && hasValidPrice && hasValidCategory && hasValidPreparationTime;
     }
 
@@ -572,6 +718,7 @@ public class MenuServiceImpl implements MenuService {
 
     private Long resolveCreatedByUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
         if (authentication != null && authentication.getPrincipal() instanceof JwtUserPrincipal principal) {
             if (principal.getUser() != null && principal.getUser().getId() != null) {
                 return principal.getUser().getId();
@@ -583,11 +730,13 @@ public class MenuServiceImpl implements MenuService {
 
     private boolean isCurrentUserAdmin() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
         if (authentication == null) {
             return false;
         }
 
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
+
         if (authorities == null) {
             return false;
         }
@@ -605,6 +754,7 @@ public class MenuServiceImpl implements MenuService {
 
     private void enforceCurrentUserBranchAccess(Long targetBranchId) {
         Long userBranchId = resolveCurrentUserBranchId();
+
         if (targetBranchId == null || !userBranchId.equals(targetBranchId)) {
             throw new InvalidOperationException("Menu item access is restricted to your branch");
         }
@@ -625,6 +775,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         Object principal = authentication.getPrincipal();
+
         if (!(principal instanceof JwtUserPrincipal jwtUser)
                 || jwtUser.getUser() == null
                 || jwtUser.getUser().getId() == null) {
@@ -651,6 +802,7 @@ public class MenuServiceImpl implements MenuService {
         }
 
         Object principal = authentication.getPrincipal();
+
         if (!(principal instanceof JwtUserPrincipal jwtUser)
                 || jwtUser.getUser() == null
                 || jwtUser.getUser().getId() == null) {
@@ -667,6 +819,7 @@ public class MenuServiceImpl implements MenuService {
             MenuItem menuItem,
             String rejectionReason) {
         Map<String, Object> payload = new LinkedHashMap<>();
+
         payload.put("decision", decision);
         payload.put("menuItemId", menuItem.getId());
         payload.put("menuItemName", menuItem.getName());
@@ -678,6 +831,7 @@ public class MenuServiceImpl implements MenuService {
         payload.put("rejectedAt", menuItem.getRejectedAt());
         payload.put("rejectionReason", rejectionReason);
         payload.put("timestamp", LocalDateTime.now());
+
         return payload;
     }
 
@@ -698,5 +852,53 @@ public class MenuServiceImpl implements MenuService {
                 .preparationTime(item.getPreparationTime())
                 .createdAt(item.getCreatedAt())
                 .build();
+    }
+
+    /*
+     * Builds safe audit JSON for menu item actions.
+     * We do not store the full entity because it can include relationships.
+     */
+    private Map<String, Object> buildMenuItemAuditSnapshot(MenuItem item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (item == null) {
+            return snapshot;
+        }
+
+        snapshot.put("menuItemId", item.getId());
+        snapshot.put("branchId", item.getBranch() != null ? item.getBranch().getId() : null);
+        snapshot.put("branchName", item.getBranch() != null ? item.getBranch().getName() : null);
+
+        snapshot.put("categoryId", item.getCategory() != null ? item.getCategory().getId() : null);
+        snapshot.put("categoryName", item.getCategory() != null ? item.getCategory().getName() : null);
+
+        snapshot.put("subCategory", item.getSubCategory());
+        snapshot.put("name", item.getName());
+        snapshot.put("description", item.getDescription());
+        snapshot.put("price", item.getPrice());
+        snapshot.put("imageUrl", item.getImageUrl());
+
+        snapshot.put("available", item.getIsAvailable());
+        snapshot.put("status", item.getStatus() != null ? item.getStatus().name() : null);
+        snapshot.put("preparationTime", item.getPreparationTime());
+
+        snapshot.put("createdBy", item.getCreatedBy());
+        snapshot.put("createdAt", item.getCreatedAt());
+        snapshot.put("approvedAt", item.getApprovedAt());
+        snapshot.put("rejectedAt", item.getRejectedAt());
+        snapshot.put("rejectionReason", item.getRejectionReason());
+
+        return snapshot;
+    }
+
+    /*
+     * Gets menu item branch ID for audit branch filtering.
+     */
+    private Long getMenuItemBranchId(MenuItem item) {
+        if (item == null || item.getBranch() == null) {
+            return null;
+        }
+
+        return item.getBranch().getId();
     }
 }

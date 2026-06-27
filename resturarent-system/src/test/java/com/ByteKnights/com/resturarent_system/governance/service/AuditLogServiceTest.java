@@ -33,9 +33,6 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for AuditLogService.
- *
- * These tests cover audit-log saving and retrieval for the governance module.
- * Repositories are mocked, so these tests do not connect to the real database.
  */
 @ExtendWith(MockitoExtension.class)
 class AuditLogServiceTest {
