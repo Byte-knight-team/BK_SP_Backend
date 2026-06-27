@@ -57,7 +57,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
                         branchId,
                         orderStatus,
-                        List.of(OrderType.QR, OrderType.ONLINE_PICKUP),
+                        List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
                         startOfDay,
                         endOfDay);
 
