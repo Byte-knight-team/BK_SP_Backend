@@ -39,13 +39,10 @@ import static org.mockito.Mockito.*;
 
 /*
  * Unit tests for RoleService.
-<<<<<<< HEAD
-=======
  *
  * These tests cover the governance / RBAC role-management logic.
  * Repositories and audit logging are mocked, so these tests do not use the real
  * database.
->>>>>>> dev_2
  */
 @ExtendWith(MockitoExtension.class)
 class RoleServiceTest {
@@ -101,13 +98,6 @@ class RoleServiceTest {
         verify(roleRepository, times(1)).findByName("CASHIER");
         verify(roleRepository, times(1)).save(any(Role.class));
 
-<<<<<<< HEAD
-        /*
-         * Current RoleService does not audit role creation.
-         * If you add ROLE_CREATED audit logging later, update this test.
-         */
-        verifyNoInteractions(auditLogService);
-=======
         verify(auditLogService, times(1)).logCurrentUserAction(
                 eq(AuditModule.RBAC),
                 eq(AuditEventType.ROLE_CREATED),
@@ -119,7 +109,6 @@ class RoleServiceTest {
                 eq("Role created successfully"),
                 isNull(),
                 anyMap());
->>>>>>> dev_2
     }
 
     @Test

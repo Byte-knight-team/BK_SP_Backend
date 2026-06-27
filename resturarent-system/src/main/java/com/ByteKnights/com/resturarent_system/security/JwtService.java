@@ -32,8 +32,6 @@ public class JwtService {
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
 
-<<<<<<< HEAD
-=======
     /*
      * Old token generator kept for safety.
      * If any old code still calls generateToken(userId, email, role),
@@ -43,7 +41,6 @@ public class JwtService {
         return generateToken(userId, email, role, null, null, null);
     }
 
->>>>>>> dev_2
     /*
      * Generates a staff JWT token after successful login.
      */
@@ -53,8 +50,6 @@ public class JwtService {
             String role,
             Long branchId,
             String branchName) {
-<<<<<<< HEAD
-=======
         return generateToken(userId, email, role, branchId, branchName, null);
     }
 
@@ -68,7 +63,6 @@ public class JwtService {
             Long branchId,
             String branchName,
             String fullName) {
->>>>>>> dev_2
         Map<String, Object> claims = new HashMap<>();
 
         /*
