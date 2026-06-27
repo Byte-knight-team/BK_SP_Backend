@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryOrde
 import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
 import java.util.List;
 import java.util.Optional;
+import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHistoryDTO;
 
 /**
  * Interface defining the contract for business logic operations related to
@@ -35,4 +36,9 @@ public interface DeliveryOrderService {
     void rejectOrder(Long orderId, Long userId, String reason);
 
     void updateStatus(Long orderId, Long userId, DeliveryStatus status);
+
+    /**
+     * Retrieves historical deliveries (DELIVERED or CANCELLED) for a specific driver.
+     */
+    List<DeliveryHistoryDTO> getDeliveryHistory(Long userId);
 }

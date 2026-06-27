@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryOrderDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHistoryDTO;
 import com.ByteKnights.com.resturarent_system.entity.Delivery;
 import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
@@ -39,7 +40,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "Staff member not found for user ID: " + userId));
 
-                // Query the database for deliveries assigned to this staff member that are still pending acceptance
+                // Query the database for deliveries assigned to this staff member that are
+                // still pending acceptance
                 List<Delivery> assignments = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatus(staff.getId(),
                                 DeliveryStatus.ASSIGNED);
 
@@ -49,7 +51,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         /**
          * Fetches the single active delivery task for a specific driver.
-         * An active task is one that the driver has accepted or is currently out delivering.
+         * An active task is one that the driver has accepted or is currently out
+         * delivering.
          */
         @Override
         @Transactional(readOnly = true)
@@ -68,7 +71,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         return Optional.empty();
                 }
 
-                // Return the first active delivery found (assuming drivers handle one delivery at a time)
+                // Return the first active delivery found (assuming drivers handle one delivery
+                // at a time)
                 return Optional.of(mapToDTO(activeDeliveries.get(0)));
         }
 
@@ -129,7 +133,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         }
 
         /**
-         * Updates the real-time status of a delivery (e.g., changing from ACCEPTED to OUT_FOR_DELIVERY).
+         * Updates the real-time status of a delivery (e.g., changing from ACCEPTED to
+         * OUT_FOR_DELIVERY).
          * If marked as DELIVERED, it also updates the master Order status to SERVED.
          */
         @Override
@@ -144,7 +149,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                                                 "Assignment not found for order ID: " + orderId));
 
                 delivery.setDeliveryStatus(status);
-                
+
                 // Special case: If the delivery is finalized, sync the master Order table
                 if (status == DeliveryStatus.DELIVERED) {
                         delivery.setDeliveredAt(LocalDateTime.now());
@@ -155,5 +160,53 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 }
 
                 deliveryRepository.save(delivery);
+        }
+
+        /**
+         * Retrieves historical deliveries (DELIVERED or CANCELLED) for a specific
+         * driver.
+         */
+        @Override
+        @Transactional(readOnly = true)
+        public List<DeliveryHistoryDTO> getDeliveryHistory(Long userId) {
+                Staff staff = staffRepository.findByUserId(userId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Staff member not found for user ID: " + userId));
+
+                List<Delivery> history = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+                                staff.getId(),
+                                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED));
+
+                // Sort descending by completion time (deliveredAt or assignedAt as fallback)
+                return history.stream().map(d -> {
+                        LocalDateTime completedAt = d.getDeliveryStatus() == DeliveryStatus.DELIVERED
+                                        ? d.getDeliveredAt()
+                                        : (d.getDeliveredAt() != null ? d.getDeliveredAt() : d.getAssignedAt());
+
+                        return DeliveryHistoryDTO.builder()
+                                        .id(d.getId())
+                                        .orderId(d.getOrder().getId())
+                                        .orderNumber(d.getOrder().getOrderNumber() != null
+                                                        ? d.getOrder().getOrderNumber()
+                                                        : "ORD-" + d.getOrder().getId())
+                                        .customerName(d.getOrder().getContactName())
+                                        .customerPhone(d.getOrder().getContactPhone())
+                                        .deliveryAddress(d.getOrder().getDeliveryAddress())
+                                        .amount(d.getOrder().getFinalAmount())
+                                        .status(d.getDeliveryStatus().name())
+                                        .completedAt(completedAt)
+                                        .cancelledReason(d.getCancelledReason())
+                                        .build();
+                })
+                                .sorted((a, b) -> {
+                                        if (a.getCompletedAt() == null && b.getCompletedAt() == null)
+                                                return 0;
+                                        if (a.getCompletedAt() == null)
+                                                return 1;
+                                        if (b.getCompletedAt() == null)
+                                                return -1;
+                                        return b.getCompletedAt().compareTo(a.getCompletedAt());
+                                })
+                                .collect(Collectors.toList());
         }
 }
