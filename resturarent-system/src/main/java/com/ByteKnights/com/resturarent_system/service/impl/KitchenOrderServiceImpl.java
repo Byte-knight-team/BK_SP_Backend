@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderItemDeta
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.KitchenOrderService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final ChefAttendanceRepository chefAttendanceRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     @Override
     public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) {
@@ -115,6 +117,13 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
 
         item.setAssignedLineChef(chef);
         orderItemRepository.save(item);
+
+        Long lineChefUserId = chef.getUser().getId();
+        webSocketNotificationService.broadcastLineChefItemAssigned(
+                lineChefUserId,
+                item.getOrder().getOrderNumber(),
+                item.getItemName()
+        );
     }
 
     @Override
