@@ -21,14 +21,14 @@ public class LineChefController {
     private final LineChefService lineChefService;
 
     @GetMapping("/my-items")
-    @PreAuthorize("hasRole('LINE_CHEF')")
+    @PreAuthorize("hasAuthority('LINE_CHEF_ORDER_VIEW')")
     public ResponseEntity<StandardResponse> getMyItems(Principal principal) {
         List<LineChefItemDTO> items = lineChefService.getMyItems(principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Success", items), HttpStatus.OK);
     }
 
     @PutMapping("/order-items/{itemId}/start")
-    @PreAuthorize("hasRole('LINE_CHEF')")
+    @PreAuthorize("hasAuthority('LINE_CHEF_ORDER_UPDATE')")
     public ResponseEntity<StandardResponse> startItem(
             @PathVariable Long itemId,
             Principal principal) {
@@ -37,7 +37,7 @@ public class LineChefController {
     }
 
     @PutMapping("/order-items/{itemId}/complete")
-    @PreAuthorize("hasRole('LINE_CHEF')")
+    @PreAuthorize("hasAuthority('LINE_CHEF_ORDER_UPDATE')")
     public ResponseEntity<StandardResponse> completeItem(
             @PathVariable Long itemId,
             Principal principal) {
