@@ -5,10 +5,12 @@ import com.ByteKnights.com.resturarent_system.dto.response.receptionist.Receptio
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistTableService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,6 +23,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final OrderRepository orderRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     // fetch all tables belonging to the receptionist's branch
     @Override
@@ -40,39 +43,32 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
         List<ReceptionistTableResponse> dtoList = new ArrayList<>();
 
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+
         for (RestaurantTable table : tables) {
-            // Build base response
+            // Always fetch today's orders directly — don't rely on activeOrderCount field
+            // which is only updated by the customer service when an order is placed
+            List<Order> activeOrders = orderRepository.findByTableIdAndStatusNotIn(
+                    table.getId(),
+                    List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.SERVED)
+            ).stream()
+                    .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
+                    .toList();
+
+            List<String> orderNumbers = activeOrders.stream()
+                    .map(Order::getOrderNumber)
+                    .toList();
+
             ReceptionistTableResponse response = ReceptionistTableResponse.builder()
                     .id(table.getId())
                     .tableNumber(table.getTableNumber())
                     .capacity(table.getCapacity())
                     .status(table.getState())
                     .currentGuestCount(table.getCurrentGuestCount())
-                    .activeOrderCount(table.getActiveOrderCount())
+                    .activeOrderCount(activeOrders.size())
                     .statusUpdatedAt(table.getStatusUpdatedAt())
+                    .activeOrderIds(orderNumbers)
                     .build();
-
-            // If the table has active orders, fetch them
-            if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
-                // Fetch ALL orders for this table EXCEPT Cancelled or Rejected ones
-                List<Order> activeOrders = orderRepository.findByTableIdAndStatusNotIn(
-                        table.getId(),
-                        List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED)
-                );
-
-                // Create a list of just the Order Strings, e.g. "#ORD-482"
-                List<String> orderNumbers = new ArrayList<>();
-
-                for (Order order : activeOrders) {
-                    orderNumbers.add(order.getOrderNumber());
-                }
-
-                // Attach the real order numbers to the response
-                response.setActiveOrderIds(orderNumbers);
-            } else {
-                // If no active orders, attach an empty list
-                response.setActiveOrderIds(new ArrayList<>());
-            }
 
             dtoList.add(response);
         }
@@ -116,6 +112,8 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
         // Save the changes
         tableRepository.save(table);
+
+        webSocketNotificationService.broadcastTableUpdate(branchId);
     }
 
     // mark a table as AVAILABLE and reset guest count
@@ -154,5 +152,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
         // Save
         tableRepository.save(table);
+
+        webSocketNotificationService.broadcastTableUpdate(branchId);
     }
 }

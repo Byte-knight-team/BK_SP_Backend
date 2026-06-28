@@ -127,6 +127,19 @@ public class WebSocketNotificationService {
     }
 
     /**
+     * Notify all receptionist clients in a branch that table data has changed.
+     * Called when: a table is occupied/cleared, or a QR order is placed/completed.
+     *
+     * Topic: /topic/branch/{branchId}/table-update
+     * Subscribers: Receptionist Table Management page
+     */
+    public void broadcastTableUpdate(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/table-update";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
+        log.info("Broadcasting table update to {}", destination);
+    }
+
+    /**
      * Broadcast an order status update to a specific customer's order topic.
      *
      * Topic: /topic/order/{orderId}/status
