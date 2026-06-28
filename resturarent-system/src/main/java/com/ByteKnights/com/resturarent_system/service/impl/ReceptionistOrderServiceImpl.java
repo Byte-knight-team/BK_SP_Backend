@@ -156,14 +156,15 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
         if (order.getStatus() != OrderStatus.PLACED) {
-            throw new RuntimeException("Order is not in PLACED status");
+            throw new RuntimeException("Order cannot be sent to kitchen from current status");
         }
 
         order.updateStatus(OrderStatus.PENDING);
         orderRepository.save(order);
 
-        // Notify kitchen in real-time via WebSocket
         Long branchId = order.getBranch().getId();
+
+        // Notify kitchen: refresh pending list + toast
         webSocketNotificationService.broadcastNewKitchenOrder(branchId, order.getOrderNumber());
     }
 

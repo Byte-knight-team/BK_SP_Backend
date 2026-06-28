@@ -92,6 +92,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
 
         return new OrderDetailsDTO(
                 order.getId(),
+                order.getOrderNumber(),
                 order.getCreatedAt(),
                 order.getStatusUpdatedAt(),
                 order.getStatus().toString(),
@@ -160,5 +161,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         }
 
         orderRepository.save(order);
+
+        // Notify receptionist in real-time so their Kitchen tab auto-switches to Hold
+        webSocketNotificationService.broadcastOrderStatusChanged(branchId, orderId, "ON_HOLD");
     }
 }
