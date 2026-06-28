@@ -15,5 +15,6 @@ public enum AuditModule {
     KITCHEN,
     INVENTORY,
     DELIVERY,
+    CUSTOMER,
     REPORT
 }

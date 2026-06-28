@@ -21,7 +21,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
-import org.springframework.security.core.GrantedAuthority;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -74,10 +73,8 @@ public class RoleService {
     }
 
     /*
-     * Updates the permissions assigned to a role.
-     * Manual audit is used because old and new permission lists are important.
+     * Updates the permissions assigned to a role..
      */
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Role assignPermissionsToRole(Long roleId, Set<String> permissionNames) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
@@ -85,26 +82,36 @@ public class RoleService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         JwtUserPrincipal principal = (JwtUserPrincipal) auth.getPrincipal();
 
+        //SUPER_ADMIN can modify all roles
         if ((role.getName().equals("SUPER_ADMIN") || role.getName().equals("ADMIN"))
                 && !principal.getUser().getRole().getName().equals("SUPER_ADMIN")) {
             throw new RuntimeException("Only Super Admin can modify Admin/Super Admin roles");
         }
 
+        //prepare old values for audit log
         Map<String, Object> oldValues = new LinkedHashMap<>();
         oldValues.put("roleId", role.getId());
         oldValues.put("roleName", role.getName());
         oldValues.put("permissionNames", extractPermissionNames(role.getPermissions()));
 
+        //add privileges to role
         Set<Privilege> privileges = new HashSet<>();
+
+        //check if privilege exists and add to role
+        //Frontend send array of permission names so we need to check if privilege exists and
+        //add to a set
         for (String permName : permissionNames) {
             Privilege privilege = privilegeRepository.findByName(permName)
+                    //if privilege not found throw exception
                     .orElseThrow(() -> new RuntimeException("Privilege not found: " + permName));
             privileges.add(privilege);
         }
 
+        //This replaces the old permissions with the new set
         role.setPermissions(privileges);
         Role savedRole = roleRepository.save(role);
 
+        //prepare new values for audit log
         Map<String, Object> newValues = new LinkedHashMap<>();
         newValues.put("roleId", savedRole.getId());
         newValues.put("roleName", savedRole.getName());
@@ -125,25 +132,28 @@ public class RoleService {
         return savedRole;
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    //get permissions of a role
     public Set<String> getPermissionsOfRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
+        //This creates an empty Set.
         Set<String> perms = new HashSet<>();
+        //Convert Privilege objects into names
         role.getPermissions().forEach(p -> perms.add(p.getName()));
+
+        //Return permission names
         return perms;
     }
 
     /*
      * Creates a new custom role.
-     * AOP handles the basic audit log because this is a simple create action.
      */
     @Auditable(module = AuditModule.RBAC, eventType = AuditEventType.ROLE_CREATED, targetType = AuditTargetType.ROLE, description = "Role created successfully", captureResultAsNewValue = false)
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Role createRole(String name, String description, BigDecimal baseSalary) {
         String normalizedName = normalizeRoleName(name);
 
+        //check if role already exists
         if (roleRepository.findByName(normalizedName).isPresent()) {
             throw new RuntimeException("Role already exists");
         }
@@ -158,31 +168,33 @@ public class RoleService {
     }
 
     /*
-     * Returns role summaries.
-     * SUPER_ADMIN can see all roles.
-     * ADMIN can only see branch-level assignable roles.
+     * Returns all roles
      */
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
     public List<RoleSummaryResponse> getAllRoleSummaries() {
         String currentUserRole = getCurrentAuthenticatedRoleName();
 
+        //get all roles
         return roleRepository.findAll()
                 .stream()
                 .filter(role -> {
                     String roleName = normalizeRoleNameForAccessCheck(role.getName());
 
+                    // ADMIN cannot access SUPER_ADMIN role
                     if ("ADMIN".equals(currentUserRole)) {
+                        // ADMIN_HIDDEN_ROLE_NAMES = ["SUPER_ADMIN"]
                         return !ADMIN_HIDDEN_ROLE_NAMES.contains(roleName);
                     }
 
                     return true;
                 })
+                //sort by name
                 .sorted((role1, role2) -> role1.getName().compareToIgnoreCase(role2.getName()))
+                //convert to role summary
                 .map(this::mapToRoleSummary)
                 .toList();
     }
 
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    // gets role details by ID
     public RoleSummaryResponse getRoleSummaryById(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
@@ -190,6 +202,7 @@ public class RoleService {
         String currentUserRole = getCurrentAuthenticatedRoleName();
         String requestedRoleName = normalizeRoleNameForAccessCheck(role.getName());
 
+        //ADMIN cannot access SUPER_ADMIN role
         if ("ADMIN".equals(currentUserRole) && ADMIN_HIDDEN_ROLE_NAMES.contains(requestedRoleName)) {
             throw new AccessDeniedException("ADMIN cannot access this role");
         }
@@ -199,9 +212,7 @@ public class RoleService {
 
     /*
      * Updates role details.
-     * Manual audit is used because before/after values are useful here.
      */
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public Role updateRole(Long roleId, UpdateRoleRequest request) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
@@ -261,20 +272,18 @@ public class RoleService {
     }
 
     /*
-     * Deletes a custom role only if it is not a core role
-     * and is not assigned to any users.
-     * Manual audit is kept because this method returns void,
-     * so AOP cannot capture targetId from the result.
+     * Deletes a custom role only if it is not a core role and is not assigned to any users.
      */
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public void deleteRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
+        //Core roles cannot be deleted
         if (CORE_ROLES.contains(role.getName())) {
             throw new RuntimeException("Core roles cannot be deleted");
         }
 
+        //if there are active users for a role, role cannot be deleted
         if (userRepository.existsByRole(role)) {
             throw new RuntimeException("Cannot delete role because it is assigned to one or more users");
         }
@@ -297,10 +306,10 @@ public class RoleService {
     }
 
     /*
-     * Reads the current logged-in user's role from Spring Security authorities.
-     * Example authority: ROLE_SUPER_ADMIN.
+     * Reads the current logged in user role from Spring Security authorities.
      */
     private String getCurrentAuthenticatedRoleName() {
+        //Gets the current logged in authentication
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || authentication.getAuthorities() == null) {
@@ -309,9 +318,13 @@ public class RoleService {
 
         return authentication.getAuthorities()
                 .stream()
+                //Converts each authority object into text.
                 .map(GrantedAuthority::getAuthority)
+                //Keeps only values that start with ROLE_.
                 .filter(authority -> authority != null && authority.startsWith("ROLE_"))
+                //Removes ROLE_ prefix
                 .map(authority -> authority.replace("ROLE_", ""))
+                //Returns the first match
                 .findFirst()
                 .orElse("");
     }
@@ -328,6 +341,7 @@ public class RoleService {
         return roleName.trim().toUpperCase();
     }
 
+    //Maps role to role summary
     private RoleSummaryResponse mapToRoleSummary(Role role) {
         int permissionCount = role.getPermissions() != null ? role.getPermissions().size() : 0;
         long activeUserCount = userRepository.countByRoleAndIsActiveTrue(role);
@@ -338,10 +352,11 @@ public class RoleService {
                 .description(role.getDescription())
                 .permissionCount(permissionCount)
                 .activeUserCount(activeUserCount)
-                .baseSalary(role.getBaseSalary()) // Returned so frontend can show/edit role default salary.
+                .baseSalary(role.getBaseSalary())
                 .build();
     }
 
+    //Normalizes role name
     private String normalizeRoleName(String name) {
         if (name == null || name.trim().isEmpty()) {
             throw new RuntimeException("Role name is required");
@@ -350,9 +365,8 @@ public class RoleService {
         return name.trim().toUpperCase();
     }
 
-    /*
-     * Snapshot is used by manual audit logs to store old/new role state.
-     */
+
+    //Snapshot is used by manual audit logs to store old/new role state.
     private Map<String, Object> buildRoleAuditSnapshot(Role role) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("roleId", role.getId());
@@ -364,7 +378,11 @@ public class RoleService {
         return snapshot;
     }
 
+    //Extracts permission names from privileges
+    //Privilege(name = "VIEW_STAFF") to VIEW_STAFF
     private Set<String> extractPermissionNames(Set<Privilege> privileges) {
+
+        //TreeSet automatically sorts the names alphabetically and removes duplicates.
         Set<String> permissionNames = new TreeSet<>();
 
         if (privileges != null) {
@@ -378,11 +396,9 @@ public class RoleService {
         return permissionNames;
     }
 
-    /*
-     * Salary validation helper.
-     * Null salary becomes 0.00, negative salary is rejected,
-     * and valid salary is stored with 2 decimal places.
-     */
+    //Salary validation helper, null salary becomes 0.00, 
+    //negative salary is rejected, 
+    //and valid salary is stored with 2 decimal places.
     private BigDecimal normalizeSalary(BigDecimal salary) {
         if (salary == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
