@@ -113,8 +113,18 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
             throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
         }
 
+        // Capture old chef before overwriting so we can notify them to refresh
+        Staff previousChef = item.getAssignedLineChef();
+
         item.setAssignedLineChef(chef);
         orderItemRepository.save(item);
+
+        // Notify the old chef to silently remove this item from their dashboard
+        if (previousChef != null && !previousChef.getId().equals(chef.getId())) {
+            webSocketNotificationService.broadcastLineChefItemRemoved(
+                    previousChef.getUser().getId()
+            );
+        }
 
         Long lineChefUserId = chef.getUser().getId();
         webSocketNotificationService.broadcastLineChefItemAssigned(

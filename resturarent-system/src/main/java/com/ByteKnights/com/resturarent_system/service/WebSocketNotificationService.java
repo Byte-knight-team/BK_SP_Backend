@@ -96,4 +96,9 @@ public class WebSocketNotificationService {
         messagingTemplate.convertAndSend(destination, payload);
     }
 
+    public void broadcastLineChefItemRemoved(Long lineChefUserId) {
+        String destination = "/topic/line-chef/" + lineChefUserId + "/item-removed";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("refresh", "true"));
+    }
+
 }
