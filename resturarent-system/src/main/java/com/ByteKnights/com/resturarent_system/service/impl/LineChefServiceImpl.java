@@ -72,7 +72,9 @@ public class LineChefServiceImpl implements LineChefService {
                     order.getOrderNumber(),
                     order.getOrderType().name(),
                     tableNumber,
-                    placedAt
+                    placedAt,
+                    item.getKitchenNotes(),
+                    order.getKitchenNotes()
             );
         }).toList();
     }
