@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -38,10 +39,24 @@ public class LineChefServiceImpl implements LineChefService {
     public List<LineChefItemDTO> getMyItems(String userEmail) {
         Staff lineChef = getStaffFromEmail(userEmail);
 
-        List<OrderItem> items = orderItemRepository.findByAssignedLineChefIdAndStatusIn(
+        List<OrderItem> activeItems = orderItemRepository.findByAssignedLineChefIdAndStatusIn(
                 lineChef.getId(),
                 List.of(OrderItemStatus.PENDING, OrderItemStatus.PREPARING)
         );
+
+        // Include today's READY and SERVED items (SERVED = already handed to customer)
+        // Both are filtered by cookingCompletedAt to avoid historical data
+        List<OrderItem> todayDoneItems = orderItemRepository.findByAssignedLineChefIdAndStatusIn(
+                lineChef.getId(),
+                List.of(OrderItemStatus.READY, OrderItemStatus.SERVED)
+        ).stream()
+                .filter(item -> item.getCookingCompletedAt() != null &&
+                        item.getCookingCompletedAt().toLocalDate().equals(LocalDate.now()))
+                .toList();
+
+        List<OrderItem> items = new ArrayList<>();
+        items.addAll(activeItems);
+        items.addAll(todayDoneItems);
 
         return items.stream().map(item -> {
             Order order = item.getOrder();
