@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistOrderService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final MenuItemIngredientRepository menuItemIngredientRepository;
     private final InventoryItemRepository inventoryItemRepository;
     private final AuditLogService auditLogService;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -118,8 +120,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                         item.getItemName(),
                         item.getQuantity(),
                         item.getUnitPrice().doubleValue(),
-                        item.getSubtotal() != null
-                                ? item.getSubtotal().doubleValue()
+                        item.getSubtotal() != null ? item.getSubtotal().doubleValue()
                                 : item.getUnitPrice().doubleValue() * item.getQuantity(),
                         item.getStatus().name()
                 ))
@@ -232,14 +233,13 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
             throw new RuntimeException("Order is not in PLACED status");
         }
 
-        /*
-         * Manual audit is used because this changes order status.
-         */
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
         order.updateStatus(OrderStatus.PENDING);
 
         Order savedOrder = orderRepository.save(order);
+        
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
@@ -266,9 +266,6 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         ensureOrderBelongsToBranch(order, actorBranchId);
 
-        /*
-         * Manual audit is used because this changes order status and hold reason.
-         */
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
         order.setStatus(OrderStatus.ON_HOLD);
@@ -276,6 +273,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.setStatusUpdatedAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
+        
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
@@ -302,9 +301,6 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         ensureOrderBelongsToBranch(order, actorBranchId);
 
-        /*
-         * Manual audit is used because this changes order status and cancel reason.
-         */
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
         order.setStatus(OrderStatus.CANCELLED);
@@ -312,6 +308,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.setStatusUpdatedAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
+        
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
@@ -338,9 +336,6 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         ensureOrderBelongsToBranch(order, actorBranchId);
 
-        /*
-         * Manual audit is used because payment status updates need old/new values.
-         */
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
         order.setPaymentStatus(PaymentStatus.PAID);
@@ -376,14 +371,13 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
             throw new RuntimeException("Order is not ready yet");
         }
 
-        /*
-         * Manual audit is used because this changes the whole order status.
-         */
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
         order.updateStatus(OrderStatus.SERVED);
 
         Order savedOrder = orderRepository.save(order);
+        
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
@@ -412,10 +406,6 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         ensureOrderBelongsToBranch(order, actorBranchId);
 
-        /*
-         * Manual audit is used because this changes one order item status.
-         * We also include the parent order state because the whole order may become SERVED.
-         */
         Map<String, Object> oldValues = new LinkedHashMap<>();
         oldValues.put("orderItem", buildReceptionistOrderItemAuditSnapshot(item));
         oldValues.put("order", buildReceptionistOrderAuditSnapshot(order));
@@ -424,13 +414,13 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         OrderItem savedItem = orderItemRepository.save(item);
 
-        // If all items are now SERVED, mark the whole order as SERVED
         boolean allServed = order.getItems().stream()
                 .allMatch(i -> i.getStatus() == OrderItemStatus.SERVED);
 
         if (allServed) {
             order.updateStatus(OrderStatus.SERVED);
             orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 
         Map<String, Object> newValues = new LinkedHashMap<>();

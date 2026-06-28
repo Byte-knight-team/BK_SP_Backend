@@ -5,19 +5,19 @@ import com.ByteKnights.com.resturarent_system.dto.request.customer.CustomerRegis
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerLoginResponseData;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerRegisterResponseData;
 import com.ByteKnights.com.resturarent_system.entity.Customer;
+import com.ByteKnights.com.resturarent_system.entity.PasswordResetToken;
+import com.ByteKnights.com.resturarent_system.entity.QrSession;
 import com.ByteKnights.com.resturarent_system.entity.Role;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import com.ByteKnights.com.resturarent_system.exception.CustomerAuthException;
 import com.ByteKnights.com.resturarent_system.repository.CustomerRepository;
+import com.ByteKnights.com.resturarent_system.repository.PasswordResetTokenRepository;
+import com.ByteKnights.com.resturarent_system.repository.QrSessionRepository;
 import com.ByteKnights.com.resturarent_system.repository.RoleRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.CustomerJwtService;
 import com.ByteKnights.com.resturarent_system.service.CustomerAuthService;
 import com.ByteKnights.com.resturarent_system.service.ProfileImageStorageService;
-import com.ByteKnights.com.resturarent_system.entity.QrSession;
-import com.ByteKnights.com.resturarent_system.entity.PasswordResetToken;
-import com.ByteKnights.com.resturarent_system.repository.QrSessionRepository;
-import com.ByteKnights.com.resturarent_system.repository.PasswordResetTokenRepository;
 import com.ByteKnights.com.resturarent_system.service.email.EmailService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -34,7 +34,6 @@ import java.util.regex.Pattern;
 @Service
 public class CustomerAuthServiceImpl implements CustomerAuthService {
 
-    // initialize email and pattern regexes
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
@@ -54,15 +53,15 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private String customerFrontendBaseUrl;
 
     public CustomerAuthServiceImpl(UserRepository userRepository,
-            RoleRepository roleRepository,
-            CustomerRepository customerRepository,
-            QrSessionRepository qrSessionRepository,
-            PasswordEncoder passwordEncoder,
-            CustomerJwtService customerJwtService,
-            SmsService smsService,
-            ProfileImageStorageService profileImageStorageService,
-            PasswordResetTokenRepository passwordResetTokenRepository,
-            EmailService emailService) {
+                                   RoleRepository roleRepository,
+                                   CustomerRepository customerRepository,
+                                   QrSessionRepository qrSessionRepository,
+                                   PasswordEncoder passwordEncoder,
+                                   CustomerJwtService customerJwtService,
+                                   SmsService smsService,
+                                   ProfileImageStorageService profileImageStorageService,
+                                   PasswordResetTokenRepository passwordResetTokenRepository,
+                                   EmailService emailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.customerRepository = customerRepository;
@@ -75,7 +74,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.emailService = emailService;
     }
 
-    // register function
     @Override
     @Transactional
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
@@ -85,17 +83,14 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         String normalizedPhone = request.getPhone().trim();
         String normalizedUsername = request.getUsername().trim();
 
-        // Check if email already exsist
         if (userRepository.findByEmail(normalizedEmail).isPresent()) {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Email already exists");
         }
 
-        // Check if Username exists
         if (userRepository.findByUsername(normalizedUsername).isPresent()) {
             throw new CustomerAuthException(HttpStatus.CONFLICT, "Username already exists");
         }
 
-        // 3. THE GHOST ACCOUNT CHECK (Phone check) (restaurent mobile)
         Optional<User> existingUserOpt = userRepository.findByPhone(normalizedPhone);
         User user;
         boolean isGhostAccount = false;
@@ -124,12 +119,10 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 isGhostAccount = true;
             }
         } else {
-            // Phone doesn't exist, create a brand new User
             user = new User();
             user.setRole(findCustomerRole());
         }
 
-        // 4. Set/Update all the user details
         user.setUsername(normalizedUsername);
         user.setEmail(normalizedEmail);
         user.setPhone(normalizedPhone);
@@ -138,12 +131,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         user.setAddress(normalizeAddress(request.getAddress()));
         user.setIsActive(true);
 
-        // Save the User
         User savedUser = userRepository.save(user);
 
-        // 5. If it's a brand new user, create the Customer profile.
-        // (If it was a ghost account (mean mobile used in restuarent), the Customer
-        // profile already exists!)
         if (!isGhostAccount) {
             Customer customer = Customer.builder()
                     .user(savedUser)
@@ -151,27 +140,21 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             customerRepository.save(customer);
         }
 
-        // getting role entity for customer from database
         Role customerRole = findCustomerRole();
 
-        // create jwt token
         String normalizedRole = normalizeRole(customerRole.getName());
         String token = customerJwtService.generateToken(savedUser.getId(), savedUser.getEmail(), normalizedRole);
 
-        // returning response
         return CustomerRegisterResponseData.builder()
                 .token(token)
                 .build();
     }
-
-    // login method
 
     @Override
     @Transactional(readOnly = true)
     public CustomerLoginResponseData login(CustomerLoginRequest request) {
         validateLoginRequest(request);
 
-        // validating user and password
         User user = userRepository.findByEmail(request.getEmail().trim().toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid username or password"));
 
@@ -185,7 +168,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
         }
 
-        // create jwt token
         String normalizedRole = normalizeRole(user.getRole().getName());
         String token = customerJwtService.generateToken(user.getId(), user.getEmail(), normalizedRole);
 
@@ -194,7 +176,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             profilePictureUrl = profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey());
         }
 
-        // return response
         return CustomerLoginResponseData.builder()
                 .token(token)
                 .username(user.getUsername())
@@ -209,20 +190,15 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone number is required");
         }
 
-        // 1. Generate 4-digit OTP
         String otpCode = String.format("%04d", new Random().nextInt(10000));
-        LocalDateTime expiry = LocalDateTime.now().plusMinutes(5); // Valid for 5 mins
+        LocalDateTime expiry = LocalDateTime.now().plusMinutes(5);
 
-        // 2. Find user or create a "Guest" skeleton user
         User user = userRepository.findByPhone(phone.trim()).orElse(null);
         Customer customer;
 
         if (user == null) {
-            /*
-             * First time this phone has scanned a QR code.
-             * Create a guest customer profile.
-             */
             Role customerRole = findCustomerRole();
+
             user = User.builder()
                     .username("Guest_" + System.currentTimeMillis())
                     .phone(phone.trim())
@@ -248,14 +224,11 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                             "Customer profile missing"));
         }
 
-        // 3. Save OTP to customer profile
         customer.setOtpCode(otpCode);
         customer.setOtpExpiry(expiry);
         customerRepository.save(customer);
 
-        // 4. Send SMS
         smsService.sendOtpSms(phone, otpCode);
-        // System.out.println(otpCode);
     }
 
     @Override
@@ -274,18 +247,17 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         ensureCustomerAccountActive(user);
 
         Customer customer = customerRepository.findByUser(user)
-                .orElseThrow(
-                        () -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Customer profile missing"));
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Customer profile missing"));
 
-        // 1. Check validity
         if (customer.getOtpCode() == null || !customer.getOtpCode().equals(code.trim())) {
             throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid OTP code");
         }
+
         if (customer.getOtpExpiry().isBefore(LocalDateTime.now())) {
             throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "OTP code has expired");
         }
 
-        // 2. Mark as verified and clear OTP
         customer.setPhoneVerified(true);
         customer.setOtpCode(null);
         customer.setOtpExpiry(null);
@@ -293,17 +265,14 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         if (sessionId != null) {
             QrSession qrSession = qrSessionRepository.findById(sessionId).orElse(null);
+
             if (qrSession != null && qrSession.getCustomer() == null) {
                 qrSession.setCustomer(customer);
                 qrSessionRepository.save(qrSession);
             }
         }
-     
-        // 3. Issue JWT Token so they can place the order!
+
         String normalizedRole = normalizeRole(user.getRole().getName());
-        // Use email if available, otherwise use phone for JWT subject
-        // This ensures Principal.getName() returns a valid identifier for profile
-        // lookups
         String tokenSubject = user.getEmail() != null ? user.getEmail() : user.getPhone();
         String token = customerJwtService.generateToken(user.getId(), tokenSubject, normalizedRole);
 
@@ -318,8 +287,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .profilePictureUrl(profilePictureUrl)
                 .build();
     }
-
-    // helper method for validation
 
     private void validateRegisterRequest(CustomerRegisterRequest request) {
         if (request == null
@@ -351,22 +318,22 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
     }
 
-    // method to get role from database
     private Role findCustomerRole() {
         Optional<Role> roleOptional = roleRepository.findByName("ROLE_CUSTOMER");
+
         if (roleOptional.isPresent()) {
             return roleOptional.get();
         }
 
         return roleRepository.findByName("CUSTOMER")
-                .orElseThrow(
-                        () -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
     }
 
     private String normalizeRole(String roleName) {
         if (roleName == null) {
             return "CUSTOMER";
         }
+
         return roleName.startsWith("ROLE_") ? roleName.substring("ROLE_".length()) : roleName;
     }
 
@@ -383,13 +350,13 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
     }
 
-    // method to if login user is a customer
     private boolean isCustomerUser(User user) {
         if (user == null || user.getRole() == null || isBlank(user.getRole().getName())) {
             return false;
         }
 
         String normalizedRole = normalizeRole(user.getRole().getName());
+
         if (!"CUSTOMER".equalsIgnoreCase(normalizedRole)) {
             return false;
         }
@@ -405,6 +372,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     @Transactional
     public void forgotPassword(String email) {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+
         if (!EMAIL_PATTERN.matcher(normalizedEmail).matches()) {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Invalid email format");
         }
@@ -422,10 +390,11 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
          */
         ensureCustomerAccountActive(user);
 
-        // Generate token and save
-        passwordResetTokenRepository.deleteByUser(user); // Clear old token if exists
+        passwordResetTokenRepository.deleteByUser(user);
+        passwordResetTokenRepository.flush();
 
         String tokenStr = java.util.UUID.randomUUID().toString();
+
         PasswordResetToken resetToken = PasswordResetToken.builder()
                 .token(tokenStr)
                 .user(user)
@@ -434,10 +403,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         passwordResetTokenRepository.save(resetToken);
 
-        // Construct reset link
         String resetLink = customerFrontendBaseUrl + "/reset-password?token=" + tokenStr;
 
-        // Send email
         emailService.sendCustomerPasswordResetEmail(normalizedEmail, resetLink);
     }
 
@@ -472,7 +439,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
 
-        // Delete token after successful reset
         passwordResetTokenRepository.delete(resetToken);
     }
 }
