@@ -74,14 +74,15 @@ public class WebSocketNotificationService {
      * @param itemName    The name of the item
      * @param newStatus   The new status (PREPARING or READY)
      */
-    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String itemName, String newStatus) {
+    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String itemName, String newItemStatus, String newOrderStatus) {
         String destination = "/topic/branch/" + branchId + "/kitchen-item-update";
         java.util.Map<String, String> payload = java.util.Map.of(
                 "orderId", String.valueOf(orderId),
                 "itemName", itemName,
-                "newStatus", newStatus
+                "newStatus", newItemStatus,
+                "orderStatus", newOrderStatus
         );
-        log.info("Broadcasting item update to kitchen {}: {} -> {}", destination, itemName, newStatus);
+        log.info("Broadcasting item update to kitchen {}: {} -> {} (order: {})", destination, itemName, newItemStatus, newOrderStatus);
         messagingTemplate.convertAndSend(destination, payload);
     }
 
@@ -94,6 +95,19 @@ public class WebSocketNotificationService {
         );
         log.info("Broadcasting item assignment to line chef {}: {}", lineChefUserId, itemName);
         messagingTemplate.convertAndSend(destination, payload);
+    }
+
+    /**
+     * Notify both kitchen and receptionist that an order's status changed cross-role.
+     * Topic: /topic/branch/{branchId}/order-status-update
+     * Used for: kitchen holds order (→ receptionist), receptionist sends back (→ kitchen)
+     */
+    public void broadcastOrderStatusChanged(Long branchId, Long orderId, String newStatus) {
+        String destination = "/topic/branch/" + branchId + "/order-status-update";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "orderId", String.valueOf(orderId),
+                "newStatus", newStatus
+        ));
     }
 
     public void broadcastLineChefItemRemoved(Long lineChefUserId, String itemName, String orderNumber, String newChefName) {
