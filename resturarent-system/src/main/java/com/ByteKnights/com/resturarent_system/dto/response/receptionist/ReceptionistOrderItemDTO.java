@@ -12,4 +12,5 @@ public class ReceptionistOrderItemDTO {
     private double unitPrice;
     private double subtotal;
     private String status;          // PENDING / PREPARING / READY / SERVED
+    private String kitchenNotes;
 }

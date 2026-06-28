@@ -85,7 +85,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                     item.getItemName(),
                     item.getQuantity(),
                     item.getStatus().toString(),
-                    item.getAssignedLineChef() != null ? item.getAssignedLineChef().getUser().getFullName() : "Not Assigned"
+                    item.getAssignedLineChef() != null ? item.getAssignedLineChef().getUser().getFullName() : "Not Assigned",
+                    item.getKitchenNotes()
             ));
         }
 
@@ -134,7 +135,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         webSocketNotificationService.broadcastLineChefItemAssigned(
                 chef.getUser().getId(),
                 item.getOrder().getOrderNumber(),
-                item.getItemName()
+                item.getItemName(),
+                item.getKitchenNotes()
         );
 
         auditLogService.logCurrentUserAction(

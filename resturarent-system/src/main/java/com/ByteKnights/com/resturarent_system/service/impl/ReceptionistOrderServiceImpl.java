@@ -127,7 +127,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                         item.getUnitPrice().doubleValue(),
                         item.getSubtotal() != null ? item.getSubtotal().doubleValue()
                                 : item.getUnitPrice().doubleValue() * item.getQuantity(),
-                        item.getStatus().name()
+                        item.getStatus().name(),
+                        item.getKitchenNotes()
                 ))
                 .toList();
 

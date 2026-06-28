@@ -84,13 +84,13 @@ public class WebSocketNotificationService {
      * Topic: /topic/line-chef/{lineChefUserId}/new-item
      * Subscribers: Line chef dashboard
      */
-    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName) {
+    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName, String kitchenNotes) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/new-item";
-        java.util.Map<String, String> payload = java.util.Map.of(
-                "orderNumber", orderNumber,
-                "itemName", itemName,
-                "message", "New item assigned: " + itemName + " (Order " + orderNumber + ")"
-        );
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderNumber", orderNumber);
+        payload.put("itemName", itemName);
+        payload.put("message", "New item assigned: " + itemName + " (Order " + orderNumber + ")");
+        payload.put("kitchenNotes", kitchenNotes);
         log.info("Broadcasting item assignment to line chef {}: {}", lineChefUserId, itemName);
         messagingTemplate.convertAndSend(destination, payload);
     }
