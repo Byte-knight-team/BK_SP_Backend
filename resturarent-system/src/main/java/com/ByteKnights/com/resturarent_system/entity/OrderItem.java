@@ -39,6 +39,9 @@ public class OrderItem {
     @Column(precision = 12, scale = 2)
     private BigDecimal subtotal;
 
+    @Column(name = "kitchen_notes", length = 500)
+    private String kitchenNotes;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     @Builder.Default

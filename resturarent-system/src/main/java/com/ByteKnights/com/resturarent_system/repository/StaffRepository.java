@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.repository;
 
+import com.ByteKnights.com.resturarent_system.entity.EmploymentStatus;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -7,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -88,13 +90,13 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     long countByBranchIdAndUserRoleNameAndEmploymentStatus(
             Long branchId,
             String roleName,
-            com.ByteKnights.com.resturarent_system.entity.EmploymentStatus status
+            EmploymentStatus status
     );
 
     long countByBranchIdAndUserRoleNameInAndEmploymentStatus(
             Long branchId,
-            java.util.Collection<String> roleNames,
-            com.ByteKnights.com.resturarent_system.entity.EmploymentStatus status
+            Collection<String> roleNames,
+            EmploymentStatus status
     );
 
     long countByBranchIdAndUserRoleName(Long branchId, String roleName);
