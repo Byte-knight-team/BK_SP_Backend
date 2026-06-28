@@ -119,10 +119,13 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         item.setAssignedLineChef(chef);
         orderItemRepository.save(item);
 
-        // Notify the old chef to silently remove this item from their dashboard
+        // Notify the old chef that this item was reassigned
         if (previousChef != null && !previousChef.getId().equals(chef.getId())) {
             webSocketNotificationService.broadcastLineChefItemRemoved(
-                    previousChef.getUser().getId()
+                    previousChef.getUser().getId(),
+                    item.getItemName(),
+                    item.getOrder().getOrderNumber(),
+                    chef.getUser().getFullName()
             );
         }
 
