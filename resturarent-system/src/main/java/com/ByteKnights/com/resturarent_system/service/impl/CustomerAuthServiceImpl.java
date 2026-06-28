@@ -50,8 +50,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
 
-    @Value("${app.frontend.customer-base-url:https://cravehouse.netlify.app}")
-    private String customerFrontendBaseUrl;
+    @Value("${app.frontend.customer-forgot-password-url:http://localhost:5173/reset-password}")
+    private String customerForgotPasswordUrl;
 
     public CustomerAuthServiceImpl(UserRepository userRepository,
             RoleRepository roleRepository,
@@ -396,7 +396,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         passwordResetTokenRepository.save(resetToken);
 
         // Construct reset link
-        String resetLink = customerFrontendBaseUrl + "/reset-password?token=" + tokenStr;
+        String resetLink = customerForgotPasswordUrl + "?token=" + tokenStr;
 
         // Send email
         emailService.sendCustomerPasswordResetEmail(normalizedEmail, resetLink);
