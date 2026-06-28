@@ -40,5 +40,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT COUNT(s) FROM Staff s JOIN s.user u WHERE s.branch.id = :branchId AND u.isActive = true")
     long countActiveUsersByBranchId(@Param("branchId") Long branchId);
 
-    // TODO: Add more custom query methods as needed
+    @Query("""
+            SELECT u
+            FROM User u
+            JOIN FETCH u.role r
+            WHERE UPPER(r.name) IN ('SUPER_ADMIN', 'ROLE_SUPER_ADMIN')
+            ORDER BY u.id ASC
+            """)
+    List<User> findSuperAdminUsersWithRole();
+
 }

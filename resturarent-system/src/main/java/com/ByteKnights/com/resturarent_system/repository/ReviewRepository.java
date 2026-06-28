@@ -25,6 +25,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
       WHERE r.orderItem IS NULL
         AND r.comment IS NOT NULL
         AND r.comment <> ''
+        AND r.rating = 5
       ORDER BY r.createdAt DESC
       """)
   List<Review> findRecentOrderReviews(Pageable pageable);

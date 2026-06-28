@@ -204,23 +204,21 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @EntityGraph(attributePaths = "items")
         List<Order> findByBranchIdAndStatusAndOrderTypeIn(
-                Long branchId,
-                OrderStatus status,
-                List<OrderType> orderTypes);
+                        Long branchId,
+                        OrderStatus status,
+                        List<OrderType> orderTypes);
 
         @EntityGraph(attributePaths = "items")
         List<Order> findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
-                Long branchId,
-                OrderStatus status,
-                List<OrderType> orderTypes,
-                java.time.LocalDateTime start,
-                java.time.LocalDateTime end);
-
+                        Long branchId,
+                        OrderStatus status,
+                        List<OrderType> orderTypes,
+                        java.time.LocalDateTime start,
+                        java.time.LocalDateTime end);
 
         List<Order> findByStatus(OrderStatus status, Sort sort);
 
         List<Order> findByStatusAndStatusUpdatedAtAfter(OrderStatus status, LocalDateTime startOfToday, Sort sort);
-
 
         @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
                         "FROM orders WHERE status = 'COMPLETED' AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL", nativeQuery = true)
@@ -233,7 +231,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         "GROUP BY hr", nativeQuery = true)
         List<Object[]> findOrderCountByHour();
 
-
         @Query(value = "SELECT DATE(created_at) as day, SUM(final_amount) as revenue, COUNT(id) as orders " +
                         "FROM orders " +
                         "WHERE branch_id = :branchId AND payment_status = 'PAID' AND created_at BETWEEN :start AND :end "
@@ -244,7 +241,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("start") LocalDateTime start,
                         @Param("end") LocalDateTime end);
 
-        // ───────────────────────── Customer Statistics Dashboard ─────────────────────────
+        // ───────────────────────── Customer Statistics Dashboard
+        // ─────────────────────────
 
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
                         "FROM Order o WHERE o.customer.id = :cid " +
@@ -254,13 +252,45 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @Query(value = "SELECT DATE_FORMAT(created_at, '%Y-%m') AS m, SUM(final_amount) " +
                         "FROM orders WHERE customer_id = :cid AND status NOT IN ('CANCELLED','REJECTED') " +
-                        "AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) GROUP BY m ORDER BY m",
-                        nativeQuery = true)
+                        "AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH) GROUP BY m ORDER BY m", nativeQuery = true)
         List<Object[]> findMonthlySpendingTrend(@Param("cid") Long customerId);
 
         @Query("SELECT o.orderType, COUNT(o) FROM Order o WHERE o.customer.id = :cid " +
                         "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
                         "com.ByteKnights.com.resturarent_system.entity.OrderStatus.REJECTED) GROUP BY o.orderType")
         List<Object[]> findOrderTypeCounts(@Param("cid") Long customerId);
-}
 
+        @Query("""
+                SELECT
+                    b.id,
+                    b.name,
+                    b.status,
+                    COALESCE(SUM(o.finalAmount), 0),
+                    COUNT(o.id),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN o.createdAt >= :todayStart THEN o.finalAmount
+                            ELSE 0
+                        END
+                    ), 0),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN o.createdAt >= :todayStart THEN 1
+                            ELSE 0
+                        END
+                    ), 0)
+                FROM Branch b
+                LEFT JOIN Order o
+                    ON o.branch = b
+                    AND o.paymentStatus IN :paymentStatuses
+                    AND o.createdAt BETWEEN :start AND :end
+                GROUP BY b.id, b.name, b.status
+                ORDER BY COALESCE(SUM(o.finalAmount), 0) DESC
+                """)
+        List<Object[]> findSuperAdminBranchRevenueSummary(
+                @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end,
+                @Param("todayStart") LocalDateTime todayStart
+        );
+}

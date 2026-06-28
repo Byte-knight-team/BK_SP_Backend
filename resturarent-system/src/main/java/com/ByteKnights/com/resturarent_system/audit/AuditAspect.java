@@ -18,6 +18,7 @@ public class AuditAspect {
 
     private final AuditLogService auditLogService;
 
+    //after the method that has @Auditable annotation returns successfully
     @AfterReturning(pointcut = "@annotation(auditable)", returning = "result")
     public void logSuccess(Auditable auditable, Object result) {
         Long targetId = extractId(result);
@@ -36,6 +37,7 @@ public class AuditAspect {
         );
     }
 
+    //after the method that has @Auditable annotation throws an exception
     @AfterThrowing(pointcut = "@annotation(auditable)", throwing = "ex")
     public void logFailure(Auditable auditable, Exception ex) {
         auditLogService.logCurrentUserAction(
@@ -52,26 +54,29 @@ public class AuditAspect {
         );
     }
 
+    //resolve description from annotation or use fallback
     private String resolveDescription(String customDescription, String fallback) {
         return customDescription != null && !customDescription.isBlank()
                 ? customDescription
                 : fallback;
     }
 
+    //extract id from the result
     private Long extractId(Object result) {
         if (result == null) {
             return null;
         }
 
+        //try to get id from the result object using reflection
         try {
             Method getIdMethod = result.getClass().getMethod("getId");
             Object idValue = getIdMethod.invoke(result);
 
+            //if id is Number, convert to long
             if (idValue instanceof Number number) {
                 return number.longValue();
             }
         } catch (Exception ignored) {
-            // Some DTOs may not have getId(). That is okay.
         }
 
         return null;

@@ -32,233 +32,229 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Standalone controller-layer tests for BranchController.
- *
- * These tests check endpoint mapping, request JSON, response JSON,
- * and whether BranchController calls BranchService correctly.
- *
- * This does not load the full Spring Boot application context.
- * That avoids unrelated security filter/repository dependencies during controller testing.
+ */
+
+/*
+ * Arrange - prepare test data and mock behavior
+ * Act - run the method or api
+ * Assert - check whether the result is correct
  */
 @ExtendWith(MockitoExtension.class)
 class BranchControllerTest {
 
-    private MockMvc mockMvc;
+        private MockMvc mockMvc;
 
-    private ObjectMapper objectMapper;
+        private ObjectMapper objectMapper;
 
-    @Mock
-    private BranchService branchService;
+        @Mock
+        private BranchService branchService;
 
-    @BeforeEach
-    void setUp() {
-        BranchController branchController = new BranchController(branchService);
+        @BeforeEach
+        void setUp() {
+                BranchController branchController = new BranchController(branchService);
 
-        mockMvc = MockMvcBuilders
-                .standaloneSetup(branchController)
-                .build();
+                mockMvc = MockMvcBuilders
+                                .standaloneSetup(branchController)
+                                .build();
 
-        objectMapper = new ObjectMapper();
-    }
+                objectMapper = new ObjectMapper();
+        }
 
-    @Test
-    void createBranch_shouldReturnCreatedBranchResponse() throws Exception {
-        // Arrange
-        CreateBranchRequest request = new CreateBranchRequest();
-        request.setName("Main Branch");
-        request.setAddress("123 Food Street");
-        request.setContactNumber("0771234567");
-        request.setEmail("main@cravehouse.com");
+        // Test case 1: Create a new branch
+        @Test
+        void createBranch_shouldReturnCreatedBranchResponse() throws Exception {
+                // Arrange
+                CreateBranchRequest request = new CreateBranchRequest();
+                request.setName("Main Branch");
+                request.setAddress("123 Food Street");
+                request.setContactNumber("0771234567");
+                request.setEmail("main@cravehouse.com");
 
-        BranchResponse response = buildBranchResponse(
-                1L,
-                "Main Branch",
-                "123 Food Street",
-                "0771234567",
-                "main@cravehouse.com",
-                "ACTIVE",
-                "Branch created successfully"
-        );
+                BranchResponse response = buildBranchResponse(
+                                1L,
+                                "Main Branch",
+                                "123 Food Street",
+                                "0771234567",
+                                "main@cravehouse.com",
+                                "ACTIVE",
+                                "Branch created successfully");
 
-        when(branchService.createBranch(any(CreateBranchRequest.class))).thenReturn(response);
+                when(branchService.createBranch(any(CreateBranchRequest.class))).thenReturn(response);
 
-        // Act + Assert
-        mockMvc.perform(post("/api/admin/branches")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.name").value("Main Branch"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.message").value("Branch created successfully"));
+                // Act + Assert
+                mockMvc.perform(post("/api/admin/branches")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(1))
+                                .andExpect(jsonPath("$.name").value("Main Branch"))
+                                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                                .andExpect(jsonPath("$.message").value("Branch created successfully"));
 
-        verify(branchService, times(1)).createBranch(any(CreateBranchRequest.class));
-    }
+                verify(branchService, times(1)).createBranch(any(CreateBranchRequest.class));
+        }
 
-    @Test
-    void getAllBranches_shouldReturnBranchList() throws Exception {
-        // Arrange
-        BranchResponse branchOne = buildBranchResponse(
-                1L,
-                "Main Branch",
-                "123 Food Street",
-                "0771234567",
-                "main@cravehouse.com",
-                "ACTIVE",
-                null
-        );
+        // Test case 2: Get all branches
+        @Test
+        void getAllBranches_shouldReturnBranchList() throws Exception {
+                // Arrange
+                BranchResponse branchOne = buildBranchResponse(
+                                1L,
+                                "Main Branch",
+                                "123 Food Street",
+                                "0771234567",
+                                "main@cravehouse.com",
+                                "ACTIVE",
+                                null);
 
-        BranchResponse branchTwo = buildBranchResponse(
-                2L,
-                "Second Branch",
-                "456 Food Street",
-                "0777654321",
-                "second@cravehouse.com",
-                "INACTIVE",
-                null
-        );
+                BranchResponse branchTwo = buildBranchResponse(
+                                2L,
+                                "Second Branch",
+                                "456 Food Street",
+                                "0777654321",
+                                "second@cravehouse.com",
+                                "INACTIVE",
+                                null);
 
-        when(branchService.getAllBranches()).thenReturn(List.of(branchOne, branchTwo));
+                when(branchService.getAllBranches()).thenReturn(List.of(branchOne, branchTwo));
 
-        // Act + Assert
-        mockMvc.perform(get("/api/admin/branches"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].name").value("Main Branch"))
-                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
-                .andExpect(jsonPath("$[1].name").value("Second Branch"))
-                .andExpect(jsonPath("$[1].status").value("INACTIVE"));
+                // Act + Assert
+                mockMvc.perform(get("/api/admin/branches"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.length()").value(2))
+                                .andExpect(jsonPath("$[0].name").value("Main Branch"))
+                                .andExpect(jsonPath("$[0].status").value("ACTIVE"))
+                                .andExpect(jsonPath("$[1].name").value("Second Branch"))
+                                .andExpect(jsonPath("$[1].status").value("INACTIVE"));
 
-        verify(branchService, times(1)).getAllBranches();
-    }
+                verify(branchService, times(1)).getAllBranches();
+        }
 
-    @Test
-    void getBranchById_shouldReturnOneBranch() throws Exception {
-        // Arrange
-        BranchResponse response = buildBranchResponse(
-                1L,
-                "Main Branch",
-                "123 Food Street",
-                "0771234567",
-                "main@cravehouse.com",
-                "ACTIVE",
-                null
-        );
+        // Test case 3: Get a single branch by ID
+        @Test
+        void getBranchById_shouldReturnOneBranch() throws Exception {
+                // Arrange
+                BranchResponse response = buildBranchResponse(
+                                1L,
+                                "Main Branch",
+                                "123 Food Street",
+                                "0771234567",
+                                "main@cravehouse.com",
+                                "ACTIVE",
+                                null);
 
-        when(branchService.getBranchById(1L)).thenReturn(response);
+                when(branchService.getBranchById(1L)).thenReturn(response);
 
-        // Act + Assert
-        mockMvc.perform(get("/api/admin/branches/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.name").value("Main Branch"))
-                .andExpect(jsonPath("$.status").value("ACTIVE"));
+                // Act + Assert
+                mockMvc.perform(get("/api/admin/branches/1"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(1))
+                                .andExpect(jsonPath("$.name").value("Main Branch"))
+                                .andExpect(jsonPath("$.status").value("ACTIVE"));
 
-        verify(branchService, times(1)).getBranchById(1L);
-    }
+                verify(branchService, times(1)).getBranchById(1L);
+        }
 
-    @Test
-    void updateBranch_shouldReturnUpdatedBranchResponse() throws Exception {
-        // Arrange
-        UpdateBranchRequest request = new UpdateBranchRequest();
-        request.setName("Updated Branch");
-        request.setAddress("Updated Address");
-        request.setContactNumber("0772222222");
-        request.setEmail("updated@cravehouse.com");
+        @Test
+        void updateBranch_shouldReturnUpdatedBranchResponse() throws Exception {
+                // Arrange
+                UpdateBranchRequest request = new UpdateBranchRequest();
+                request.setName("Updated Branch");
+                request.setAddress("Updated Address");
+                request.setContactNumber("0772222222");
+                request.setEmail("updated@cravehouse.com");
 
-        BranchResponse response = buildBranchResponse(
-                1L,
-                "Updated Branch",
-                "Updated Address",
-                "0772222222",
-                "updated@cravehouse.com",
-                "ACTIVE",
-                "Branch updated successfully"
-        );
+                BranchResponse response = buildBranchResponse(
+                                1L,
+                                "Updated Branch",
+                                "Updated Address",
+                                "0772222222",
+                                "updated@cravehouse.com",
+                                "ACTIVE",
+                                "Branch updated successfully");
 
-        when(branchService.updateBranch(eq(1L), any(UpdateBranchRequest.class))).thenReturn(response);
+                when(branchService.updateBranch(eq(1L), any(UpdateBranchRequest.class))).thenReturn(response);
 
-        // Act + Assert
-        mockMvc.perform(put("/api/admin/branches/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.name").value("Updated Branch"))
-                .andExpect(jsonPath("$.address").value("Updated Address"))
-                .andExpect(jsonPath("$.message").value("Branch updated successfully"));
+                // Act + Assert
+                mockMvc.perform(put("/api/admin/branches/1")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(1))
+                                .andExpect(jsonPath("$.name").value("Updated Branch"))
+                                .andExpect(jsonPath("$.address").value("Updated Address"))
+                                .andExpect(jsonPath("$.message").value("Branch updated successfully"));
 
-        verify(branchService, times(1)).updateBranch(eq(1L), any(UpdateBranchRequest.class));
-    }
+                verify(branchService, times(1)).updateBranch(eq(1L), any(UpdateBranchRequest.class));
+        }
 
-    @Test
-    void activateBranch_shouldReturnActiveBranchResponse() throws Exception {
-        // Arrange
-        BranchResponse response = buildBranchResponse(
-                1L,
-                "Main Branch",
-                "123 Food Street",
-                "0771234567",
-                "main@cravehouse.com",
-                "ACTIVE",
-                "Branch activated successfully"
-        );
+        @Test
+        void activateBranch_shouldReturnActiveBranchResponse() throws Exception {
+                // Arrange
+                BranchResponse response = buildBranchResponse(
+                                1L,
+                                "Main Branch",
+                                "123 Food Street",
+                                "0771234567",
+                                "main@cravehouse.com",
+                                "ACTIVE",
+                                "Branch activated successfully");
 
-        when(branchService.activateBranch(1L)).thenReturn(response);
+                when(branchService.activateBranch(1L)).thenReturn(response);
 
-        // Act + Assert
-        mockMvc.perform(patch("/api/admin/branches/1/activate"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.message").value("Branch activated successfully"));
+                // Act + Assert
+                mockMvc.perform(patch("/api/admin/branches/1/activate"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(1))
+                                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                                .andExpect(jsonPath("$.message").value("Branch activated successfully"));
 
-        verify(branchService, times(1)).activateBranch(1L);
-    }
+                verify(branchService, times(1)).activateBranch(1L);
+        }
 
-    @Test
-    void deactivateBranch_shouldReturnInactiveBranchResponse() throws Exception {
-        // Arrange
-        BranchResponse response = buildBranchResponse(
-                1L,
-                "Main Branch",
-                "123 Food Street",
-                "0771234567",
-                "main@cravehouse.com",
-                "INACTIVE",
-                "Branch deactivated successfully"
-        );
+        @Test
+        void deactivateBranch_shouldReturnInactiveBranchResponse() throws Exception {
+                // Arrange
+                BranchResponse response = buildBranchResponse(
+                                1L,
+                                "Main Branch",
+                                "123 Food Street",
+                                "0771234567",
+                                "main@cravehouse.com",
+                                "INACTIVE",
+                                "Branch deactivated successfully");
 
-        when(branchService.deactivateBranch(1L)).thenReturn(response);
+                when(branchService.deactivateBranch(1L)).thenReturn(response);
 
-        // Act + Assert
-        mockMvc.perform(patch("/api/admin/branches/1/deactivate"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1))
-                .andExpect(jsonPath("$.status").value("INACTIVE"))
-                .andExpect(jsonPath("$.message").value("Branch deactivated successfully"));
+                // Act + Assert
+                mockMvc.perform(patch("/api/admin/branches/1/deactivate"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.id").value(1))
+                                .andExpect(jsonPath("$.status").value("INACTIVE"))
+                                .andExpect(jsonPath("$.message").value("Branch deactivated successfully"));
 
-        verify(branchService, times(1)).deactivateBranch(1L);
-    }
+                verify(branchService, times(1)).deactivateBranch(1L);
+        }
 
-    /**
-     * Helper method to avoid repeating BranchResponse builder code.
-     */
-    private BranchResponse buildBranchResponse(Long id,
-                                               String name,
-                                               String address,
-                                               String contactNumber,
-                                               String email,
-                                               String status,
-                                               String message) {
-        return BranchResponse.builder()
-                .id(id)
-                .name(name)
-                .address(address)
-                .contactNumber(contactNumber)
-                .email(email)
-                .status(status)
-                .createdAt(LocalDateTime.of(2026, 4, 27, 10, 0))
-                .message(message)
-                .build();
-    }
+        /**
+         * Helper method to avoid repeating BranchResponse builder code.
+         */
+        private BranchResponse buildBranchResponse(Long id,
+                        String name,
+                        String address,
+                        String contactNumber,
+                        String email,
+                        String status,
+                        String message) {
+                return BranchResponse.builder()
+                                .id(id)
+                                .name(name)
+                                .address(address)
+                                .contactNumber(contactNumber)
+                                .email(email)
+                                .status(status)
+                                .createdAt(LocalDateTime.of(2026, 4, 27, 10, 0))
+                                .message(message)
+                                .build();
+        }
 }
