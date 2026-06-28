@@ -114,7 +114,7 @@ public class LineChefServiceImpl implements LineChefService {
 
         Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
         if (branchId != null) {
-            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), item.getItemName(), "PREPARING", order.getStatus().name());
+            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), order.getOrderNumber(), item.getItemName(), "PREPARING", order.getStatus().name());
         }
     }
 
@@ -151,7 +151,7 @@ public class LineChefServiceImpl implements LineChefService {
 
         Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
         if (branchId != null) {
-            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), item.getItemName(), "READY", order.getStatus().name());
+            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), order.getOrderNumber(), item.getItemName(), "READY", order.getStatus().name());
         }
 
         // If this line chef has no more PREPARING items → set status back to AVAILABLE

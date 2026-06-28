@@ -66,10 +66,11 @@ public class WebSocketNotificationService {
      * @param newItemStatus  The new item status (PREPARING or READY)
      * @param newOrderStatus The new order status
      */
-    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String itemName, String newItemStatus, String newOrderStatus) {
+    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String orderNumber, String itemName, String newItemStatus, String newOrderStatus) {
         String destination = "/topic/branch/" + branchId + "/kitchen-item-update";
         java.util.Map<String, String> payload = java.util.Map.of(
                 "orderId", String.valueOf(orderId),
+                "orderNumber", orderNumber,
                 "itemName", itemName,
                 "newStatus", newItemStatus,
                 "orderStatus", newOrderStatus
@@ -100,10 +101,11 @@ public class WebSocketNotificationService {
      * Topic: /topic/branch/{branchId}/order-status-update
      * Used for: kitchen holds order (→ receptionist), receptionist sends back (→ kitchen)
      */
-    public void broadcastOrderStatusChanged(Long branchId, Long orderId, String newStatus) {
+    public void broadcastOrderStatusChanged(Long branchId, Long orderId, String orderNumber, String newStatus) {
         String destination = "/topic/branch/" + branchId + "/order-status-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of(
                 "orderId", String.valueOf(orderId),
+                "orderNumber", orderNumber,
                 "newStatus", newStatus
         ));
     }
