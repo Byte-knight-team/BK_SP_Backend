@@ -276,6 +276,12 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
             throw new RuntimeException("Order is not ready yet");
         }
 
+        // Mark all items as SERVED so line chefs see them in their Done tab
+        order.getItems().forEach(item -> {
+            item.setStatus(OrderItemStatus.SERVED);
+            orderItemRepository.save(item);
+        });
+
         order.updateStatus(OrderStatus.SERVED);
         orderRepository.save(order);
     }
