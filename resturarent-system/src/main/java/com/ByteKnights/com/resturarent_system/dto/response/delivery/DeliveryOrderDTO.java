@@ -15,6 +15,9 @@ public class DeliveryOrderDTO {
     private Long id;
     private String orderNumber;
     private String location;
+    private String deliveryAddress;
+    private String customerName;
+    private String customerPhone;
     private String paymentType;
     private BigDecimal amount;
     private String status; // e.g. "ASSIGNED", "ACCEPTED"

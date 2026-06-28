@@ -16,7 +16,6 @@ import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -82,36 +81,37 @@ public class RoleService {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         JwtUserPrincipal principal = (JwtUserPrincipal) auth.getPrincipal();
 
-        //SUPER_ADMIN can modify all roles
+        // SUPER_ADMIN can modify all roles
         if ((role.getName().equals("SUPER_ADMIN") || role.getName().equals("ADMIN"))
                 && !principal.getUser().getRole().getName().equals("SUPER_ADMIN")) {
             throw new RuntimeException("Only Super Admin can modify Admin/Super Admin roles");
         }
 
-        //prepare old values for audit log
+        // prepare old values for audit log
         Map<String, Object> oldValues = new LinkedHashMap<>();
         oldValues.put("roleId", role.getId());
         oldValues.put("roleName", role.getName());
         oldValues.put("permissionNames", extractPermissionNames(role.getPermissions()));
 
-        //add privileges to role
+        // add privileges to role
         Set<Privilege> privileges = new HashSet<>();
 
-        //check if privilege exists and add to role
-        //Frontend send array of permission names so we need to check if privilege exists and
-        //add to a set
+        // check if privilege exists and add to role
+        // Frontend send array of permission names so we need to check if privilege
+        // exists and
+        // add to a set
         for (String permName : permissionNames) {
             Privilege privilege = privilegeRepository.findByName(permName)
-                    //if privilege not found throw exception
+                    // if privilege not found throw exception
                     .orElseThrow(() -> new RuntimeException("Privilege not found: " + permName));
             privileges.add(privilege);
         }
 
-        //This replaces the old permissions with the new set
+        // This replaces the old permissions with the new set
         role.setPermissions(privileges);
         Role savedRole = roleRepository.save(role);
 
-        //prepare new values for audit log
+        // prepare new values for audit log
         Map<String, Object> newValues = new LinkedHashMap<>();
         newValues.put("roleId", savedRole.getId());
         newValues.put("roleName", savedRole.getName());
@@ -132,17 +132,17 @@ public class RoleService {
         return savedRole;
     }
 
-    //get permissions of a role
+    // get permissions of a role
     public Set<String> getPermissionsOfRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
-        //This creates an empty Set.
+        // This creates an empty Set.
         Set<String> perms = new HashSet<>();
-        //Convert Privilege objects into names
+        // Convert Privilege objects into names
         role.getPermissions().forEach(p -> perms.add(p.getName()));
 
-        //Return permission names
+        // Return permission names
         return perms;
     }
 
@@ -153,7 +153,7 @@ public class RoleService {
     public Role createRole(String name, String description, BigDecimal baseSalary) {
         String normalizedName = normalizeRoleName(name);
 
-        //check if role already exists
+        // check if role already exists
         if (roleRepository.findByName(normalizedName).isPresent()) {
             throw new RuntimeException("Role already exists");
         }
@@ -173,7 +173,7 @@ public class RoleService {
     public List<RoleSummaryResponse> getAllRoleSummaries() {
         String currentUserRole = getCurrentAuthenticatedRoleName();
 
-        //get all roles
+        // get all roles
         return roleRepository.findAll()
                 .stream()
                 .filter(role -> {
@@ -187,9 +187,9 @@ public class RoleService {
 
                     return true;
                 })
-                //sort by name
+                // sort by name
                 .sorted((role1, role2) -> role1.getName().compareToIgnoreCase(role2.getName()))
-                //convert to role summary
+                // convert to role summary
                 .map(this::mapToRoleSummary)
                 .toList();
     }
@@ -202,7 +202,7 @@ public class RoleService {
         String currentUserRole = getCurrentAuthenticatedRoleName();
         String requestedRoleName = normalizeRoleNameForAccessCheck(role.getName());
 
-        //ADMIN cannot access SUPER_ADMIN role
+        // ADMIN cannot access SUPER_ADMIN role
         if ("ADMIN".equals(currentUserRole) && ADMIN_HIDDEN_ROLE_NAMES.contains(requestedRoleName)) {
             throw new AccessDeniedException("ADMIN cannot access this role");
         }
@@ -272,18 +272,19 @@ public class RoleService {
     }
 
     /*
-     * Deletes a custom role only if it is not a core role and is not assigned to any users.
+     * Deletes a custom role only if it is not a core role and is not assigned to
+     * any users.
      */
     public void deleteRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
-        //Core roles cannot be deleted
+        // Core roles cannot be deleted
         if (CORE_ROLES.contains(role.getName())) {
             throw new RuntimeException("Core roles cannot be deleted");
         }
 
-        //if there are active users for a role, role cannot be deleted
+        // if there are active users for a role, role cannot be deleted
         if (userRepository.existsByRole(role)) {
             throw new RuntimeException("Cannot delete role because it is assigned to one or more users");
         }
@@ -309,7 +310,7 @@ public class RoleService {
      * Reads the current logged in user role from Spring Security authorities.
      */
     private String getCurrentAuthenticatedRoleName() {
-        //Gets the current logged in authentication
+        // Gets the current logged in authentication
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || authentication.getAuthorities() == null) {
@@ -318,13 +319,13 @@ public class RoleService {
 
         return authentication.getAuthorities()
                 .stream()
-                //Converts each authority object into text.
+                // Converts each authority object into text.
                 .map(GrantedAuthority::getAuthority)
-                //Keeps only values that start with ROLE_.
+                // Keeps only values that start with ROLE_.
                 .filter(authority -> authority != null && authority.startsWith("ROLE_"))
-                //Removes ROLE_ prefix
+                // Removes ROLE_ prefix
                 .map(authority -> authority.replace("ROLE_", ""))
-                //Returns the first match
+                // Returns the first match
                 .findFirst()
                 .orElse("");
     }
@@ -341,7 +342,7 @@ public class RoleService {
         return roleName.trim().toUpperCase();
     }
 
-    //Maps role to role summary
+    // Maps role to role summary
     private RoleSummaryResponse mapToRoleSummary(Role role) {
         int permissionCount = role.getPermissions() != null ? role.getPermissions().size() : 0;
         long activeUserCount = userRepository.countByRoleAndIsActiveTrue(role);
@@ -356,7 +357,7 @@ public class RoleService {
                 .build();
     }
 
-    //Normalizes role name
+    // Normalizes role name
     private String normalizeRoleName(String name) {
         if (name == null || name.trim().isEmpty()) {
             throw new RuntimeException("Role name is required");
@@ -365,8 +366,7 @@ public class RoleService {
         return name.trim().toUpperCase();
     }
 
-
-    //Snapshot is used by manual audit logs to store old/new role state.
+    // Snapshot is used by manual audit logs to store old/new role state.
     private Map<String, Object> buildRoleAuditSnapshot(Role role) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("roleId", role.getId());
@@ -378,11 +378,11 @@ public class RoleService {
         return snapshot;
     }
 
-    //Extracts permission names from privileges
-    //Privilege(name = "VIEW_STAFF") to VIEW_STAFF
+    // Extracts permission names from privileges
+    // Privilege(name = "VIEW_STAFF") to VIEW_STAFF
     private Set<String> extractPermissionNames(Set<Privilege> privileges) {
 
-        //TreeSet automatically sorts the names alphabetically and removes duplicates.
+        // TreeSet automatically sorts the names alphabetically and removes duplicates.
         Set<String> permissionNames = new TreeSet<>();
 
         if (privileges != null) {
@@ -396,9 +396,9 @@ public class RoleService {
         return permissionNames;
     }
 
-    //Salary validation helper, null salary becomes 0.00, 
-    //negative salary is rejected, 
-    //and valid salary is stored with 2 decimal places.
+    // Salary validation helper, null salary becomes 0.00,
+    // negative salary is rejected,
+    // and valid salary is stored with 2 decimal places.
     private BigDecimal normalizeSalary(BigDecimal salary) {
         if (salary == null) {
             return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);

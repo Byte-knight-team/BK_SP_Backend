@@ -2,20 +2,12 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryOrderDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHistoryDTO;
-import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
-import com.ByteKnights.com.resturarent_system.entity.AuditModule;
-import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
-import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
-import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Delivery;
 import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
-import com.ByteKnights.com.resturarent_system.entity.Order;
-import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 import com.ByteKnights.com.resturarent_system.entity.Staff;
 import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
-import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,11 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 
 @Service
 @RequiredArgsConstructor
@@ -36,7 +27,6 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         private final DeliveryRepository deliveryRepository;
         private final OrderRepository orderRepository;
         private final StaffRepository staffRepository;
-        private final AuditLogService auditLogService;
 
         /**
          * Fetches all delivery tasks that are newly assigned to a specific driver.
@@ -96,6 +86,9 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                                 .orderNumber(d.getOrder().getOrderNumber() != null ? d.getOrder().getOrderNumber()
                                                 : "ORD-" + d.getOrder().getId())
                                 .location(d.getOrder().getDeliveryAddress())
+                                .deliveryAddress(d.getOrder().getDeliveryAddress())
+                                .customerName(d.getOrder().getContactName())
+                                .customerPhone(d.getOrder().getContactPhone())
                                 .paymentType("CASH ON DELIVERY")
                                 .amount(d.getOrder().getFinalAmount())
                                 .status(d.getDeliveryStatus().name())
@@ -136,12 +129,6 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "Assignment not found for order ID: " + orderId));
 
-                /*
-                 * Manual audit is used because this method changes delivery status
-                 * and saves a rejection/cancel reason.
-                 */
-                Map<String, Object> oldValues = buildDeliveryAuditSnapshot(delivery);
-
                 // Mark the delivery as cancelled and save the driver's provided reason
                 delivery.setDeliveryStatus(DeliveryStatus.CANCELLED);
                 delivery.setCancelledReason(reason);
@@ -164,14 +151,6 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "Assignment not found for order ID: " + orderId));
 
-                /*
-                 * Manual audit is used because this method may update both delivery status
-                 * and the parent order status when the delivery is completed.
-                 */
-                Map<String, Object> oldValues = new LinkedHashMap<>();
-                oldValues.put("delivery", buildDeliveryAuditSnapshot(delivery));
-                oldValues.put("order", buildDeliveryOrderAuditSnapshot(delivery.getOrder()));
-
                 delivery.setDeliveryStatus(status);
 
                 // Special case: If the delivery is finalized, sync the master Order table
@@ -183,106 +162,54 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         orderRepository.save(delivery.getOrder());
                 }
 
-                Delivery savedDelivery = deliveryRepository.save(delivery);
-
-                Map<String, Object> newValues = new LinkedHashMap<>();
-                newValues.put("delivery", buildDeliveryAuditSnapshot(savedDelivery));
-                newValues.put("order", buildDeliveryOrderAuditSnapshot(savedDelivery.getOrder()));
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.DELIVERY,
-                                AuditEventType.DELIVERY_STATUS_UPDATED,
-                                AuditStatus.SUCCESS,
-                                status == DeliveryStatus.DELIVERED ? AuditSeverity.INFO : AuditSeverity.INFO,
-                                AuditTargetType.DELIVERY,
-                                savedDelivery.getId(),
-                                getDeliveryBranchId(savedDelivery),
-                                "Delivery status updated successfully",
-                                oldValues,
-                                newValues);
+                deliveryRepository.save(delivery);
         }
 
-        /*
-         * Builds safe audit JSON for delivery changes.
-         * We store only useful fields instead of saving the full entity object.
+        /**
+         * Retrieves historical deliveries (DELIVERED or CANCELLED) for a specific
+         * driver.
          */
-    private Map<String, Object> buildDeliveryAuditSnapshot(Delivery delivery) {
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-        if (delivery == null) {
-            return snapshot;
+        @Override
+        @Transactional(readOnly = true)
+        public List<DeliveryHistoryDTO> getDeliveryHistory(Long userId) {
+                Staff staff = staffRepository.findByUserId(userId)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                                "Staff member not found for user ID: " + userId));
+
+                List<Delivery> history = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+                                staff.getId(),
+                                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED));
+
+                // Sort descending by completion time (deliveredAt or assignedAt as fallback)
+                return history.stream().map(d -> {
+                        LocalDateTime completedAt = d.getDeliveryStatus() == DeliveryStatus.DELIVERED
+                                        ? d.getDeliveredAt()
+                                        : (d.getDeliveredAt() != null ? d.getDeliveredAt() : d.getAssignedAt());
+
+                        return DeliveryHistoryDTO.builder()
+                                        .id(d.getId())
+                                        .orderId(d.getOrder().getId())
+                                        .orderNumber(d.getOrder().getOrderNumber() != null
+                                                        ? d.getOrder().getOrderNumber()
+                                                        : "ORD-" + d.getOrder().getId())
+                                        .customerName(d.getOrder().getContactName())
+                                        .customerPhone(d.getOrder().getContactPhone())
+                                        .deliveryAddress(d.getOrder().getDeliveryAddress())
+                                        .amount(d.getOrder().getFinalAmount())
+                                        .status(d.getDeliveryStatus().name())
+                                        .completedAt(completedAt)
+                                        .cancelledReason(d.getCancelledReason())
+                                        .build();
+                })
+                                .sorted((a, b) -> {
+                                        if (a.getCompletedAt() == null && b.getCompletedAt() == null)
+                                                return 0;
+                                        if (a.getCompletedAt() == null)
+                                                return 1;
+                                        if (b.getCompletedAt() == null)
+                                                return -1;
+                                        return b.getCompletedAt().compareTo(a.getCompletedAt());
+                                })
+                                .collect(Collectors.toList());
         }
-        snapshot.put("id", delivery.getId());
-        snapshot.put("status", delivery.getDeliveryStatus() != null ? delivery.getDeliveryStatus().name() : null);
-        snapshot.put("assigned_at", delivery.getAssignedAt());
-        snapshot.put("delivered_at", delivery.getDeliveredAt());
-        snapshot.put("cancelled_reason", delivery.getCancelledReason());
-        return snapshot;
-    }
-
-    private Map<String, Object> buildDeliveryOrderAuditSnapshot(Order order) {
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-        if (order == null) {
-            return snapshot;
-        }
-        snapshot.put("id", order.getId());
-        snapshot.put("order_number", order.getOrderNumber());
-        snapshot.put("status", order.getStatus() != null ? order.getStatus().name() : null);
-        snapshot.put("amount", order.getFinalAmount());
-        return snapshot;
-    }
-
-    private Long getDeliveryBranchId(Delivery delivery) {
-        if (delivery != null && delivery.getOrder() != null && delivery.getOrder().getBranch() != null) {
-            return delivery.getOrder().getBranch().getId();
-        }
-        return null;
-    }
-
-    /**
-     * Retrieves historical deliveries (DELIVERED or CANCELLED) for a specific
-     * driver.
-     */
-    @Override
-    @Transactional(readOnly = true)
-    public List<DeliveryHistoryDTO> getDeliveryHistory(Long userId) {
-        Staff staff = staffRepository.findByUserId(userId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Staff member not found for user ID: " + userId));
-
-        List<Delivery> history = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
-                staff.getId(),
-                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED));
-
-        // Sort descending by completion time (deliveredAt or assignedAt as fallback)
-        return history.stream().map(d -> {
-            LocalDateTime completedAt = d.getDeliveryStatus() == DeliveryStatus.DELIVERED
-                    ? d.getDeliveredAt()
-                    : (d.getDeliveredAt() != null ? d.getDeliveredAt() : d.getAssignedAt());
-
-            return DeliveryHistoryDTO.builder()
-                    .id(d.getId())
-                    .orderId(d.getOrder().getId())
-                    .orderNumber(d.getOrder().getOrderNumber() != null
-                            ? d.getOrder().getOrderNumber()
-                            : "ORD-" + d.getOrder().getId())
-                    .customerName(d.getOrder().getContactName())
-                    .customerPhone(d.getOrder().getContactPhone())
-                    .deliveryAddress(d.getOrder().getDeliveryAddress())
-                    .amount(d.getOrder().getFinalAmount())
-                    .status(d.getDeliveryStatus().name())
-                    .completedAt(completedAt)
-                    .cancelledReason(d.getCancelledReason())
-                    .build();
-        })
-        .sorted((a, b) -> {
-            if (a.getCompletedAt() == null && b.getCompletedAt() == null)
-                return 0;
-            if (a.getCompletedAt() == null)
-                return 1;
-            if (b.getCompletedAt() == null)
-                return -1;
-            return b.getCompletedAt().compareTo(a.getCompletedAt());
-        })
-        .collect(Collectors.toList());
-    }
 }
