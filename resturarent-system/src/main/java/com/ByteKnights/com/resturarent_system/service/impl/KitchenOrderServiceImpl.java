@@ -13,7 +13,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -30,7 +29,6 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
     private final OrderItemRepository orderItemRepository;
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
-    private final ChefAttendanceRepository chefAttendanceRepository;
     private final WebSocketNotificationService webSocketNotificationService;
     private final AuditLogService auditLogService;
 
@@ -257,34 +255,6 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         }
 
         snapshot.put("items", itemSnapshots);
-
-        return snapshot;
-    }
-
-    private Map<String, Object> buildChefAttendanceAuditSnapshot(ChefAttendance attendance) {
-        Map<String, Object> snapshot = new LinkedHashMap<>();
-
-        if (attendance == null) {
-            return snapshot;
-        }
-
-        Staff staff = attendance.getStaff();
-
-        snapshot.put("attendanceId", attendance.getId());
-        snapshot.put("chefStaffId", staff != null ? staff.getId() : null);
-        snapshot.put("chefUserId",
-                staff != null && staff.getUser() != null ? staff.getUser().getId() : null);
-        snapshot.put("chefName",
-                staff != null && staff.getUser() != null ? staff.getUser().getFullName() : null);
-        snapshot.put("attendanceDate", attendance.getAttendanceDate());
-        snapshot.put("attendanceStatus",
-                attendance.getAttendanceStatus() != null
-                        ? attendance.getAttendanceStatus().name()
-                        : null);
-        snapshot.put("workStatus",
-                attendance.getWorkStatus() != null
-                        ? attendance.getWorkStatus().name()
-                        : null);
 
         return snapshot;
     }
