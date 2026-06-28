@@ -96,9 +96,14 @@ public class WebSocketNotificationService {
         messagingTemplate.convertAndSend(destination, payload);
     }
 
-    public void broadcastLineChefItemRemoved(Long lineChefUserId) {
+    public void broadcastLineChefItemRemoved(Long lineChefUserId, String itemName, String orderNumber, String newChefName) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/item-removed";
-        messagingTemplate.convertAndSend(destination, java.util.Map.of("refresh", "true"));
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "itemName", itemName,
+                "orderNumber", orderNumber,
+                "newChefName", newChefName
+        );
+        messagingTemplate.convertAndSend(destination, payload);
     }
 
 }
