@@ -51,16 +51,12 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
 
         for (Order order : orders) {
-            int totalQty = 0;
-            for (OrderItem item : order.getItems()) {
-                totalQty += item.getQuantity();
-            }
             orderCardDetailsDTOS.add(new OrderCardDetailsDTO(
                     order.getId(),
                     order.getOrderNumber(),
                     order.getStatus().name(),
                     order.getStatusUpdatedAt() != null ? order.getStatusUpdatedAt().format(formatter) : null,
-                    totalQty
+                    order.getItems().size()
             ));
         }
         return orderCardDetailsDTOS;
