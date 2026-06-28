@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefItemD
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.LineChefService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ public class LineChefServiceImpl implements LineChefService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final ChefAttendanceRepository chefAttendanceRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -92,6 +94,11 @@ public class LineChefServiceImpl implements LineChefService {
                 .orElseThrow(() -> new RuntimeException("No attendance record for today. Please check in first."));
         attendance.setWorkStatus(ChefWorkStatus.COOKING);
         chefAttendanceRepository.save(attendance);
+
+        Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
+        if (branchId != null) {
+            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), item.getItemName(), "PREPARING");
+        }
     }
 
     @Override
@@ -123,6 +130,11 @@ public class LineChefServiceImpl implements LineChefService {
         if (allFinished) {
             order.updateStatus(OrderStatus.COMPLETED);
             orderRepository.save(order);
+        }
+
+        Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
+        if (branchId != null) {
+            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), item.getItemName(), "READY");
         }
 
         // If this line chef has no more PREPARING items → set status back to AVAILABLE

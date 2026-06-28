@@ -63,6 +63,28 @@ public class WebSocketNotificationService {
      * @param orderNumber     The order the item belongs to
      * @param itemName        The name of the assigned item
      */
+    /**
+     * Notify the kitchen (chief chef) that a line chef has updated an item status.
+     *
+     * Topic: /topic/branch/{branchId}/kitchen-item-update
+     * Subscribers: Kitchen order management page (SelectedOrder panel)
+     *
+     * @param branchId    The branch ID to scope the broadcast
+     * @param orderId     The order that contains the updated item
+     * @param itemName    The name of the item
+     * @param newStatus   The new status (PREPARING or READY)
+     */
+    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String itemName, String newStatus) {
+        String destination = "/topic/branch/" + branchId + "/kitchen-item-update";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "orderId", String.valueOf(orderId),
+                "itemName", itemName,
+                "newStatus", newStatus
+        );
+        log.info("Broadcasting item update to kitchen {}: {} -> {}", destination, itemName, newStatus);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
     public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/new-item";
         java.util.Map<String, String> payload = java.util.Map.of(
