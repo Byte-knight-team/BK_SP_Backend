@@ -208,6 +208,42 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OrderStatus status,
                         List<OrderType> orderTypes);
 
+        // Kitchen tab: PENDING/PREPARING orders, but exclude QR orders that already have a READY or SERVED item
+        // (those are shown in the Ready tab instead)
+        @EntityGraph(attributePaths = "items")
+        @Query("SELECT o FROM Order o " +
+               "WHERE o.branch.id = :branchId " +
+               "AND o.status = :status " +
+               "AND o.orderType IN :orderTypes " +
+               "AND o.createdAt BETWEEN :start AND :end " +
+               "AND (o.orderType <> com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "     OR NOT EXISTS (" +
+               "         SELECT i FROM OrderItem i WHERE i.order = o " +
+               "         AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                          com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED)))")
+        List<Order> findKitchenOrdersExcludingQRWithReadyItems(
+                @Param("branchId") Long branchId,
+                @Param("status") OrderStatus status,
+                @Param("orderTypes") List<OrderType> orderTypes,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
+
+        // QR orders in PENDING/PREPARING that have at least one READY or SERVED item — for receptionist Ready tab.
+        // Using SERVED too so the order stays visible after partial serving while remaining items are still cooking.
+        @EntityGraph(attributePaths = "items")
+        @Query("SELECT DISTINCT o FROM Order o JOIN o.items i " +
+               "WHERE o.branch.id = :branchId " +
+               "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "AND o.status IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.PENDING, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderStatus.PREPARING) " +
+               "AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED) " +
+               "AND o.createdAt BETWEEN :start AND :end")
+        List<Order> findQROrdersWithAnyReadyItem(
+                @Param("branchId") Long branchId,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
+
         @EntityGraph(attributePaths = "items")
         List<Order> findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
                         Long branchId,
