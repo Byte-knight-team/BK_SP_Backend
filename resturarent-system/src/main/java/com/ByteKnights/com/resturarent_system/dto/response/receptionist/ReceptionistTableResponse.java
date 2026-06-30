@@ -17,5 +17,5 @@ public class ReceptionistTableResponse {
     private Integer currentGuestCount;
     private Integer activeOrderCount;
     private LocalDateTime statusUpdatedAt;
-    private List<String> activeOrderIds;
+    private List<TableOrderSummary> activeOrders;
 }
