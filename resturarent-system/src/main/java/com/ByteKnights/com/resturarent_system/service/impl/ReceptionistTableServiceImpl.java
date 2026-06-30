@@ -169,8 +169,13 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
         }
 
-        // Reset table data
-        table.setState(TableStatus.AVAILABLE);
+        // If a reservation starts within 15 minutes, lock the table as RESERVED instead of AVAILABLE
+        LocalDateTime now = LocalDateTime.now();
+        boolean hasImmediateReservation = !reservationRepository
+                .findOverlappingReservations(tableId, now, now.plusMinutes(15))
+                .isEmpty();
+
+        table.setState(hasImmediateReservation ? TableStatus.RESERVED : TableStatus.AVAILABLE);
         table.setCurrentGuestCount(0);
         table.setStatusUpdatedAt(LocalDateTime.now());
 
