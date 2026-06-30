@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.TableOrderSummary;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.TableReservationSummary;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistTableService;
@@ -24,6 +25,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final OrderRepository orderRepository;
+    private final ReservationRepository reservationRepository;
     private final WebSocketNotificationService webSocketNotificationService;
 
     // fetch all tables belonging to the receptionist's branch
@@ -45,6 +47,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         List<ReceptionistTableResponse> dtoList = new ArrayList<>();
 
         LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfToday = startOfToday.plusDays(1);
 
         for (RestaurantTable table : tables) {
             // Always fetch today's orders directly — don't rely on activeOrderCount field
@@ -64,6 +67,21 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                             .build())
                     .toList();
 
+            // Check if there is a confirmed reservation for this table today
+            List<Reservation> todayReservations = reservationRepository.findByBranchAndDate(
+                    branchId, startOfToday, endOfToday);
+            TableReservationSummary todayReservation = todayReservations.stream()
+                    .filter(r -> r.getTable().getId().equals(table.getId()))
+                    .findFirst()
+                    .map(r -> TableReservationSummary.builder()
+                            .reservationId(r.getId())
+                            .customerName(r.getCustomerName())
+                            .customerPhone(r.getCustomerPhone())
+                            .reservationTime(r.getReservationTime())
+                            .endTime(r.getEndTime())
+                            .build())
+                    .orElse(null);
+
             ReceptionistTableResponse response = ReceptionistTableResponse.builder()
                     .id(table.getId())
                     .tableNumber(table.getTableNumber())
@@ -73,6 +91,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                     .activeOrderCount(activeOrders.size())
                     .statusUpdatedAt(table.getStatusUpdatedAt())
                     .activeOrders(orderSummaries)
+                    .todayReservation(todayReservation)
                     .build();
 
             dtoList.add(response);
