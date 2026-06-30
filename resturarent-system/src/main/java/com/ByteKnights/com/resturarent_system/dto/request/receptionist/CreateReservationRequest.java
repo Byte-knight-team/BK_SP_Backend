@@ -22,8 +22,6 @@ public class CreateReservationRequest {
     @NotNull(message = "End time is required")
     private LocalDateTime endTime;
 
-    @NotNull(message = "Guest count is required")
-    @Min(value = 1, message = "At least 1 guest is required")
     private Integer guestCount;
 
     private String notes;
