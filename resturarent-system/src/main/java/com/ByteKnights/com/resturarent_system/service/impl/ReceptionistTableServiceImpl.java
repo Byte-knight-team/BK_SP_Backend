@@ -129,6 +129,11 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
         }
 
+        // Allow seating on AVAILABLE or RESERVED tables (reserved guests arriving)
+        if (table.getState() != TableStatus.AVAILABLE && table.getState() != TableStatus.RESERVED) {
+            throw new RuntimeException("Table is not available for seating");
+        }
+
         // Update status and guest count
         table.setState(TableStatus.OCCUPIED);
         table.setCurrentGuestCount(guestCount);
