@@ -133,6 +133,23 @@ public class WebSocketNotificationService {
      * Topic: /topic/branch/{branchId}/table-update
      * Subscribers: Receptionist Table Management page
      */
+    /**
+     * Broadcast a reservation reminder to the receptionist.
+     * type: REMINDER_1HR or REMINDER_15MIN
+     *
+     * Topic: /topic/branch/{branchId}/reservation-reminder
+     * Subscribers: Receptionist Table Management page
+     */
+    public void broadcastReservationReminder(Long branchId, String type, Integer tableNumber, String reservationTime) {
+        String destination = "/topic/branch/" + branchId + "/reservation-reminder";
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("type", type);
+        payload.put("tableNumber", String.valueOf(tableNumber));
+        payload.put("reservationTime", reservationTime);
+        log.info("Broadcasting reservation reminder [{}] to branch {}, table {}", type, branchId, tableNumber);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
     public void broadcastTableUpdate(Long branchId) {
         String destination = "/topic/branch/" + branchId + "/table-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
