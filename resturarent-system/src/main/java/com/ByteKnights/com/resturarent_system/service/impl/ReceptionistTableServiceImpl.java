@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistTableResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.TableOrderSummary;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistTableService;
@@ -55,8 +56,12 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                     .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
                     .toList();
 
-            List<String> orderNumbers = activeOrders.stream()
-                    .map(Order::getOrderNumber)
+            List<TableOrderSummary> orderSummaries = activeOrders.stream()
+                    .map(o -> TableOrderSummary.builder()
+                            .orderNumber(o.getOrderNumber())
+                            .contactName(o.getContactName())
+                            .paymentStatus(o.getPaymentStatus() != null ? o.getPaymentStatus().name() : "PENDING")
+                            .build())
                     .toList();
 
             ReceptionistTableResponse response = ReceptionistTableResponse.builder()
@@ -67,7 +72,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                     .currentGuestCount(table.getCurrentGuestCount())
                     .activeOrderCount(activeOrders.size())
                     .statusUpdatedAt(table.getStatusUpdatedAt())
-                    .activeOrderIds(orderNumbers)
+                    .activeOrders(orderSummaries)
                     .build();
 
             dtoList.add(response);
