@@ -178,6 +178,8 @@ public class OrderServiceImpl implements OrderService {
                 order.setContactPhone(request.getContactPhone());
                 order.setContactEmail(request.getContactEmail());
                 order.setDeliveryAddress(request.getDeliveryAddress());
+                order.setLatitude(request.getLatitude());
+                order.setLongitude(request.getLongitude());
                 order.setKitchenNotes(request.getKitchenNotes());
 
                 // Apply Math to Order

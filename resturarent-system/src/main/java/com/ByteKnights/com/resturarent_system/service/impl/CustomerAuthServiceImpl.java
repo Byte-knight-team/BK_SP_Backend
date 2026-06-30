@@ -49,19 +49,19 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
 
-    @Value("${app.frontend.customer-base-url:https://cravehouse.netlify.app}")
-    private String customerFrontendBaseUrl;
+    @Value("${app.frontend.customer-forgot-password-url:http://localhost:5173/reset-password}")
+    private String customerForgotPasswordUrl;
 
     public CustomerAuthServiceImpl(UserRepository userRepository,
-                                   RoleRepository roleRepository,
-                                   CustomerRepository customerRepository,
-                                   QrSessionRepository qrSessionRepository,
-                                   PasswordEncoder passwordEncoder,
-                                   CustomerJwtService customerJwtService,
-                                   SmsService smsService,
-                                   ProfileImageStorageService profileImageStorageService,
-                                   PasswordResetTokenRepository passwordResetTokenRepository,
-                                   EmailService emailService) {
+            RoleRepository roleRepository,
+            CustomerRepository customerRepository,
+            QrSessionRepository qrSessionRepository,
+            PasswordEncoder passwordEncoder,
+            CustomerJwtService customerJwtService,
+            SmsService smsService,
+            ProfileImageStorageService profileImageStorageService,
+            PasswordResetTokenRepository passwordResetTokenRepository,
+            EmailService emailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.customerRepository = customerRepository;
@@ -326,7 +326,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
 
         return roleRepository.findByName("CUSTOMER")
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
+                .orElseThrow(
+                        () -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error"));
     }
 
     private String normalizeRole(String roleName) {
@@ -403,7 +404,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         passwordResetTokenRepository.save(resetToken);
 
-        String resetLink = customerFrontendBaseUrl + "/reset-password?token=" + tokenStr;
+        // Construct reset link
+        String resetLink = customerForgotPasswordUrl + "?token=" + tokenStr;
 
         emailService.sendCustomerPasswordResetEmail(normalizedEmail, resetLink);
     }
