@@ -59,6 +59,12 @@ public class Order {
     @Column(name = "delivery_address", columnDefinition = "TEXT")
     private String deliveryAddress;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     // ==========================================
     // MONEY, FEES, AND DISCOUNTS
     // ==========================================
