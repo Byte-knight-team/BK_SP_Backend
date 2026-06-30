@@ -116,6 +116,10 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege kitchenAlertView = createPrivilege("KITCHEN_ALERT_VIEW");
                 Privilege kitchenAlertResolve = createPrivilege("KITCHEN_ALERT_RESOLVE");
 
+                // Line Chef
+                Privilege lineChefOrderView = createPrivilege("LINE_CHEF_ORDER_VIEW");
+                Privilege lineChefOrderUpdate = createPrivilege("LINE_CHEF_ORDER_UPDATE");
+
                 // RECEPTIONIST
                 Privilege receptionistTableView = createPrivilege("RECEPTIONIST_TABLE_VIEW");
                 Privilege receptionistTableUpdate = createPrivilege("RECEPTIONIST_TABLE_UPDATE");
@@ -180,7 +184,9 @@ public class DataSeeder implements CommandLineRunner {
                                 receptionistReservationUpdate,
                                 receptionistOrderView,
                                 receptionistOrderUpdate,
-                                receptionistPaymentCollect
+                                receptionistPaymentCollect,
+                                lineChefOrderView,
+                                lineChefOrderUpdate
                 );
 
                 /*
@@ -236,6 +242,11 @@ public class DataSeeder implements CommandLineRunner {
                                 updateDeliveryStatus,
                                 viewDelivery,
                                 manageDeliveryStatus));
+
+                Role lineChefRole = createRoleWithDefaultPermissions("LINE_CHEF", Set.of(
+                                lineChefOrderView,
+                                lineChefOrderUpdate));
+                addMissingPermissions(lineChefRole, Set.of(lineChefOrderView, lineChefOrderUpdate));
 
                 createRoleWithDefaultPermissions("CUSTOMER", Set.of(
                                 viewOwnOrders,

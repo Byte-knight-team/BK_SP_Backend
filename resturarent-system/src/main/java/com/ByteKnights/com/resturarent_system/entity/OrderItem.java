@@ -48,8 +48,8 @@ public class OrderItem {
     private OrderItemStatus status = OrderItemStatus.PENDING;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_chef_id")
-    private Staff assignedChef;
+    @JoinColumn(name = "assigned_line_chef_id")
+    private Staff assignedLineChef;
 
     @Column(name = "cooking_started_at")
     private LocalDateTime cookingStartedAt;
