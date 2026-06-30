@@ -1,19 +1,28 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuCategoryRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateMenuCategoryRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuCategoryResponse;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
 import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
 import com.ByteKnights.com.resturarent_system.exception.InvalidOperationException;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.MenuCategoryService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -24,10 +33,16 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
     private final MenuCategoryRepository menuCategoryRepository;
     private final MenuItemRepository menuItemRepository;
+    private final AuditLogService auditLogService;
 
-    public MenuCategoryServiceImpl(MenuCategoryRepository menuCategoryRepository, MenuItemRepository menuItemRepository) {
+    public MenuCategoryServiceImpl(
+            MenuCategoryRepository menuCategoryRepository,
+            MenuItemRepository menuItemRepository,
+            AuditLogService auditLogService
+    ) {
         this.menuCategoryRepository = menuCategoryRepository;
         this.menuItemRepository = menuItemRepository;
+        this.auditLogService = auditLogService;
     }
 
     @Override
@@ -47,10 +62,19 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.MENU,
+            eventType = AuditEventType.MENU_CATEGORY_CREATED,
+            targetType = AuditTargetType.MENU_CATEGORY,
+            description = "Menu category created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public MenuCategoryResponse createCategory(CreateMenuCategoryRequest request) {
         String normalizedName = validateAndNormalizeRequiredName(request != null ? request.getName() : null);
-        String normalizedDescription = validateAndNormalizeOptionalDescription(request != null ? request.getDescription() : null);
+        String normalizedDescription = validateAndNormalizeOptionalDescription(
+                request != null ? request.getDescription() : null
+        );
 
         if (menuCategoryRepository.existsByNameIgnoreCase(normalizedName)) {
             throw new DuplicateResourceException("Category already exists: " + normalizedName);
@@ -62,19 +86,33 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
                 .build();
 
         MenuCategory saved = menuCategoryRepository.save(category);
+
+        /*
+         * AOP audit is used here because category create is a simple action.
+         * captureResultAsNewValue = false keeps audit JSON storage small.
+         */
         return mapToResponse(saved, "Category created successfully");
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.MENU,
+            eventType = AuditEventType.MENU_CATEGORY_UPDATED,
+            targetType = AuditTargetType.MENU_CATEGORY,
+            description = "Menu category updated successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public MenuCategoryResponse updateCategory(Long id, UpdateMenuCategoryRequest request) {
         MenuCategory category = findCategoryOrThrow(id);
 
         if (request != null && request.getName() != null) {
             String normalizedName = validateAndNormalizeRequiredName(request.getName());
+
             if (menuCategoryRepository.existsByNameIgnoreCaseAndIdNot(normalizedName, id)) {
                 throw new DuplicateResourceException("Category already exists: " + normalizedName);
             }
+
             category.setName(normalizedName);
         }
 
@@ -83,6 +121,11 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         }
 
         MenuCategory updated = menuCategoryRepository.save(category);
+
+        /*
+         * AOP audit is used here because category update is a simple action.
+         * No old/new JSON is stored to reduce audit storage.
+         */
         return mapToResponse(updated, "Category updated successfully");
     }
 
@@ -99,8 +142,30 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
             throw new InvalidOperationException("Cannot delete category with existing menu items");
         }
 
+        /*
+         * Delete stays manual because after deleting the entity,
+         * oldValuesJson is useful to show what category was removed.
+         */
+        Map<String, Object> oldValues = buildMenuCategoryAuditSnapshot(category);
+
+        MenuCategoryResponse response = mapToResponse(category, "Category deleted successfully");
+
         menuCategoryRepository.delete(category);
-        return mapToResponse(category, "Category deleted successfully");
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.MENU,
+                AuditEventType.MENU_CATEGORY_DELETED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.MENU_CATEGORY,
+                id,
+                null,
+                "Menu category deleted successfully",
+                oldValues,
+                null
+        );
+
+        return response;
     }
 
     private MenuCategory findCategoryOrThrow(Long id) {
@@ -114,6 +179,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         }
 
         String normalizedName = name.trim();
+
         if (normalizedName.length() > MAX_NAME_LENGTH) {
             throw new InvalidOperationException("Category name must be at most " + MAX_NAME_LENGTH + " characters");
         }
@@ -127,12 +193,15 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         }
 
         String normalizedDescription = description.trim();
+
         if (normalizedDescription.isEmpty()) {
             return null;
         }
 
         if (normalizedDescription.length() > MAX_DESCRIPTION_LENGTH) {
-            throw new InvalidOperationException("Category description must be at most " + MAX_DESCRIPTION_LENGTH + " characters");
+            throw new InvalidOperationException(
+                    "Category description must be at most " + MAX_DESCRIPTION_LENGTH + " characters"
+            );
         }
 
         return normalizedDescription;
@@ -145,5 +214,22 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
                 .description(category.getDescription())
                 .message(message)
                 .build();
+    }
+
+    /*
+     * Builds safe audit JSON for menu category delete.
+     */
+    private Map<String, Object> buildMenuCategoryAuditSnapshot(MenuCategory category) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (category == null) {
+            return snapshot;
+        }
+
+        snapshot.put("categoryId", category.getId());
+        snapshot.put("name", category.getName());
+        snapshot.put("description", category.getDescription());
+
+        return snapshot;
     }
 }

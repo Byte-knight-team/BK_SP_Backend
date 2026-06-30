@@ -4,5 +4,6 @@ public enum OrderItemStatus {
     PENDING,
     PREPARING,
     READY,
-    ON_HOLD
+    ON_HOLD,
+    SERVED
 }
