@@ -14,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -27,16 +29,20 @@ public class ReservationScheduler {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("h:mm a");
 
+    // Tracks reservations that have already been notified to prevent duplicate toasts
+    private final Set<String> sentNotifications = new HashSet<>();
+
     @Scheduled(fixedRate = 60000)
     @Transactional
     public void checkReservations() {
         LocalDateTime now = LocalDateTime.now();
 
-        // Window: reservations starting between 59–61 min from now → 1-hour reminder
         LocalDateTime oneHourStart = now.plusMinutes(59);
         LocalDateTime oneHourEnd = now.plusMinutes(61);
 
-        // Window: reservations starting between 14–16 min from now → 15-min reminder + lock
+        LocalDateTime thirtyMinStart = now.plusMinutes(29);
+        LocalDateTime thirtyMinEnd = now.plusMinutes(31);
+
         LocalDateTime fifteenMinStart = now.plusMinutes(14);
         LocalDateTime fifteenMinEnd = now.plusMinutes(16);
 
@@ -49,28 +55,45 @@ public class ReservationScheduler {
             Long branchId = r.getTable().getBranch().getId();
             Integer tableNumber = r.getTable().getTableNumber();
             String timeStr = reservationTime.format(TIME_FORMATTER);
+            Long reservationId = r.getId();
 
-            // 1-hour reminder
-            if (!reservationTime.isBefore(oneHourStart) && !reservationTime.isAfter(oneHourEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(
-                        branchId, "REMINDER_1HR", tableNumber, timeStr);
+            // 1-hour reminder — fire only once
+            String key1hr = reservationId + "-1HR";
+            if (!sentNotifications.contains(key1hr)
+                    && !reservationTime.isBefore(oneHourStart)
+                    && !reservationTime.isAfter(oneHourEnd)) {
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_1HR", tableNumber, timeStr);
+                sentNotifications.add(key1hr);
                 log.info("1-hour reminder sent for table {} at {}", tableNumber, timeStr);
             }
 
-            // 15-minute reminder + lock table
-            if (!reservationTime.isBefore(fifteenMinStart) && !reservationTime.isAfter(fifteenMinEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(
-                        branchId, "REMINDER_15MIN", tableNumber, timeStr);
+            // 30-minute reminder — fire only once
+            String key30min = reservationId + "-30MIN";
+            if (!sentNotifications.contains(key30min)
+                    && !reservationTime.isBefore(thirtyMinStart)
+                    && !reservationTime.isAfter(thirtyMinEnd)) {
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_30MIN", tableNumber, timeStr);
+                sentNotifications.add(key30min);
+                log.info("30-min reminder sent for table {} at {}", tableNumber, timeStr);
+            }
+
+            // 15-minute reminder + lock table — fire only once
+            String key15min = reservationId + "-15MIN";
+            if (!sentNotifications.contains(key15min)
+                    && !reservationTime.isBefore(fifteenMinStart)
+                    && !reservationTime.isAfter(fifteenMinEnd)) {
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_15MIN", tableNumber, timeStr);
+                sentNotifications.add(key15min);
                 log.info("15-min reminder sent for table {} at {}", tableNumber, timeStr);
 
-                // Lock the table only if it's currently AVAILABLE (don't disturb OCCUPIED tables)
+                // Lock the table only if currently AVAILABLE
                 var table = r.getTable();
                 if (table.getState() == TableStatus.AVAILABLE) {
                     table.setState(TableStatus.RESERVED);
                     table.setStatusUpdatedAt(LocalDateTime.now());
                     tableRepository.save(table);
                     webSocketNotificationService.broadcastTableUpdate(branchId);
-                    log.info("Table {} locked as RESERVED for upcoming reservation", tableNumber);
+                    log.info("Table {} locked as RESERVED", tableNumber);
                 }
             }
         }
