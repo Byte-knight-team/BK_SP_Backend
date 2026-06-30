@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
 import com.ByteKnights.com.resturarent_system.entity.*;
@@ -90,6 +91,17 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .findFirst()
                 .map(this::toDTO)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public void cancelReservation(Long reservationId, CancelReservationRequest request) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new RuntimeException("Reservation not found"));
+
+        reservation.setStatus(ReservationStatus.CANCELLED);
+        reservation.setCancelReason(request.getReason());
+        reservationRepository.save(reservation);
     }
 
     private ReservationResponseDTO toDTO(Reservation r) {

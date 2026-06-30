@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service;
 
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
 
@@ -12,4 +13,6 @@ public interface ReceptionistReservationService {
     List<ReservationResponseDTO> getUpcomingReservations(String userEmail);
 
     ReservationResponseDTO getTableNextReservation(Long tableId, String userEmail);
+
+    void cancelReservation(Long reservationId, CancelReservationRequest request);
 }

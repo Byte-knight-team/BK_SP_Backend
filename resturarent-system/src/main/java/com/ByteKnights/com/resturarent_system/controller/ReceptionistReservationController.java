@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistReservationService;
@@ -50,5 +51,14 @@ public class ReceptionistReservationController {
             Principal principal) {
         ReservationResponseDTO dto = receptionistReservationService.getTableNextReservation(tableId, principal.getName());
         return ResponseEntity.ok(new StandardResponse(200, "Table reservation fetched", dto));
+    }
+
+    @PatchMapping("/{reservationId}/cancel")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
+    public ResponseEntity<StandardResponse> cancelReservation(
+            @PathVariable Long reservationId,
+            @Valid @RequestBody CancelReservationRequest request) {
+        receptionistReservationService.cancelReservation(reservationId, request);
+        return ResponseEntity.ok(new StandardResponse(200, "Reservation cancelled", null));
     }
 }
