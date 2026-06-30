@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -60,17 +61,49 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
 
         Reservation saved = reservationRepository.save(reservation);
 
+        return toDTO(saved);
+    }
+
+    @Override
+    public List<ReservationResponseDTO> getUpcomingReservations(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime oneYearLater = now.plusYears(1);
+
+        return reservationRepository.findByBranchAndDate(branchId, now, oneYearLater)
+                .stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    @Override
+    public ReservationResponseDTO getTableNextReservation(Long tableId, String userEmail) {
+        return reservationRepository.findOverlappingReservations(tableId, LocalDateTime.now(), LocalDateTime.now().plusYears(1))
+                .stream()
+                .findFirst()
+                .map(this::toDTO)
+                .orElse(null);
+    }
+
+    private ReservationResponseDTO toDTO(Reservation r) {
         return ReservationResponseDTO.builder()
-                .id(saved.getId())
-                .tableId(table.getId())
-                .tableNumber(table.getTableNumber())
-                .customerName(saved.getCustomerName())
-                .customerPhone(saved.getCustomerPhone())
-                .reservationTime(saved.getReservationTime())
-                .endTime(saved.getEndTime())
-                .guestCount(saved.getGuestCount())
-                .status(saved.getStatus().name())
-                .createdAt(saved.getCreatedAt())
+                .id(r.getId())
+                .tableId(r.getTable().getId())
+                .tableNumber(r.getTable().getTableNumber())
+                .customerName(r.getCustomerName())
+                .customerPhone(r.getCustomerPhone())
+                .reservationTime(r.getReservationTime())
+                .endTime(r.getEndTime())
+                .guestCount(r.getGuestCount())
+                .status(r.getStatus().name())
+                .createdAt(r.getCreatedAt())
                 .build();
     }
 }
