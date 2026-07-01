@@ -34,8 +34,14 @@ public class Reservation {
     @Column(name = "reservation_time", nullable = false)
     private LocalDateTime reservationTime;
 
+    @Column(name = "end_time", nullable = false)
+    private LocalDateTime endTime;
+
     @Column(name = "guest_count")
     private Integer guestCount;
+
+    @Column(name = "notes", length = 500)
+    private String notes;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
