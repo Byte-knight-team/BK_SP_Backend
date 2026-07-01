@@ -329,4 +329,54 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 @Param("end") LocalDateTime end,
                 @Param("todayStart") LocalDateTime todayStart
         );
+
+        // ── Receptionist Dashboard ──────────────────────────────────────────────
+
+        long countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
+                Long branchId, OrderStatus status, OrderType orderType,
+                LocalDateTime start, LocalDateTime end);
+
+        long countByBranchIdAndPaymentStatusAndOrderTypeAndCreatedAtBetween(
+                Long branchId, PaymentStatus paymentStatus, OrderType orderType,
+                LocalDateTime start, LocalDateTime end);
+
+        // QR orders in PENDING/PREPARING that have NO READY or SERVED items — for kitchen QR count
+        @Query("SELECT COUNT(DISTINCT o) FROM Order o " +
+               "WHERE o.branch.id = :branchId " +
+               "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "AND o.status = :status " +
+               "AND o.createdAt BETWEEN :start AND :end " +
+               "AND NOT EXISTS (" +
+               "    SELECT i FROM OrderItem i WHERE i.order = o " +
+               "    AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                     com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED))")
+        long countKitchenQROrdersWithoutReadyItems(
+                @Param("branchId") Long branchId,
+                @Param("status") OrderStatus status,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
+
+        // QR orders in PENDING/PREPARING with at least one READY or SERVED item — for ready QR count
+        @Query("SELECT COUNT(DISTINCT o) FROM Order o JOIN o.items i " +
+               "WHERE o.branch.id = :branchId " +
+               "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "AND o.status IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.PENDING, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderStatus.PREPARING) " +
+               "AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED) " +
+               "AND o.createdAt BETWEEN :start AND :end")
+        long countQROrdersWithAnyReadyItem(
+                @Param("branchId") Long branchId,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
+
+        // Completed orders by type in last 7 days (for pie chart)
+        @Query(value = "SELECT order_type, COUNT(*) FROM orders " +
+               "WHERE branch_id = :branchId AND status = 'SERVED' " +
+               "AND created_at BETWEEN :start AND :end " +
+               "GROUP BY order_type", nativeQuery = true)
+        List<Object[]> countCompletedOrdersByType(
+                @Param("branchId") Long branchId,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
 }
