@@ -49,8 +49,8 @@ public class DataSeeder implements CommandLineRunner {
         public void run(String... args) throws Exception {
 
                 /*
-                   Privileges are system-level permission names.
-                */
+                 * Privileges are system-level permission names.
+                 */
 
                 // Staff & RBAC
                 Privilege createStaff = createPrivilege("CREATE_STAFF");
@@ -95,15 +95,15 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege createQrcode = createPrivilege("CREATE_QRCODE");
                 Privilege regenerateQrcode = createPrivilege("REGENERATE_QRCODE");
                 Privilege revokeQrcode = createPrivilege("REVOKE_QRCODE");
-               
-                //Restaurant table permissions
+
+                // Restaurant table permissions
                 Privilege createRestaurantTable = createPrivilege("CREATE_RESTAURANT_TABLE");
                 Privilege viewRestaurantTable = createPrivilege("VIEW_RESTAURANT_TABLE");
                 Privilege viewRestaurantTableById = createPrivilege("VIEW_RESTAURANT_TABLE_BY_ID");
                 Privilege updateRestaurantTable = createPrivilege("UPDATE_RESTAURANT_TABLE");
                 Privilege deleteRestaurantTable = createPrivilege("DELETE_RESTAURANT_TABLE");
 
-                //Kitchen permissions
+                // Kitchen permissions
                 Privilege kitchenViewStats = createPrivilege("KITCHEN_VIEW_STATS");
                 Privilege kitchenOrderView = createPrivilege("KITCHEN_ORDER_VIEW");
                 Privilege kitchenOrderUpdate = createPrivilege("KITCHEN_ORDER_UPDATE");
@@ -128,7 +128,6 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege receptionistOrderView = createPrivilege("RECEPTIONIST_ORDER_VIEW");
                 Privilege receptionistOrderUpdate = createPrivilege("RECEPTIONIST_ORDER_UPDATE");
                 Privilege receptionistPaymentCollect = createPrivilege("RECEPTIONIST_PAYMENT_COLLECT");
-
 
                 /*
                  * All known system privileges.
@@ -186,18 +185,19 @@ public class DataSeeder implements CommandLineRunner {
                                 receptionistOrderUpdate,
                                 receptionistPaymentCollect,
                                 lineChefOrderView,
-                                lineChefOrderUpdate
-                );
+                                lineChefOrderUpdate);
 
                 /*
-                 * For normal roles, default permissions are added ONLY when the role is first created.
-                 * This prevents the DataSeeder from overwriting changes made from the Roles & Permissions page.
+                 * For normal roles, default permissions are added ONLY when the role is first
+                 * created.
+                 * This prevents the DataSeeder from overwriting changes made from the Roles &
+                 * Permissions page.
                  */
                 Role superAdminRole = createRoleWithDefaultPermissions("SUPER_ADMIN", allPrivileges);
 
                 /*
-                    SUPER_ADMIN is the owner role,  gets all currently known system privileges
-                */
+                 * SUPER_ADMIN is the owner role, gets all currently known system privileges
+                 */
                 addMissingPermissions(superAdminRole, allPrivileges);
 
                 createRoleWithDefaultPermissions("ADMIN", Set.of(
@@ -236,7 +236,8 @@ public class DataSeeder implements CommandLineRunner {
                                 receptionistReservationUpdate,
                                 receptionistOrderView,
                                 receptionistOrderUpdate,
-                                receptionistPaymentCollect));
+                                receptionistPaymentCollect,
+                                kitchenAlertView));
 
                 createRoleWithDefaultPermissions("DELIVERY", Set.of(
                                 updateDeliveryStatus,
@@ -267,7 +268,8 @@ public class DataSeeder implements CommandLineRunner {
         }
 
         /*
-         * Creates a role with default permissions only if the role does not already exist.
+         * Creates a role with default permissions only if the role does not already
+         * exist.
          */
         private Role createRoleWithDefaultPermissions(String name, Set<Privilege> defaultPermissions) {
                 Role existingRole = roleRepository.findByName(name).orElse(null);
@@ -286,7 +288,8 @@ public class DataSeeder implements CommandLineRunner {
 
         /*
          * Adds missing permissions without removing existing permissions.
-         * We use this only for SUPER_ADMIN so that the system owner role always receives new system privileges added later.
+         * We use this only for SUPER_ADMIN so that the system owner role always
+         * receives new system privileges added later.
          */
         private void addMissingPermissions(Role role, Set<Privilege> permissionsToAdd) {
                 if (role == null) {
