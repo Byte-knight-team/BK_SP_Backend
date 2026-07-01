@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -12,5 +14,7 @@ public class ActiveAlertDTO {
     private Long id;
     private String message;
     private KitchenAlertType type;
-    private String timeAgo; // ex: "2m", "1h"
+    private String timeAgo;
+    private boolean resolved;
+    private LocalDateTime resolvedAt;
 }

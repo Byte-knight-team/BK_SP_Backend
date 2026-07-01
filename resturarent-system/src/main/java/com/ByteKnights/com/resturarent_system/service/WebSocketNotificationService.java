@@ -48,8 +48,7 @@ public class WebSocketNotificationService {
         String destination = "/topic/branch/" + branchId + "/kitchen-orders";
         java.util.Map<String, String> payload = java.util.Map.of(
                 "orderNumber", orderNumber,
-                "message", "New order received: " + orderNumber
-        );
+                "message", "New order received: " + orderNumber);
         log.info("Broadcasting new kitchen order to {}: {}", destination, orderNumber);
         messagingTemplate.convertAndSend(destination, payload);
     }
@@ -66,15 +65,18 @@ public class WebSocketNotificationService {
      * @param newItemStatus  The new item status (PREPARING or READY)
      * @param newOrderStatus The new order status
      */
-    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String itemName, String newItemStatus, String newOrderStatus) {
+    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String orderNumber, String itemName,
+            String newItemStatus, String newOrderStatus, String orderType) {
         String destination = "/topic/branch/" + branchId + "/kitchen-item-update";
-        java.util.Map<String, String> payload = java.util.Map.of(
-                "orderId", String.valueOf(orderId),
-                "itemName", itemName,
-                "newStatus", newItemStatus,
-                "orderStatus", newOrderStatus
-        );
-        log.info("Broadcasting item update to kitchen {}: {} -> {} (order: {})", destination, itemName, newItemStatus, newOrderStatus);
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderId", String.valueOf(orderId));
+        payload.put("orderNumber", orderNumber);
+        payload.put("itemName", itemName);
+        payload.put("newStatus", newItemStatus);
+        payload.put("orderStatus", newOrderStatus);
+        payload.put("orderType", orderType);
+        log.info("Broadcasting item update to kitchen {}: {} -> {} (order: {})", destination, itemName, newItemStatus,
+                newOrderStatus);
         messagingTemplate.convertAndSend(destination, payload);
     }
 
@@ -84,44 +86,78 @@ public class WebSocketNotificationService {
      * Topic: /topic/line-chef/{lineChefUserId}/new-item
      * Subscribers: Line chef dashboard
      */
-    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName) {
+    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName,
+            String kitchenNotes) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/new-item";
-        java.util.Map<String, String> payload = java.util.Map.of(
-                "orderNumber", orderNumber,
-                "itemName", itemName,
-                "message", "New item assigned: " + itemName + " (Order " + orderNumber + ")"
-        );
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderNumber", orderNumber);
+        payload.put("itemName", itemName);
+        payload.put("message", "New item assigned: " + itemName + " (Order " + orderNumber + ")");
+        payload.put("kitchenNotes", kitchenNotes);
         log.info("Broadcasting item assignment to line chef {}: {}", lineChefUserId, itemName);
         messagingTemplate.convertAndSend(destination, payload);
     }
 
     /**
-     * Notify both kitchen and receptionist that an order's status changed cross-role.
+     * Notify both kitchen and receptionist that an order's status changed
+     * cross-role.
      * Topic: /topic/branch/{branchId}/order-status-update
-     * Used for: kitchen holds order (→ receptionist), receptionist sends back (→ kitchen)
+     * Used for: kitchen holds order (→ receptionist), receptionist sends back (→
+     * kitchen)
      */
-    public void broadcastOrderStatusChanged(Long branchId, Long orderId, String newStatus) {
+    public void broadcastOrderStatusChanged(Long branchId, Long orderId, String orderNumber, String newStatus) {
         String destination = "/topic/branch/" + branchId + "/order-status-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of(
                 "orderId", String.valueOf(orderId),
-                "newStatus", newStatus
-        ));
+                "orderNumber", orderNumber,
+                "newStatus", newStatus));
     }
 
     /**
-     * Notify a line chef that their assigned item has been reassigned to another chef.
+     * Notify a line chef that their assigned item has been reassigned to another
+     * chef.
      *
      * Topic: /topic/line-chef/{lineChefUserId}/item-removed
      * Subscribers: Line chef dashboard
      */
-    public void broadcastLineChefItemRemoved(Long lineChefUserId, String itemName, String orderNumber, String newChefName) {
+    public void broadcastLineChefItemRemoved(Long lineChefUserId, String itemName, String orderNumber,
+            String newChefName) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/item-removed";
         java.util.Map<String, String> payload = java.util.Map.of(
                 "itemName", itemName,
                 "orderNumber", orderNumber,
-                "newChefName", newChefName
-        );
+                "newChefName", newChefName);
         messagingTemplate.convertAndSend(destination, payload);
+    }
+
+    /**
+     * Notify all receptionist clients in a branch that table data has changed.
+     * Called when: a table is occupied/cleared, or a QR order is placed/completed.
+     *
+     * Topic: /topic/branch/{branchId}/table-update
+     * Subscribers: Receptionist Table Management page
+     */
+    /**
+     * Broadcast a reservation reminder to the receptionist.
+     * type: REMINDER_1HR or REMINDER_15MIN
+     *
+     * Topic: /topic/branch/{branchId}/reservation-reminder
+     * Subscribers: Receptionist Table Management page
+     */
+    public void broadcastReservationReminder(Long branchId, String type, Integer tableNumber, String reservationTime) {
+        String destination = "/topic/branch/" + branchId + "/reservation-reminder";
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("type", type);
+        payload.put("tableNumber", String.valueOf(tableNumber));
+        payload.put("reservationTime", reservationTime);
+        log.info("Broadcasting reservation reminder [{}] to branch {}, table {}", type, branchId, tableNumber);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
+    public void broadcastTableUpdate(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/table-update";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
+        log.info("Broadcasting table update to {}", destination);
     }
 
     /**
