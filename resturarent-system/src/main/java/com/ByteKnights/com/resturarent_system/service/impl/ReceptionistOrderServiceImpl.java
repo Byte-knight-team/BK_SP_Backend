@@ -35,6 +35,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final LoyaltyTransactionRepository loyaltyTransactionRepository;
     private final CouponUsageRepository couponUsageRepository;
     private final CouponRepository couponRepository;
+    private final PaymentRepository paymentRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -373,6 +374,20 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.setPaymentStatus(PaymentStatus.PAID);
 
         Order savedOrder = orderRepository.save(order);
+
+        BigDecimal amount = savedOrder.getFinalAmount() != null
+                ? savedOrder.getFinalAmount()
+                : savedOrder.getTotalAmount();
+
+        Payment payment = Payment.builder()
+                .order(savedOrder)
+                .paymentMethod(PaymentMethod.CASH)
+                .paymentStatus(PaymentStatus.PAID)
+                .amount(amount)
+                .paidAt(LocalDateTime.now())
+                .build();
+
+        paymentRepository.save(payment);
 
         auditLogService.logCurrentUserAction(
                 AuditModule.PAYMENT,
