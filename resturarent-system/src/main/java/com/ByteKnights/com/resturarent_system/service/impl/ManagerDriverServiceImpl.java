@@ -8,6 +8,7 @@ import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ManagerDriverService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,16 +27,9 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         private final OrderRepository orderRepository;
         private final StaffRepository staffRepository;
         private final DeliveryRepository deliveryRepository;
+        private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
 
-        /**
-         * Compiles the data required for the Manager's Delivery Dashboard.
-         * Includes online drivers, dispatchable orders, and historical deliveries.
-         *
-         * @param targetBranchId Optional branch ID filter.
-         * @param userId         The ID of the currently authenticated manager.
-         * @return A comprehensive summary of driver activity and dispatch status.
-         */
         @Override
         @Transactional(readOnly = true)
         public ManagerDriverSummaryDTO getDriverSummary(Long targetBranchId, Long userId) {
@@ -181,15 +175,8 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 .build();
         }
 
-        /**
-         * Manual assignment of a delivery task to a specific driver by the Manager.
-         * Generates the Delivery record and updates the core Order status.
-         *
-         * @param orderId  ID of the order being assigned.
-         * @param driverId ID of the driver receiving the assignment.
-         */
         @Override
-        @org.springframework.transaction.annotation.Transactional
+        @Transactional
         public void assignDriver(Long orderId, Long driverId) {
                 Order order = orderRepository.findById(orderId)
                                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -240,6 +227,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 // Update Order status
                 order.setStatus(OrderStatus.OUT_FOR_DELIVERY);
                 Order savedOrder = orderRepository.save(order);
+                webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
 
                 /*
                  * Capture new values after assignment.
@@ -262,18 +250,19 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 newValues);
         }
 
-        /**
-         * Helper method to determine the correct branch context.
-         */
         private Long resolveBranchId(Long targetBranchId, Long userId) {
-                if (targetBranchId != null)
+                if (targetBranchId != null) {
                         return targetBranchId;
+                }
+
                 Staff staff = staffRepository.findByUserId(userId)
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "User is not assigned to any branch as staff"));
+
                 if (staff.getBranch() == null) {
                         throw new IllegalArgumentException("Staff member is not assigned to a branch");
                 }
+
                 return staff.getBranch().getId();
         }
 
@@ -291,16 +280,29 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 Staff driver = delivery.getDeliveryStaff();
 
                 snapshot.put("deliveryId", delivery.getId());
+
                 snapshot.put("orderId", order != null ? order.getId() : null);
                 snapshot.put("orderNumber", order != null ? order.getOrderNumber() : null);
                 snapshot.put("branchId", order != null && order.getBranch() != null ? order.getBranch().getId() : null);
-                snapshot.put("deliveryStatus", delivery.getDeliveryStatus() != null ? delivery.getDeliveryStatus().name() : null);
+
+                snapshot.put("deliveryStatus",
+                                delivery.getDeliveryStatus() != null
+                                                ? delivery.getDeliveryStatus().name()
+                                                : null);
+
                 snapshot.put("assignedAt", delivery.getAssignedAt());
                 snapshot.put("deliveredAt", delivery.getDeliveredAt());
                 snapshot.put("cancelledReason", delivery.getCancelledReason());
+
                 snapshot.put("driverStaffId", driver != null ? driver.getId() : null);
-                snapshot.put("driverUserId", driver != null && driver.getUser() != null ? driver.getUser().getId() : null);
-                snapshot.put("driverName", driver != null && driver.getUser() != null ? driver.getUser().getFullName() : null);
+                snapshot.put("driverUserId",
+                                driver != null && driver.getUser() != null
+                                                ? driver.getUser().getId()
+                                                : null);
+                snapshot.put("driverName",
+                                driver != null && driver.getUser() != null
+                                                ? driver.getUser().getFullName()
+                                                : null);
 
                 return snapshot;
         }
@@ -319,13 +321,17 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 snapshot.put("orderNumber", order.getOrderNumber());
                 snapshot.put("branchId", getOrderBranchId(order));
                 snapshot.put("branchName", order.getBranch() != null ? order.getBranch().getName() : null);
+
                 snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
                 snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
-                snapshot.put("paymentStatus", order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
+                snapshot.put("paymentStatus",
+                                order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
+
                 snapshot.put("contactName", order.getContactName());
                 snapshot.put("contactPhone", order.getContactPhone());
                 snapshot.put("deliveryAddress", order.getDeliveryAddress());
                 snapshot.put("finalAmount", order.getFinalAmount());
+
                 snapshot.put("createdAt", order.getCreatedAt());
                 snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
 
@@ -343,11 +349,23 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 }
 
                 snapshot.put("driverStaffId", driver.getId());
-                snapshot.put("driverUserId", driver.getUser() != null ? driver.getUser().getId() : null);
-                snapshot.put("driverName", driver.getUser() != null ? driver.getUser().getFullName() : null);
-                snapshot.put("driverEmail", driver.getUser() != null ? driver.getUser().getEmail() : null);
-                snapshot.put("role", driver.getUser() != null && driver.getUser().getRole() != null ? driver.getUser().getRole().getName() : null);
-                snapshot.put("employmentStatus", driver.getEmploymentStatus() != null ? driver.getEmploymentStatus().name() : null);
+                snapshot.put("driverUserId",
+                                driver.getUser() != null ? driver.getUser().getId() : null);
+                snapshot.put("driverName",
+                                driver.getUser() != null ? driver.getUser().getFullName() : null);
+                snapshot.put("driverEmail",
+                                driver.getUser() != null ? driver.getUser().getEmail() : null);
+
+                snapshot.put("role",
+                                driver.getUser() != null && driver.getUser().getRole() != null
+                                                ? driver.getUser().getRole().getName()
+                                                : null);
+
+                snapshot.put("employmentStatus",
+                                driver.getEmploymentStatus() != null
+                                                ? driver.getEmploymentStatus().name()
+                                                : null);
+
                 snapshot.put("online", driver.isOnline());
                 snapshot.put("branchId", getStaffBranchId(driver));
                 snapshot.put("branchName", driver.getBranch() != null ? driver.getBranch().getName() : null);
@@ -372,6 +390,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 if (staff == null || staff.getBranch() == null) {
                         return null;
                 }
+
                 return staff.getBranch().getId();
         }
 }

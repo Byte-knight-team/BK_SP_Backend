@@ -236,11 +236,12 @@ public class MenuServiceImpl implements MenuService {
                     .description(item.getDescription())
                     .price(item.getPrice())
                     .imageUrl(item.getImageUrl())
+                    // Prevent NullPointerExceptions if a category was deleted
                     .categoryName(item.getCategory() != null ? item.getCategory().getName() : "Uncategorized")
                     .subCategory(item.getSubCategory())
                     .isAvailable(item.getIsAvailable())
                     .preparationTime(item.getPreparationTime())
-                    .averageRating(avg > 0 ? avg : null)
+                    .averageRating(avg > 0 ? avg : null) // Keep it null if there are no ratings
                     .ratingCount(count)
                     .build();
         }).collect(Collectors.toList());

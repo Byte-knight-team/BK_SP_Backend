@@ -3,7 +3,6 @@ package com.ByteKnights.com.resturarent_system.controller;
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.AssignChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.HoldOrderRequestDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.kitchen.MealCompletionResponseDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderCardDetailsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderDetailsDTO;
 import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
@@ -50,20 +49,6 @@ public class KitchenOrderController {
             @RequestBody AssignChefRequestDTO requestDTO) {
         kitchenOrderService.assignChefToMeal(itemId, requestDTO.getChefStaffId());
         return new ResponseEntity<>(new StandardResponse(200, "Chef assigned successfully", null), HttpStatus.OK);
-    }
-
-    @PutMapping("/order-items/{itemId}/start")
-    @PreAuthorize("hasAuthority('KITCHEN_ORDER_UPDATE')")
-    public ResponseEntity<StandardResponse> startMeal(@PathVariable Long itemId) {
-        kitchenOrderService.startMeal(itemId);
-        return new ResponseEntity<>(new StandardResponse(200, "Meal preparation started", null), HttpStatus.OK);
-    }
-
-    @PutMapping("/order-items/{itemId}/complete")
-    @PreAuthorize("hasAuthority('KITCHEN_ORDER_UPDATE')")
-    public ResponseEntity<StandardResponse> completeMeal(@PathVariable Long itemId) {
-        MealCompletionResponseDTO orderStats = kitchenOrderService.completeMeal(itemId);
-        return new ResponseEntity<>(new StandardResponse(200, "Success", orderStats), HttpStatus.OK);
     }
 
     @PutMapping("/orders/{orderId}/hold")

@@ -27,9 +27,9 @@ public class InventoryTransaction {
     @JoinColumn(name = "inventory_item_id", nullable = false)
     private InventoryItem inventoryItem;
 
-    /** The staff member (manager) who performed the update. */
+    /** The staff member (manager) who performed the update. Null for automated system updates. */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "staff_id", nullable = false)
+    @JoinColumn(name = "staff_id", nullable = true)
     private Staff staff;
 
     /** The type of update performed (RESTOCK, WASTAGE, CORRECTION). */

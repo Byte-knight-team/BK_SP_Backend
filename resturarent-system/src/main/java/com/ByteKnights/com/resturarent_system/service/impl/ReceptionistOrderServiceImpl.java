@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistOrderService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,523 +23,535 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
-        private final OrderRepository orderRepository;
-        private final OrderItemRepository orderItemRepository;
-        private final UserRepository userRepository;
-        private final StaffRepository staffRepository;
-        private final MenuItemIngredientRepository menuItemIngredientRepository;
-        private final InventoryItemRepository inventoryItemRepository;
-        private final AuditLogService auditLogService;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
+    private final MenuItemIngredientRepository menuItemIngredientRepository;
+    private final InventoryItemRepository inventoryItemRepository;
+    private final AuditLogService auditLogService;
+    private final WebSocketNotificationService webSocketNotificationService;
+    private final CustomerRepository customerRepository;
+    private final LoyaltyTransactionRepository loyaltyTransactionRepository;
+    private final CouponUsageRepository couponUsageRepository;
+    private final CouponRepository couponRepository;
 
-        private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
-        // ── helper: resolve branch from logged-in receptionist ──────────────
-        private Long getBranchId(String userEmail) {
-                User user = userRepository.findByEmail(userEmail)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+    // ── helper: resolve branch from logged-in receptionist ──────────────
+    private Long getBranchId(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-                Staff staff = staffRepository.findByUser(user)
-                                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
-                return staff.getBranch().getId();
+        return staff.getBranch().getId();
+    }
+
+    // ── GET orders by status (today, QR + ONLINE_PICKUP only) ───────────
+    @Override
+    public List<ReceptionistOrderSummaryDTO> getOrdersByStatus(String status, String userEmail) {
+        Long branchId = getBranchId(userEmail);
+        OrderStatus orderStatus = OrderStatus.valueOf(status);
+
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
+
+        List<Order> orders = orderRepository
+                .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
+                        branchId,
+                        orderStatus,
+                        List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
+                        startOfDay,
+                        endOfDay
+                );
+
+        List<ReceptionistOrderSummaryDTO> result = new ArrayList<>();
+
+        for (Order order : orders) {
+            String customerName = (order.getContactName() != null && !order.getContactName().isBlank())
+                    ? order.getContactName()
+                    : (order.getCustomer().getUser().getFullName() != null
+                    ? order.getCustomer().getUser().getFullName()
+                    : "Guest");
+
+            String customerPhone = (order.getContactPhone() != null && !order.getContactPhone().isBlank())
+                    ? order.getContactPhone()
+                    : order.getCustomer().getUser().getPhone();
+
+            Integer tableNumber = (order.getTable() != null) ? order.getTable().getTableNumber() : null;
+
+            int totalItems = order.getItems().stream().mapToInt(OrderItem::getQuantity).sum();
+
+            double finalAmount = order.getFinalAmount() != null
+                    ? order.getFinalAmount().doubleValue()
+                    : order.getTotalAmount().doubleValue();
+
+            result.add(new ReceptionistOrderSummaryDTO(
+                    order.getId(),
+                    order.getOrderNumber(),
+                    order.getOrderType().name(),
+                    order.getStatus().name(),
+                    order.getPaymentStatus().name(),
+                    order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
+                    order.getStatusUpdatedAt() != null ? order.getStatusUpdatedAt().format(FORMATTER) : "",
+                    customerName,
+                    customerPhone,
+                    tableNumber,
+                    totalItems,
+                    finalAmount
+            ));
         }
 
-        // ── GET orders by status (today, QR + ONLINE_PICKUP only) ───────────
-        @Override
-        public List<ReceptionistOrderSummaryDTO> getOrdersByStatus(String status, String userEmail) {
-                Long branchId = getBranchId(userEmail);
-                OrderStatus orderStatus = OrderStatus.valueOf(status);
+        return result;
+    }
 
-                LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-                LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
+    // ── GET full order detail ────────────────────────────────────────────
+    @Override
+    public ReceptionistOrderDetailDTO getOrderDetail(Long orderId, String userEmail) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
 
-                List<Order> orders = orderRepository
-                                .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
-                                                branchId,
-                                                orderStatus,
-                                                List.of(OrderType.QR, OrderType.ONLINE_PICKUP),
-                                                startOfDay,
-                                                endOfDay);
+        String customerName = order.getCustomer().getUser().getFullName();
+        String customerPhone = order.getCustomer().getUser().getPhone();
+        String customerEmail = order.getCustomer().getUser().getEmail();
 
-                List<ReceptionistOrderSummaryDTO> result = new ArrayList<>();
+        Integer tableNumber = (order.getTable() != null) ? order.getTable().getTableNumber() : null;
 
-                for (Order order : orders) {
-                        String customerName = (order.getContactName() != null && !order.getContactName().isBlank())
-                                        ? order.getContactName()
-                                        : (order.getCustomer().getUser().getFullName() != null
-                                                        ? order.getCustomer().getUser().getFullName()
-                                                        : "Guest");
+        List<ReceptionistOrderItemDTO> items = order.getItems().stream()
+                .map(item -> new ReceptionistOrderItemDTO(
+                        item.getId(),
+                        item.getItemName(),
+                        item.getQuantity(),
+                        item.getUnitPrice().doubleValue(),
+                        item.getSubtotal() != null ? item.getSubtotal().doubleValue()
+                                : item.getUnitPrice().doubleValue() * item.getQuantity(),
+                        item.getStatus().name()
+                ))
+                .toList();
 
-                        String customerPhone = (order.getContactPhone() != null && !order.getContactPhone().isBlank())
-                                        ? order.getContactPhone()
-                                        : order.getCustomer().getUser().getPhone();
+        double finalAmount = order.getFinalAmount() != null
+                ? order.getFinalAmount().doubleValue()
+                : order.getTotalAmount().doubleValue();
 
-                        Integer tableNumber = (order.getTable() != null) ? order.getTable().getTableNumber() : null;
+        return new ReceptionistOrderDetailDTO(
+                order.getId(),
+                order.getOrderNumber(),
+                order.getOrderType().name(),
+                order.getStatus().name(),
+                order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
+                customerName,
+                customerPhone,
+                customerEmail,
+                order.getContactName(),
+                order.getContactPhone(),
+                order.getContactEmail(),
+                tableNumber,
+                items,
+                order.getPaymentStatus().name(),
+                order.getTotalAmount().doubleValue(),
+                order.getTaxAmount() != null ? order.getTaxAmount().doubleValue() : 0,
+                order.getServiceCharge() != null ? order.getServiceCharge().doubleValue() : 0,
+                order.getDiscountAmount() != null ? order.getDiscountAmount().doubleValue() : 0,
+                order.getAppliedCouponCode(),
+                finalAmount,
+                order.getKitchenNotes(),
+                order.getHoldReason(),
+                order.getCancelReason()
+        );
+    }
 
-                        int totalItems = order.getItems().stream().mapToInt(OrderItem::getQuantity).sum();
+    // ── SEND TO KITCHEN: PLACED → PENDING ───────────────────────────────
+    @Override
+    @Transactional
+    public void sendToKitchen(Long orderId, String userEmail) {
+        Long actorBranchId = getBranchId(userEmail);
 
-                        double finalAmount = order.getFinalAmount() != null
-                                        ? order.getFinalAmount().doubleValue()
-                                        : order.getTotalAmount().doubleValue();
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
 
-                        result.add(new ReceptionistOrderSummaryDTO(
-                                        order.getId(),
-                                        order.getOrderNumber(),
-                                        order.getOrderType().name(),
-                                        order.getStatus().name(),
-                                        order.getPaymentStatus().name(),
-                                        order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
-                                        customerName,
-                                        customerPhone,
-                                        tableNumber,
-                                        totalItems,
-                                        finalAmount));
-                }
+        ensureOrderBelongsToBranch(order, actorBranchId);
 
-                return result;
+        if (order.getStatus() != OrderStatus.PLACED) {
+            throw new RuntimeException("Order cannot be sent to kitchen from current status");
         }
 
-        // ── GET full order detail ────────────────────────────────────────────
-        @Override
-        public ReceptionistOrderDetailDTO getOrderDetail(Long orderId, String userEmail) {
-                Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new RuntimeException("Order not found"));
+        Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
-                String customerName = order.getCustomer().getUser().getFullName();
-                String customerPhone = order.getCustomer().getUser().getPhone();
-                String customerEmail = order.getCustomer().getUser().getEmail();
+        order.updateStatus(OrderStatus.PENDING);
 
-                Integer tableNumber = (order.getTable() != null) ? order.getTable().getTableNumber() : null;
+        Order savedOrder = orderRepository.save(order);
 
-                List<ReceptionistOrderItemDTO> items = order.getItems().stream()
-                                .map(item -> new ReceptionistOrderItemDTO(
-                                                item.getId(),
-                                                item.getItemName(),
-                                                item.getQuantity(),
-                                                item.getUnitPrice().doubleValue(),
-                                                item.getSubtotal() != null
-                                                                ? item.getSubtotal().doubleValue()
-                                                                : item.getUnitPrice().doubleValue()
-                                                                                * item.getQuantity(),
-                                                item.getStatus().name()))
-                                .toList();
+        Long branchId = savedOrder.getBranch().getId();
 
-                double finalAmount = order.getFinalAmount() != null
-                                ? order.getFinalAmount().doubleValue()
-                                : order.getTotalAmount().doubleValue();
+        // Notify kitchen: new order appeared in pending list
+        webSocketNotificationService.broadcastNewKitchenOrder(branchId, savedOrder.getOrderNumber());
+        // Notify customer: order status changed to PENDING
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
-                return new ReceptionistOrderDetailDTO(
-                                order.getId(),
-                                order.getOrderNumber(),
-                                order.getOrderType().name(),
-                                order.getStatus().name(),
-                                order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
-                                customerName,
-                                customerPhone,
-                                customerEmail,
-                                order.getContactName(),
-                                order.getContactPhone(),
-                                order.getContactEmail(),
-                                tableNumber,
-                                items,
-                                order.getPaymentStatus().name(),
-                                order.getTotalAmount().doubleValue(),
-                                order.getTaxAmount() != null ? order.getTaxAmount().doubleValue() : 0,
-                                order.getServiceCharge() != null ? order.getServiceCharge().doubleValue() : 0,
-                                order.getDiscountAmount() != null ? order.getDiscountAmount().doubleValue() : 0,
-                                order.getAppliedCouponCode(),
-                                finalAmount,
-                                order.getKitchenNotes(),
-                                order.getHoldReason(),
-                                order.getCancelReason());
+        auditLogService.logCurrentUserAction(
+                AuditModule.ORDER,
+                AuditEventType.ORDER_STATUS_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.ORDER,
+                savedOrder.getId(),
+                getOrderBranchId(savedOrder),
+                "Order sent to kitchen successfully",
+                oldValues,
+                buildReceptionistOrderAuditSnapshot(savedOrder)
+        );
+    }
+
+    // ── HOLD ─────────────────────────────────────────────────────────────
+    @Override
+    @Transactional
+    public void holdOrder(Long orderId, String reason, String userEmail) {
+        Long actorBranchId = getBranchId(userEmail);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        ensureOrderBelongsToBranch(order, actorBranchId);
+
+        Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
+
+        order.setStatus(OrderStatus.ON_HOLD);
+        order.setHoldReason(reason);
+        order.setStatusUpdatedAt(LocalDateTime.now());
+
+        Order savedOrder = orderRepository.save(order);
+
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.ORDER,
+                AuditEventType.ORDER_ON_HOLD,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.ORDER,
+                savedOrder.getId(),
+                getOrderBranchId(savedOrder),
+                "Order placed on hold by receptionist",
+                oldValues,
+                buildReceptionistOrderAuditSnapshot(savedOrder)
+        );
+    }
+
+    // ── CANCEL (with loyalty rollback + coupon restock) ──────────────────
+    @Override
+    @Transactional
+    public void cancelOrder(Long orderId, String reason, String userEmail) {
+        Long actorBranchId = getBranchId(userEmail);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        ensureOrderBelongsToBranch(order, actorBranchId);
+
+        Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
+
+        if (order.getStatus() == OrderStatus.PREPARING
+                || order.getStatus() == OrderStatus.COMPLETED
+                || order.getStatus() == OrderStatus.CANCELLED) {
+            throw new RuntimeException(
+                    "Cannot cancel an order that is already preparing, completed, or cancelled.");
         }
 
-        // ── STOCK CHECK (read-only) ──────────────────────────────────────────
-        @Override
-        public StockCheckResultDTO checkStock(Long orderId) {
-                Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new RuntimeException("Order not found"));
+        Customer customer = order.getCustomer();
 
-                List<StockCheckResultDTO.StockItemResult> results = new ArrayList<>();
-                boolean allSufficient = true;
+        // Rollback loyalty points if not already refunded
+        if (!loyaltyTransactionRepository.existsByOrderAndTransactionType(order, LoyaltyTransactionType.REFUND)) {
+            int currentPoints = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+            int redeemedPoints = order.getRewardPointsRedeemed() != null ? order.getRewardPointsRedeemed() : 0;
+            int earnedPoints   = order.getRewardPointsEarned()   != null ? order.getRewardPointsEarned()   : 0;
 
-                for (OrderItem orderItem : order.getItems()) {
-                        if (orderItem.getMenuItem() == null) {
-                                continue;
-                        }
+            if (redeemedPoints > 0) {
+                customer.setLoyaltyPoints(currentPoints + redeemedPoints);
+                currentPoints = customer.getLoyaltyPoints();
 
-                        List<MenuItemIngredient> ingredients = menuItemIngredientRepository
-                                        .findByMenuItemId(orderItem.getMenuItem().getId());
+                loyaltyTransactionRepository.save(LoyaltyTransaction.builder()
+                        .customer(customer)
+                        .order(order)
+                        .transactionType(LoyaltyTransactionType.REFUND)
+                        .points(redeemedPoints)
+                        .description("Refunded redeemed points for cancelled order " + order.getOrderNumber())
+                        .build());
+            }
 
-                        if (ingredients.isEmpty()) {
-                                continue;
-                        }
+            if (earnedPoints > 0) {
+                int pointsToReverse = Math.min(currentPoints, earnedPoints);
+                customer.setLoyaltyPoints(Math.max(0, currentPoints - pointsToReverse));
 
-                        List<String> shortages = new ArrayList<>();
-
-                        for (MenuItemIngredient ing : ingredients) {
-                                InventoryItem stock = ing.getInventoryItem();
-
-                                BigDecimal needed = ing.getQuantityRequired()
-                                                .multiply(BigDecimal.valueOf(orderItem.getQuantity()));
-
-                                BigDecimal available = stock.getQuantity() != null
-                                                ? stock.getQuantity()
-                                                : BigDecimal.ZERO;
-
-                                if (available.compareTo(needed) < 0) {
-                                        shortages.add(String.format(
-                                                        "%s: need %.3f %s, have %.3f %s",
-                                                        stock.getName(),
-                                                        needed,
-                                                        stock.getUnit(),
-                                                        available,
-                                                        stock.getUnit()));
-                                }
-                        }
-
-                        boolean sufficient = shortages.isEmpty();
-
-                        if (!sufficient) {
-                                allSufficient = false;
-                        }
-
-                        results.add(new StockCheckResultDTO.StockItemResult(
-                                        orderItem.getItemName(),
-                                        sufficient,
-                                        sufficient ? null : String.join(", ", shortages)));
-                }
-
-                return new StockCheckResultDTO(allSufficient, results);
+                loyaltyTransactionRepository.save(LoyaltyTransaction.builder()
+                        .customer(customer)
+                        .order(order)
+                        .transactionType(LoyaltyTransactionType.REFUND)
+                        .points(-pointsToReverse)
+                        .description("Reversed earned points for cancelled order " + order.getOrderNumber())
+                        .build());
+            }
         }
 
-        // ── SEND TO KITCHEN: PLACED → PENDING ───────────────────────────────
-        @Override
-        @Transactional
-        public void sendToKitchen(Long orderId, String userEmail) {
-                Long actorBranchId = getBranchId(userEmail);
+        // Restock used coupon and remove usage record
+        if (order.getAppliedCouponCode() != null && !order.getAppliedCouponCode().isBlank()) {
+            couponUsageRepository.findByOrder(order).ifPresent(couponUsageRepository::delete);
 
-                Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new RuntimeException("Order not found"));
-
-                ensureOrderBelongsToBranch(order, actorBranchId);
-
-                if (order.getStatus() != OrderStatus.PLACED) {
-                        throw new RuntimeException("Order is not in PLACED status");
-                }
-
-                /*
-                 * Manual audit is used because this changes order status.
-                 */
-                Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
-
-                order.updateStatus(OrderStatus.PENDING);
-
-                Order savedOrder = orderRepository.save(order);
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.ORDER,
-                                AuditEventType.ORDER_STATUS_UPDATED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.INFO,
-                                AuditTargetType.ORDER,
-                                savedOrder.getId(),
-                                getOrderBranchId(savedOrder),
-                                "Order sent to kitchen successfully",
-                                oldValues,
-                                buildReceptionistOrderAuditSnapshot(savedOrder));
+            couponRepository.findByCode(order.getAppliedCouponCode()).ifPresent(coupon -> {
+                int usedCount = coupon.getUsedCount() != null ? coupon.getUsedCount() : 0;
+                coupon.setUsedCount(Math.max(0, usedCount - 1));
+                couponRepository.save(coupon);
+            });
         }
 
-        // ── HOLD ─────────────────────────────────────────────────────────────
-        @Override
-        @Transactional
-        public void holdOrder(Long orderId, String reason, String userEmail) {
-                Long actorBranchId = getBranchId(userEmail);
-
-                Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new RuntimeException("Order not found"));
-
-                ensureOrderBelongsToBranch(order, actorBranchId);
-
-                /*
-                 * Manual audit is used because this changes order status and hold reason.
-                 */
-                Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
-
-                order.setStatus(OrderStatus.ON_HOLD);
-                order.setHoldReason(reason);
-                order.setStatusUpdatedAt(LocalDateTime.now());
-
-                Order savedOrder = orderRepository.save(order);
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.ORDER,
-                                AuditEventType.ORDER_ON_HOLD,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.WARN,
-                                AuditTargetType.ORDER,
-                                savedOrder.getId(),
-                                getOrderBranchId(savedOrder),
-                                "Order placed on hold by receptionist",
-                                oldValues,
-                                buildReceptionistOrderAuditSnapshot(savedOrder));
+        // Deduct from customer total spent
+        if (order.getFinalAmount() != null && customer.getTotalSpent() != null) {
+            customer.setTotalSpent(
+                    customer.getTotalSpent().subtract(order.getFinalAmount()).max(BigDecimal.ZERO));
         }
 
-        // ── CANCEL ───────────────────────────────────────────────────────────
-        @Override
-        @Transactional
-        public void cancelOrder(Long orderId, String reason, String userEmail) {
-                Long actorBranchId = getBranchId(userEmail);
+        customerRepository.save(customer);
 
-                Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new RuntimeException("Order not found"));
+        order.setStatus(OrderStatus.CANCELLED);
+        order.setCancelReason(reason);
+        order.setStatusUpdatedAt(LocalDateTime.now());
 
-                ensureOrderBelongsToBranch(order, actorBranchId);
+        Order savedOrder = orderRepository.save(order);
 
-                /*
-                 * Manual audit is used because this changes order status and cancel reason.
-                 */
-                Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
-                order.setStatus(OrderStatus.CANCELLED);
-                order.setCancelReason(reason);
-                order.setStatusUpdatedAt(LocalDateTime.now());
+        auditLogService.logCurrentUserAction(
+                AuditModule.ORDER,
+                AuditEventType.ORDER_CANCELLED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.ORDER,
+                savedOrder.getId(),
+                getOrderBranchId(savedOrder),
+                "Order cancelled by receptionist",
+                oldValues,
+                buildReceptionistOrderAuditSnapshot(savedOrder)
+        );
+    }
 
-                Order savedOrder = orderRepository.save(order);
+    // ── COLLECT CASH PAYMENT ─────────────────────────────────────────────
+    @Override
+    @Transactional
+    public void collectPayment(Long orderId, String userEmail) {
+        Long actorBranchId = getBranchId(userEmail);
 
-                auditLogService.logCurrentUserAction(
-                                AuditModule.ORDER,
-                                AuditEventType.ORDER_CANCELLED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.WARN,
-                                AuditTargetType.ORDER,
-                                savedOrder.getId(),
-                                getOrderBranchId(savedOrder),
-                                "Order cancelled by receptionist",
-                                oldValues,
-                                buildReceptionistOrderAuditSnapshot(savedOrder));
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        ensureOrderBelongsToBranch(order, actorBranchId);
+
+        Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
+
+        order.setPaymentStatus(PaymentStatus.PAID);
+
+        Order savedOrder = orderRepository.save(order);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.PAYMENT,
+                AuditEventType.PAYMENT_STATUS_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.PAYMENT,
+                savedOrder.getId(),
+                getOrderBranchId(savedOrder),
+                "Cash payment collected successfully",
+                oldValues,
+                buildReceptionistOrderAuditSnapshot(savedOrder)
+        );
+    }
+
+    // ── SERVE WHOLE ORDER (Online Pickup) ────────────────────────────────
+    @Override
+    @Transactional
+    public void serveOrder(Long orderId, String userEmail) {
+        Long actorBranchId = getBranchId(userEmail);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+
+        ensureOrderBelongsToBranch(order, actorBranchId);
+
+        if (order.getStatus() != OrderStatus.COMPLETED) {
+            throw new RuntimeException("Order is not ready yet");
         }
 
-        // ── COLLECT CASH PAYMENT ─────────────────────────────────────────────
-        @Override
-        @Transactional
-        public void collectPayment(Long orderId, String userEmail) {
-                Long actorBranchId = getBranchId(userEmail);
+        Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
-                Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new RuntimeException("Order not found"));
+        // Mark all items as SERVED so line chefs see them in their Done tab
+        order.getItems().forEach(item -> {
+            item.setStatus(OrderItemStatus.SERVED);
+            orderItemRepository.save(item);
+        });
 
-                ensureOrderBelongsToBranch(order, actorBranchId);
+        order.updateStatus(OrderStatus.SERVED);
 
-                /*
-                 * Manual audit is used because payment status updates need old/new values.
-                 */
-                Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
+        Order savedOrder = orderRepository.save(order);
 
-                order.setPaymentStatus(PaymentStatus.PAID);
+        webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
-                Order savedOrder = orderRepository.save(order);
+        auditLogService.logCurrentUserAction(
+                AuditModule.ORDER,
+                AuditEventType.ORDER_STATUS_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.ORDER,
+                savedOrder.getId(),
+                getOrderBranchId(savedOrder),
+                "Order served successfully",
+                oldValues,
+                buildReceptionistOrderAuditSnapshot(savedOrder)
+        );
+    }
 
-                auditLogService.logCurrentUserAction(
-                                AuditModule.PAYMENT,
-                                AuditEventType.PAYMENT_STATUS_UPDATED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.INFO,
-                                AuditTargetType.PAYMENT,
-                                savedOrder.getId(),
-                                getOrderBranchId(savedOrder),
-                                "Cash payment collected successfully",
-                                oldValues,
-                                buildReceptionistOrderAuditSnapshot(savedOrder));
+    // ── SERVE ONE ITEM (QR dine-in) ──────────────────────────────────────
+    @Override
+    @Transactional
+    public void serveOrderItem(Long itemId, String userEmail) {
+        Long actorBranchId = getBranchId(userEmail);
+
+        OrderItem item = orderItemRepository.findById(itemId)
+                .orElseThrow(() -> new RuntimeException("Order item not found"));
+
+        Order order = item.getOrder();
+
+        ensureOrderBelongsToBranch(order, actorBranchId);
+
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        oldValues.put("orderItem", buildReceptionistOrderItemAuditSnapshot(item));
+        oldValues.put("order", buildReceptionistOrderAuditSnapshot(order));
+
+        item.setStatus(OrderItemStatus.SERVED);
+
+        OrderItem savedItem = orderItemRepository.save(item);
+
+        boolean allServed = order.getItems().stream()
+                .allMatch(i -> i.getStatus() == OrderItemStatus.SERVED);
+
+        if (allServed) {
+            order.updateStatus(OrderStatus.SERVED);
+            orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 
-        // ── SERVE WHOLE ORDER (Online Pickup) ────────────────────────────────
-        @Override
-        @Transactional
-        public void serveOrder(Long orderId, String userEmail) {
-                Long actorBranchId = getBranchId(userEmail);
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("orderItem", buildReceptionistOrderItemAuditSnapshot(savedItem));
+        newValues.put("order", buildReceptionistOrderAuditSnapshot(order));
 
-                Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new RuntimeException("Order not found"));
+        auditLogService.logCurrentUserAction(
+                AuditModule.ORDER,
+                AuditEventType.ORDER_ITEM_STATUS_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.ORDER_ITEM,
+                savedItem.getId(),
+                getOrderBranchId(order),
+                "Order item served successfully",
+                oldValues,
+                newValues
+        );
+    }
 
-                ensureOrderBelongsToBranch(order, actorBranchId);
+    /*
+     * Extra branch safety for receptionist actions.
+     * Receptionist should only update orders from their own branch.
+     */
+    private void ensureOrderBelongsToBranch(Order order, Long actorBranchId) {
+        Long orderBranchId = getOrderBranchId(order);
 
-                if (order.getStatus() != OrderStatus.COMPLETED) {
-                        throw new RuntimeException("Order is not ready yet");
-                }
+        if (orderBranchId == null || !orderBranchId.equals(actorBranchId)) {
+            throw new RuntimeException("Security Alert: Access Denied! This order does not belong to your branch.");
+        }
+    }
 
-                /*
-                 * Manual audit is used because this changes the whole order status.
-                 */
-                Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
-
-                order.updateStatus(OrderStatus.SERVED);
-
-                Order savedOrder = orderRepository.save(order);
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.ORDER,
-                                AuditEventType.ORDER_STATUS_UPDATED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.INFO,
-                                AuditTargetType.ORDER,
-                                savedOrder.getId(),
-                                getOrderBranchId(savedOrder),
-                                "Order served successfully",
-                                oldValues,
-                                buildReceptionistOrderAuditSnapshot(savedOrder));
+    /*
+     * Gets branch ID from an order safely.
+     */
+    private Long getOrderBranchId(Order order) {
+        if (order == null || order.getBranch() == null) {
+            return null;
         }
 
-        // ── SERVE ONE ITEM (QR dine-in) ──────────────────────────────────────
-        @Override
-        @Transactional
-        public void serveOrderItem(Long itemId, String userEmail) {
-                Long actorBranchId = getBranchId(userEmail);
+        return order.getBranch().getId();
+    }
 
-                OrderItem item = orderItemRepository.findById(itemId)
-                                .orElseThrow(() -> new RuntimeException("Order item not found"));
+    /*
+     * Builds safe audit JSON for receptionist order actions.
+     */
+    private Map<String, Object> buildReceptionistOrderAuditSnapshot(Order order) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
 
-                Order order = item.getOrder();
-
-                ensureOrderBelongsToBranch(order, actorBranchId);
-
-                /*
-                 * Manual audit is used because this changes one order item status.
-                 * We also include the parent order state because the whole order may become
-                 * SERVED.
-                 */
-                Map<String, Object> oldValues = new LinkedHashMap<>();
-                oldValues.put("orderItem", buildReceptionistOrderItemAuditSnapshot(item));
-                oldValues.put("order", buildReceptionistOrderAuditSnapshot(order));
-
-                item.setStatus(OrderItemStatus.SERVED);
-
-                OrderItem savedItem = orderItemRepository.save(item);
-
-                // If all items are now SERVED, mark the whole order as SERVED
-                boolean allServed = order.getItems().stream()
-                                .allMatch(i -> i.getStatus() == OrderItemStatus.SERVED);
-
-                if (allServed) {
-                        order.updateStatus(OrderStatus.SERVED);
-                        orderRepository.save(order);
-                }
-
-                Map<String, Object> newValues = new LinkedHashMap<>();
-                newValues.put("orderItem", buildReceptionistOrderItemAuditSnapshot(savedItem));
-                newValues.put("order", buildReceptionistOrderAuditSnapshot(order));
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.ORDER,
-                                AuditEventType.ORDER_ITEM_STATUS_UPDATED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.INFO,
-                                AuditTargetType.ORDER_ITEM,
-                                savedItem.getId(),
-                                getOrderBranchId(order),
-                                "Order item served successfully",
-                                oldValues,
-                                newValues);
+        if (order == null) {
+            return snapshot;
         }
 
-        /*
-         * Extra branch safety for receptionist actions.
-         * Receptionist should only update orders from their own branch.
-         */
-        private void ensureOrderBelongsToBranch(Order order, Long actorBranchId) {
-                Long orderBranchId = getOrderBranchId(order);
+        snapshot.put("orderId", order.getId());
+        snapshot.put("orderNumber", order.getOrderNumber());
+        snapshot.put("branchId", getOrderBranchId(order));
+        snapshot.put("branchName", order.getBranch() != null ? order.getBranch().getName() : null);
+        snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
+        snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
+        snapshot.put("paymentStatus", order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
 
-                if (orderBranchId == null || !orderBranchId.equals(actorBranchId)) {
-                        throw new RuntimeException(
-                                        "Security Alert: Access Denied! This order does not belong to your branch.");
-                }
+        snapshot.put("contactName", order.getContactName());
+        snapshot.put("contactPhone", order.getContactPhone());
+        snapshot.put("contactEmail", order.getContactEmail());
+
+        snapshot.put("tableId", order.getTable() != null ? order.getTable().getId() : null);
+        snapshot.put("tableNumber", order.getTable() != null ? order.getTable().getTableNumber() : null);
+
+        snapshot.put("totalAmount", order.getTotalAmount());
+        snapshot.put("taxAmount", order.getTaxAmount());
+        snapshot.put("serviceCharge", order.getServiceCharge());
+        snapshot.put("discountAmount", order.getDiscountAmount());
+        snapshot.put("appliedCouponCode", order.getAppliedCouponCode());
+        snapshot.put("finalAmount", order.getFinalAmount());
+
+        snapshot.put("kitchenNotes", order.getKitchenNotes());
+        snapshot.put("holdReason", order.getHoldReason());
+        snapshot.put("cancelReason", order.getCancelReason());
+
+        snapshot.put("createdAt", order.getCreatedAt());
+        snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
+
+        List<Map<String, Object>> itemSnapshots = new ArrayList<>();
+
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                itemSnapshots.add(buildReceptionistOrderItemAuditSnapshot(item));
+            }
         }
 
-        /*
-         * Gets branch ID from an order safely.
-         */
-        private Long getOrderBranchId(Order order) {
-                if (order == null || order.getBranch() == null) {
-                        return null;
-                }
+        snapshot.put("items", itemSnapshots);
 
-                return order.getBranch().getId();
+        return snapshot;
+    }
+
+    /*
+     * Builds safe audit JSON for one order item.
+     */
+    private Map<String, Object> buildReceptionistOrderItemAuditSnapshot(OrderItem item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (item == null) {
+            return snapshot;
         }
 
-        /*
-         * Builds safe audit JSON for receptionist order actions.
-         * We do not store the full entity because Order has many relationships.
-         */
-        private Map<String, Object> buildReceptionistOrderAuditSnapshot(Order order) {
-                Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("orderItemId", item.getId());
+        snapshot.put("orderId", item.getOrder() != null ? item.getOrder().getId() : null);
+        snapshot.put("orderNumber", item.getOrder() != null ? item.getOrder().getOrderNumber() : null);
+        snapshot.put("itemName", item.getItemName());
+        snapshot.put("quantity", item.getQuantity());
+        snapshot.put("unitPrice", item.getUnitPrice());
+        snapshot.put("subtotal", item.getSubtotal());
+        snapshot.put("itemStatus", item.getStatus() != null ? item.getStatus().name() : null);
+        snapshot.put("menuItemId", item.getMenuItem() != null ? item.getMenuItem().getId() : null);
 
-                if (order == null) {
-                        return snapshot;
-                }
-
-                snapshot.put("orderId", order.getId());
-                snapshot.put("orderNumber", order.getOrderNumber());
-                snapshot.put("branchId", getOrderBranchId(order));
-                snapshot.put("branchName", order.getBranch() != null ? order.getBranch().getName() : null);
-                snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
-                snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
-                snapshot.put("paymentStatus",
-                                order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
-
-                snapshot.put("contactName", order.getContactName());
-                snapshot.put("contactPhone", order.getContactPhone());
-                snapshot.put("contactEmail", order.getContactEmail());
-
-                snapshot.put("tableId", order.getTable() != null ? order.getTable().getId() : null);
-                snapshot.put("tableNumber", order.getTable() != null ? order.getTable().getTableNumber() : null);
-
-                snapshot.put("totalAmount", order.getTotalAmount());
-                snapshot.put("taxAmount", order.getTaxAmount());
-                snapshot.put("serviceCharge", order.getServiceCharge());
-                snapshot.put("discountAmount", order.getDiscountAmount());
-                snapshot.put("appliedCouponCode", order.getAppliedCouponCode());
-                snapshot.put("finalAmount", order.getFinalAmount());
-
-                snapshot.put("kitchenNotes", order.getKitchenNotes());
-                snapshot.put("holdReason", order.getHoldReason());
-                snapshot.put("cancelReason", order.getCancelReason());
-
-                snapshot.put("createdAt", order.getCreatedAt());
-                snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
-
-                List<Map<String, Object>> itemSnapshots = new ArrayList<>();
-
-                if (order.getItems() != null) {
-                        for (OrderItem item : order.getItems()) {
-                                itemSnapshots.add(buildReceptionistOrderItemAuditSnapshot(item));
-                        }
-                }
-
-                snapshot.put("items", itemSnapshots);
-
-                return snapshot;
-        }
-
-        /*
-         * Builds safe audit JSON for one order item.
-         */
-        private Map<String, Object> buildReceptionistOrderItemAuditSnapshot(OrderItem item) {
-                Map<String, Object> snapshot = new LinkedHashMap<>();
-
-                if (item == null) {
-                        return snapshot;
-                }
-
-                snapshot.put("orderItemId", item.getId());
-                snapshot.put("orderId", item.getOrder() != null ? item.getOrder().getId() : null);
-                snapshot.put("orderNumber", item.getOrder() != null ? item.getOrder().getOrderNumber() : null);
-                snapshot.put("itemName", item.getItemName());
-                snapshot.put("quantity", item.getQuantity());
-                snapshot.put("unitPrice", item.getUnitPrice());
-                snapshot.put("subtotal", item.getSubtotal());
-                snapshot.put("itemStatus", item.getStatus() != null ? item.getStatus().name() : null);
-                snapshot.put("menuItemId", item.getMenuItem() != null ? item.getMenuItem().getId() : null);
-
-                return snapshot;
-        }
+        return snapshot;
+    }
 }
