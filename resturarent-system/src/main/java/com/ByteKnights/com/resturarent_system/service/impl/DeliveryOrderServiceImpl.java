@@ -82,11 +82,17 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                                                 ? d.getOrder().getOrderNumber()
                                                 : "ORD-" + d.getOrder().getId())
                                 .location(d.getOrder().getDeliveryAddress())
+                                .deliveryAddress(d.getOrder().getDeliveryAddress())
+                                .customerName(d.getOrder().getContactName())
+                                .customerPhone(d.getOrder().getContactPhone())
                                 .paymentType("CASH ON DELIVERY")
                                 .amount(d.getOrder().getFinalAmount())
                                 .status(d.getDeliveryStatus().name())
+                                .latitude(d.getOrder().getLatitude())
+                                .longitude(d.getOrder().getLongitude())
                                 .build();
         }
+
 
         @Override
         @Transactional
