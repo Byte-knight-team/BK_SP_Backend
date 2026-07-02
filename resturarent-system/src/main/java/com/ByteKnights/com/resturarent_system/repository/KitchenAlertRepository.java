@@ -14,19 +14,18 @@ public interface KitchenAlertRepository extends JpaRepository<KitchenAlert, Long
 
     List<KitchenAlert> findByBranchIdAndIsResolvedFalseOrderByCreatedAtDesc(Long branchId);
 
-    // For receptionist: today's alerts (all) + previous days that are still
-    // unresolved
+    // For receptionist: today's alerts (all) + previous days that are still unresolved
     @Query("SELECT a FROM KitchenAlert a WHERE a.branch.id = :branchId " +
-            "AND (a.createdAt >= :startOfToday OR a.isResolved = false) " +
-            "ORDER BY a.createdAt DESC")
+           "AND (a.createdAt >= :startOfToday OR a.isResolved = false) " +
+           "ORDER BY a.createdAt DESC")
     List<KitchenAlert> findReceptionistAlerts(
             @Param("branchId") Long branchId,
             @Param("startOfToday") LocalDateTime startOfToday);
     /*
-     * no need to write a query like this
-     * SELECT * FROM kitchen_alerts
-     * WHERE branch_id = ?
-     * AND is_resolved = false
-     * ORDER BY created_at DESC;
+    no need to write a query like this
+        SELECT * FROM kitchen_alerts
+        WHERE branch_id = ?
+        AND is_resolved = false
+        ORDER BY created_at DESC;
      */
 }

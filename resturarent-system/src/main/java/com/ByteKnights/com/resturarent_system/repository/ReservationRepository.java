@@ -13,7 +13,7 @@ import java.util.Optional;
 @Repository
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
-    // ------------------------receptionist query START---------------------
+    //------------------------receptionist query START---------------------
 
     // Find a reservation that is CONFIRMED for a specific table
     @Query("SELECT r FROM Reservation r WHERE r.table.id = :tableId AND r.status = 'CONFIRMED'")
@@ -21,23 +21,22 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     // Find all confirmed reservations for a branch within a date range
     @Query("SELECT r FROM Reservation r WHERE r.table.branch.id = :branchId " +
-            "AND r.status = 'CONFIRMED' " +
-            "AND r.reservationTime >= :start AND r.reservationTime < :end " +
-            "ORDER BY r.reservationTime ASC")
+           "AND r.status = 'CONFIRMED' " +
+           "AND r.reservationTime >= :start AND r.reservationTime < :end " +
+           "ORDER BY r.reservationTime ASC")
     List<Reservation> findByBranchAndDate(
             @Param("branchId") Long branchId,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
 
-    // Check if a table already has a confirmed reservation overlapping with the
-    // requested slot
+    // Check if a table already has a confirmed reservation overlapping with the requested slot
     @Query("SELECT r FROM Reservation r WHERE r.table.id = :tableId " +
-            "AND r.status = 'CONFIRMED' " +
-            "AND r.reservationTime < :endTime AND r.endTime > :startTime")
+           "AND r.status = 'CONFIRMED' " +
+           "AND r.reservationTime < :endTime AND r.endTime > :startTime")
     List<Reservation> findOverlappingReservations(
             @Param("tableId") Long tableId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
 
-    // ------------------------receptionist query END---------------------
+    //------------------------receptionist query END---------------------
 }

@@ -25,21 +25,24 @@ public class ReceptionistDashboardController {
     @GetMapping("/stats")
     @PreAuthorize("hasAuthority('RECEPTIONIST_ORDER_VIEW')")
     public ResponseEntity<StandardResponse> getDashboardStats(Principal principal) {
-        ReceptionistDashboardStatsDTO stats = receptionistDashboardService.getDashboardStats(principal.getName());
+        ReceptionistDashboardStatsDTO stats =
+                receptionistDashboardService.getDashboardStats(principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Success", stats), HttpStatus.OK);
     }
 
     @GetMapping("/revenue-by-type")
     @PreAuthorize("hasAuthority('RECEPTIONIST_ORDER_VIEW')")
     public ResponseEntity<StandardResponse> getRevenueByType(Principal principal) {
-        List<ReceptionistRevenueByTypeDTO> revenue = receptionistDashboardService.getRevenueByType(principal.getName());
+        List<ReceptionistRevenueByTypeDTO> revenue =
+                receptionistDashboardService.getRevenueByType(principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Success", revenue), HttpStatus.OK);
     }
 
     @GetMapping("/order-counts-by-type")
     @PreAuthorize("hasAuthority('RECEPTIONIST_ORDER_VIEW')")
     public ResponseEntity<StandardResponse> getOrderCountsByType(Principal principal) {
-        ReceptionistOrderCountByTypeDTO counts = receptionistDashboardService.getOrderCountsByType(principal.getName());
+        ReceptionistOrderCountByTypeDTO counts =
+                receptionistDashboardService.getOrderCountsByType(principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Success", counts), HttpStatus.OK);
     }
 }

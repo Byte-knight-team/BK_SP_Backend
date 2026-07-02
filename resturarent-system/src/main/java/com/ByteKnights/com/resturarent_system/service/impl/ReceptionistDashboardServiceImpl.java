@@ -50,13 +50,12 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
                 branchId, OrderStatus.PLACED, OrderType.ONLINE_PICKUP, start, end);
 
         // Kitchen orders — QR excludes orders that already have a READY/SERVED item
-        long kitchenQR = orderRepository.countKitchenQROrdersWithoutReadyItems(branchId, OrderStatus.PENDING, start,
-                end)
+        long kitchenQR = orderRepository.countKitchenQROrdersWithoutReadyItems(branchId, OrderStatus.PENDING, start, end)
                 + orderRepository.countKitchenQROrdersWithoutReadyItems(branchId, OrderStatus.PREPARING, start, end);
         long kitchenPickup = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
                 branchId, OrderStatus.PENDING, OrderType.ONLINE_PICKUP, start, end)
                 + orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
-                        branchId, OrderStatus.PREPARING, OrderType.ONLINE_PICKUP, start, end);
+                branchId, OrderStatus.PREPARING, OrderType.ONLINE_PICKUP, start, end);
 
         // Ready orders
         // QR ready = COMPLETED QR + PENDING/PREPARING QR with any READY/SERVED item
@@ -90,7 +89,8 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
                 readyQR, readyPickup,
                 servedQR, servedPickup,
                 pendingPaymentQR, pendingPaymentPickup,
-                collectedTodayQR, collectedTodayPickup);
+                collectedTodayQR, collectedTodayPickup
+        );
     }
 
     @Override
@@ -119,8 +119,7 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
         }
 
         // Pickup revenue per day
-        List<Object[]> pickupRows = paymentRepository.findDailyRevenueByOrderType(branchId, "ONLINE_PICKUP", start,
-                end);
+        List<Object[]> pickupRows = paymentRepository.findDailyRevenueByOrderType(branchId, "ONLINE_PICKUP", start, end);
         for (Object[] row : pickupRows) {
             LocalDate rowDate = ((java.sql.Date) row[0]).toLocalDate();
             double revenue = ((Number) row[1]).doubleValue();
@@ -145,12 +144,9 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
         for (Object[] row : rows) {
             String type = (String) row[0];
             long count = ((Number) row[1]).longValue();
-            if ("QR".equals(type))
-                qrCount = count;
-            else if ("ONLINE_PICKUP".equals(type))
-                pickupCount = count;
-            else if ("ONLINE_DELIVERY".equals(type))
-                deliveryCount = count;
+            if ("QR".equals(type)) qrCount = count;
+            else if ("ONLINE_PICKUP".equals(type)) pickupCount = count;
+            else if ("ONLINE_DELIVERY".equals(type)) deliveryCount = count;
         }
 
         return new ReceptionistOrderCountByTypeDTO(qrCount, pickupCount, deliveryCount);

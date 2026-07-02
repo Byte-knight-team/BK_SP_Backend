@@ -48,7 +48,8 @@ public class WebSocketNotificationService {
         String destination = "/topic/branch/" + branchId + "/kitchen-orders";
         java.util.Map<String, String> payload = java.util.Map.of(
                 "orderNumber", orderNumber,
-                "message", "New order received: " + orderNumber);
+                "message", "New order received: " + orderNumber
+        );
         log.info("Broadcasting new kitchen order to {}: {}", destination, orderNumber);
         messagingTemplate.convertAndSend(destination, payload);
     }
@@ -65,8 +66,7 @@ public class WebSocketNotificationService {
      * @param newItemStatus  The new item status (PREPARING or READY)
      * @param newOrderStatus The new order status
      */
-    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String orderNumber, String itemName,
-            String newItemStatus, String newOrderStatus, String orderType) {
+    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String orderNumber, String itemName, String newItemStatus, String newOrderStatus, String orderType) {
         String destination = "/topic/branch/" + branchId + "/kitchen-item-update";
         java.util.Map<String, String> payload = new java.util.HashMap<>();
         payload.put("orderId", String.valueOf(orderId));
@@ -75,8 +75,7 @@ public class WebSocketNotificationService {
         payload.put("newStatus", newItemStatus);
         payload.put("orderStatus", newOrderStatus);
         payload.put("orderType", orderType);
-        log.info("Broadcasting item update to kitchen {}: {} -> {} (order: {})", destination, itemName, newItemStatus,
-                newOrderStatus);
+        log.info("Broadcasting item update to kitchen {}: {} -> {} (order: {})", destination, itemName, newItemStatus, newOrderStatus);
         messagingTemplate.convertAndSend(destination, payload);
     }
 
@@ -86,8 +85,7 @@ public class WebSocketNotificationService {
      * Topic: /topic/line-chef/{lineChefUserId}/new-item
      * Subscribers: Line chef dashboard
      */
-    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName,
-            String kitchenNotes) {
+    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName, String kitchenNotes) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/new-item";
         java.util.Map<String, String> payload = new java.util.HashMap<>();
         payload.put("orderNumber", orderNumber);
@@ -99,34 +97,32 @@ public class WebSocketNotificationService {
     }
 
     /**
-     * Notify both kitchen and receptionist that an order's status changed
-     * cross-role.
+     * Notify both kitchen and receptionist that an order's status changed cross-role.
      * Topic: /topic/branch/{branchId}/order-status-update
-     * Used for: kitchen holds order (→ receptionist), receptionist sends back (→
-     * kitchen)
+     * Used for: kitchen holds order (→ receptionist), receptionist sends back (→ kitchen)
      */
     public void broadcastOrderStatusChanged(Long branchId, Long orderId, String orderNumber, String newStatus) {
         String destination = "/topic/branch/" + branchId + "/order-status-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of(
                 "orderId", String.valueOf(orderId),
                 "orderNumber", orderNumber,
-                "newStatus", newStatus));
+                "newStatus", newStatus
+        ));
     }
 
     /**
-     * Notify a line chef that their assigned item has been reassigned to another
-     * chef.
+     * Notify a line chef that their assigned item has been reassigned to another chef.
      *
      * Topic: /topic/line-chef/{lineChefUserId}/item-removed
      * Subscribers: Line chef dashboard
      */
-    public void broadcastLineChefItemRemoved(Long lineChefUserId, String itemName, String orderNumber,
-            String newChefName) {
+    public void broadcastLineChefItemRemoved(Long lineChefUserId, String itemName, String orderNumber, String newChefName) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/item-removed";
         java.util.Map<String, String> payload = java.util.Map.of(
                 "itemName", itemName,
                 "orderNumber", orderNumber,
-                "newChefName", newChefName);
+                "newChefName", newChefName
+        );
         messagingTemplate.convertAndSend(destination, payload);
     }
 

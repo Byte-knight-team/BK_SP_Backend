@@ -25,249 +25,247 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class KitchenOrderServiceImpl implements KitchenOrderService {
 
-        private final OrderRepository orderRepository;
-        private final OrderItemRepository orderItemRepository;
-        private final UserRepository userRepository;
-        private final StaffRepository staffRepository;
-        private final WebSocketNotificationService webSocketNotificationService;
-        private final AuditLogService auditLogService;
+    private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
+    private final AuditLogService auditLogService;
 
-        @Override
-        public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) {
-                User user = userRepository.findByEmail(userEmail)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+    @Override
+    public List<OrderCardDetailsDTO> getOrdersByStatus(OrderStatus status, String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-                Staff staff = staffRepository.findByUser(user)
-                                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
-                Long branchId = staff.getBranch().getId();
-                LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
+        Long branchId = staff.getBranch().getId();
+        LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
 
-                Sort sort = (status == OrderStatus.COMPLETED)
-                                ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
-                                : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
+        Sort sort = (status == OrderStatus.COMPLETED)
+                ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
+                : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
 
-                List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(
-                                branchId, status, startOfToday, sort);
+        List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(
+                branchId, status, startOfToday, sort);
 
-                List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
+        List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
 
-                for (Order order : orders) {
-                        orderCardDetailsDTOS.add(new OrderCardDetailsDTO(
-                                        order.getId(),
-                                        order.getOrderNumber(),
-                                        order.getStatus().name(),
-                                        order.getStatusUpdatedAt() != null
-                                                        ? order.getStatusUpdatedAt().format(formatter)
-                                                        : null,
-                                        order.getItems().size()));
-                }
-                return orderCardDetailsDTOS;
+        for (Order order : orders) {
+            orderCardDetailsDTOS.add(new OrderCardDetailsDTO(
+                    order.getId(),
+                    order.getOrderNumber(),
+                    order.getStatus().name(),
+                    order.getStatusUpdatedAt() != null ? order.getStatusUpdatedAt().format(formatter) : null,
+                    order.getItems().size()
+            ));
+        }
+        return orderCardDetailsDTOS;
+    }
+
+    @Override
+    public OrderDetailsDTO getOrderDetails(Long orderId, String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
+
+        List<OrderItemDetailsDTO> itemDTOs = new ArrayList<>();
+        for (OrderItem item : order.getItems()) {
+            itemDTOs.add(new OrderItemDetailsDTO(
+                    item.getId(),
+                    item.getItemName(),
+                    item.getQuantity(),
+                    item.getStatus().toString(),
+                    item.getAssignedLineChef() != null ? item.getAssignedLineChef().getUser().getFullName() : "Not Assigned",
+                    item.getKitchenNotes()
+            ));
         }
 
-        @Override
-        public OrderDetailsDTO getOrderDetails(Long orderId, String userEmail) {
-                User user = userRepository.findByEmail(userEmail)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+        return new OrderDetailsDTO(
+                order.getId(),
+                order.getOrderNumber(),
+                order.getCreatedAt(),
+                order.getStatusUpdatedAt(),
+                order.getStatus().toString(),
+                order.getHoldReason(),
+                order.getKitchenNotes(),
+                itemDTOs
+        );
+    }
 
-                Staff staff = staffRepository.findByUser(user)
-                                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+    @Override
+    public void assignChefToMeal(Long orderItemId, Long chefStaffId) {
+        OrderItem item = orderItemRepository.findById(orderItemId)
+                .orElseThrow(() -> new RuntimeException("Meal not found"));
 
-                Long branchId = staff.getBranch().getId();
+        Staff chef = staffRepository.findById(chefStaffId)
+                .orElseThrow(() -> new RuntimeException("Chef not found"));
 
-                Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
-                                .orElseThrow(() -> new RuntimeException(
-                                                "Order not found in your branch with ID: " + orderId));
-
-                List<OrderItemDetailsDTO> itemDTOs = new ArrayList<>();
-                for (OrderItem item : order.getItems()) {
-                        itemDTOs.add(new OrderItemDetailsDTO(
-                                        item.getId(),
-                                        item.getItemName(),
-                                        item.getQuantity(),
-                                        item.getStatus().toString(),
-                                        item.getAssignedLineChef() != null
-                                                        ? item.getAssignedLineChef().getUser().getFullName()
-                                                        : "Not Assigned",
-                                        item.getKitchenNotes()));
-                }
-
-                return new OrderDetailsDTO(
-                                order.getId(),
-                                order.getOrderNumber(),
-                                order.getCreatedAt(),
-                                order.getStatusUpdatedAt(),
-                                order.getStatus().toString(),
-                                order.getHoldReason(),
-                                order.getKitchenNotes(),
-                                itemDTOs);
+        if (!item.getOrder().getBranch().getId().equals(chef.getBranch().getId())) {
+            throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
         }
 
-        @Override
-        public void assignChefToMeal(Long orderItemId, Long chefStaffId) {
-                OrderItem item = orderItemRepository.findById(orderItemId)
-                                .orElseThrow(() -> new RuntimeException("Meal not found"));
+        Map<String, Object> oldValues = buildKitchenOrderItemAuditSnapshot(item);
 
-                Staff chef = staffRepository.findById(chefStaffId)
-                                .orElseThrow(() -> new RuntimeException("Chef not found"));
+        Staff previousChef = item.getAssignedLineChef();
 
-                if (!item.getOrder().getBranch().getId().equals(chef.getBranch().getId())) {
-                        throw new RuntimeException("Security Alert: Cannot assign a chef from a different branch!");
-                }
+        item.setAssignedLineChef(chef);
+        OrderItem savedItem = orderItemRepository.save(item);
 
-                Map<String, Object> oldValues = buildKitchenOrderItemAuditSnapshot(item);
-
-                Staff previousChef = item.getAssignedLineChef();
-
-                item.setAssignedLineChef(chef);
-                OrderItem savedItem = orderItemRepository.save(item);
-
-                // Notify the old chef that this item was reassigned
-                if (previousChef != null && !previousChef.getId().equals(chef.getId())) {
-                        webSocketNotificationService.broadcastLineChefItemRemoved(
-                                        previousChef.getUser().getId(),
-                                        item.getItemName(),
-                                        item.getOrder().getOrderNumber(),
-                                        chef.getUser().getFullName());
-                }
-
-                // Notify the new chef that an item was assigned to them
-                webSocketNotificationService.broadcastLineChefItemAssigned(
-                                chef.getUser().getId(),
-                                item.getOrder().getOrderNumber(),
-                                item.getItemName(),
-                                item.getKitchenNotes());
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.KITCHEN,
-                                AuditEventType.CHEF_ASSIGNED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.INFO,
-                                AuditTargetType.ORDER_ITEM,
-                                savedItem.getId(),
-                                getBranchIdFromOrderItem(savedItem),
-                                "Chef assigned to meal successfully",
-                                oldValues,
-                                buildKitchenOrderItemAuditSnapshot(savedItem));
+        // Notify the old chef that this item was reassigned
+        if (previousChef != null && !previousChef.getId().equals(chef.getId())) {
+            webSocketNotificationService.broadcastLineChefItemRemoved(
+                    previousChef.getUser().getId(),
+                    item.getItemName(),
+                    item.getOrder().getOrderNumber(),
+                    chef.getUser().getFullName()
+            );
         }
 
-        @Override
-        @Transactional
-        public void holdOrder(Long orderId, String holdReason, String userEmail) {
-                User user = userRepository.findByEmail(userEmail)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+        // Notify the new chef that an item was assigned to them
+        webSocketNotificationService.broadcastLineChefItemAssigned(
+                chef.getUser().getId(),
+                item.getOrder().getOrderNumber(),
+                item.getItemName(),
+                item.getKitchenNotes()
+        );
 
-                Staff staff = staffRepository.findByUser(user)
-                                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        auditLogService.logCurrentUserAction(
+                AuditModule.KITCHEN,
+                AuditEventType.CHEF_ASSIGNED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.ORDER_ITEM,
+                savedItem.getId(),
+                getBranchIdFromOrderItem(savedItem),
+                "Chef assigned to meal successfully",
+                oldValues,
+                buildKitchenOrderItemAuditSnapshot(savedItem));
+    }
 
-                Long branchId = staff.getBranch().getId();
+    @Override
+    @Transactional
+    public void holdOrder(Long orderId, String holdReason, String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-                Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
-                                .orElseThrow(() -> new RuntimeException(
-                                                "Order not found in your branch with ID: " + orderId));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
-                Map<String, Object> oldValues = buildKitchenOrderAuditSnapshot(order);
+        Long branchId = staff.getBranch().getId();
 
-                order.setStatus(OrderStatus.ON_HOLD);
-                order.setHoldReason(holdReason);
-                order.setStatusUpdatedAt(LocalDateTime.now());
+        Order order = orderRepository.findByIdAndBranchId(orderId, branchId)
+                .orElseThrow(() -> new RuntimeException("Order not found in your branch with ID: " + orderId));
 
-                for (OrderItem item : order.getItems()) {
-                        item.setStatus(OrderItemStatus.ON_HOLD);
-                }
+        Map<String, Object> oldValues = buildKitchenOrderAuditSnapshot(order);
 
-                Order savedOrder = orderRepository.save(order);
+        order.setStatus(OrderStatus.ON_HOLD);
+        order.setHoldReason(holdReason);
+        order.setStatusUpdatedAt(LocalDateTime.now());
 
-                // Notify customer (order tracking)
-                webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
-                // Notify receptionist (cross-role tab switch to Hold)
-                webSocketNotificationService.broadcastOrderStatusChanged(branchId, orderId, savedOrder.getOrderNumber(),
-                                "ON_HOLD");
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.KITCHEN,
-                                AuditEventType.ORDER_ON_HOLD,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.WARN,
-                                AuditTargetType.ORDER,
-                                savedOrder.getId(),
-                                branchId,
-                                "Order placed on hold by kitchen staff",
-                                oldValues,
-                                buildKitchenOrderAuditSnapshot(savedOrder));
+        for (OrderItem item : order.getItems()) {
+            item.setStatus(OrderItemStatus.ON_HOLD);
         }
 
-        private Map<String, Object> buildKitchenOrderItemAuditSnapshot(OrderItem item) {
-                Map<String, Object> snapshot = new LinkedHashMap<>();
+        Order savedOrder = orderRepository.save(order);
 
-                if (item == null) {
-                        return snapshot;
-                }
+        // Notify customer (order tracking)
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+        // Notify receptionist (cross-role tab switch to Hold)
+        webSocketNotificationService.broadcastOrderStatusChanged(branchId, orderId, savedOrder.getOrderNumber(), "ON_HOLD");
 
-                Order order = item.getOrder();
-                Staff assignedChef = item.getAssignedLineChef();
+        auditLogService.logCurrentUserAction(
+                AuditModule.KITCHEN,
+                AuditEventType.ORDER_ON_HOLD,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.ORDER,
+                savedOrder.getId(),
+                branchId,
+                "Order placed on hold by kitchen staff",
+                oldValues,
+                buildKitchenOrderAuditSnapshot(savedOrder));
+    }
 
-                snapshot.put("orderItemId", item.getId());
-                snapshot.put("orderId", order != null ? order.getId() : null);
-                snapshot.put("orderNumber", order != null ? order.getOrderNumber() : null);
-                snapshot.put("branchId",
-                                order != null && order.getBranch() != null ? order.getBranch().getId() : null);
+    private Map<String, Object> buildKitchenOrderItemAuditSnapshot(OrderItem item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
 
-                snapshot.put("itemName", item.getItemName());
-                snapshot.put("quantity", item.getQuantity());
-                snapshot.put("itemStatus", item.getStatus() != null ? item.getStatus().name() : null);
-
-                snapshot.put("assignedChefStaffId", assignedChef != null ? assignedChef.getId() : null);
-                snapshot.put("assignedChefUserId",
-                                assignedChef != null && assignedChef.getUser() != null
-                                                ? assignedChef.getUser().getId()
-                                                : null);
-                snapshot.put("assignedChefName",
-                                assignedChef != null && assignedChef.getUser() != null
-                                                ? assignedChef.getUser().getFullName()
-                                                : null);
-
-                snapshot.put("cookingStartedAt", item.getCookingStartedAt());
-                snapshot.put("cookingCompletedAt", item.getCookingCompletedAt());
-
-                return snapshot;
+        if (item == null) {
+            return snapshot;
         }
 
-        private Map<String, Object> buildKitchenOrderAuditSnapshot(Order order) {
-                Map<String, Object> snapshot = new LinkedHashMap<>();
+        Order order = item.getOrder();
+        Staff assignedChef = item.getAssignedLineChef();
 
-                if (order == null) {
-                        return snapshot;
-                }
+        snapshot.put("orderItemId", item.getId());
+        snapshot.put("orderId", order != null ? order.getId() : null);
+        snapshot.put("orderNumber", order != null ? order.getOrderNumber() : null);
+        snapshot.put("branchId",
+                order != null && order.getBranch() != null ? order.getBranch().getId() : null);
 
-                snapshot.put("orderId", order.getId());
-                snapshot.put("orderNumber", order.getOrderNumber());
-                snapshot.put("branchId", order.getBranch() != null ? order.getBranch().getId() : null);
-                snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
-                snapshot.put("holdReason", order.getHoldReason());
-                snapshot.put("kitchenNotes", order.getKitchenNotes());
-                snapshot.put("createdAt", order.getCreatedAt());
-                snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
+        snapshot.put("itemName", item.getItemName());
+        snapshot.put("quantity", item.getQuantity());
+        snapshot.put("itemStatus", item.getStatus() != null ? item.getStatus().name() : null);
 
-                List<Map<String, Object>> itemSnapshots = new ArrayList<>();
+        snapshot.put("assignedChefStaffId", assignedChef != null ? assignedChef.getId() : null);
+        snapshot.put("assignedChefUserId",
+                assignedChef != null && assignedChef.getUser() != null
+                        ? assignedChef.getUser().getId()
+                        : null);
+        snapshot.put("assignedChefName",
+                assignedChef != null && assignedChef.getUser() != null
+                        ? assignedChef.getUser().getFullName()
+                        : null);
 
-                if (order.getItems() != null) {
-                        for (OrderItem item : order.getItems()) {
-                                itemSnapshots.add(buildKitchenOrderItemAuditSnapshot(item));
-                        }
-                }
+        snapshot.put("cookingStartedAt", item.getCookingStartedAt());
+        snapshot.put("cookingCompletedAt", item.getCookingCompletedAt());
 
-                snapshot.put("items", itemSnapshots);
+        return snapshot;
+    }
 
-                return snapshot;
+    private Map<String, Object> buildKitchenOrderAuditSnapshot(Order order) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (order == null) {
+            return snapshot;
         }
 
-        private Long getBranchIdFromOrderItem(OrderItem item) {
-                if (item == null || item.getOrder() == null || item.getOrder().getBranch() == null) {
-                        return null;
-                }
+        snapshot.put("orderId", order.getId());
+        snapshot.put("orderNumber", order.getOrderNumber());
+        snapshot.put("branchId", order.getBranch() != null ? order.getBranch().getId() : null);
+        snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
+        snapshot.put("holdReason", order.getHoldReason());
+        snapshot.put("kitchenNotes", order.getKitchenNotes());
+        snapshot.put("createdAt", order.getCreatedAt());
+        snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
 
-                return item.getOrder().getBranch().getId();
+        List<Map<String, Object>> itemSnapshots = new ArrayList<>();
+
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                itemSnapshots.add(buildKitchenOrderItemAuditSnapshot(item));
+            }
         }
+
+        snapshot.put("items", itemSnapshots);
+
+        return snapshot;
+    }
+
+    private Long getBranchIdFromOrderItem(OrderItem item) {
+        if (item == null || item.getOrder() == null || item.getOrder().getBranch() == null) {
+            return null;
+        }
+
+        return item.getOrder().getBranch().getId();
+    }
 }

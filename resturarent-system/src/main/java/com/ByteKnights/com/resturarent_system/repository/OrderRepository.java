@@ -192,15 +192,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         com.ByteKnights.com.resturarent_system.entity.OrderType orderType,
                         OrderStatus status);
 
-        // Counts today's orders for this branch that have unpaid cash (paymentStatus =
-        // PENDING)
+        // Counts today's orders for this branch that have unpaid cash (paymentStatus = PENDING)
         // Used by receptionist dashboard "Cash Due" KPI card
         long countByBranchIdAndPaymentStatusAndOrderTypeInAndCreatedAtBetween(
-                        Long branchId,
-                        PaymentStatus paymentStatus,
-                        List<OrderType> orderTypes,
-                        LocalDateTime start,
-                        LocalDateTime end);
+                Long branchId,
+                PaymentStatus paymentStatus,
+                List<OrderType> orderTypes,
+                LocalDateTime start,
+                LocalDateTime end);
+
 
         @EntityGraph(attributePaths = "items")
         List<Order> findByBranchIdAndStatusAndOrderTypeIn(
@@ -208,45 +208,41 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         OrderStatus status,
                         List<OrderType> orderTypes);
 
-        // Kitchen tab: PENDING/PREPARING orders, but exclude QR orders that already
-        // have a READY or SERVED item
+        // Kitchen tab: PENDING/PREPARING orders, but exclude QR orders that already have a READY or SERVED item
         // (those are shown in the Ready tab instead)
         @EntityGraph(attributePaths = "items")
         @Query("SELECT o FROM Order o " +
-                        "WHERE o.branch.id = :branchId " +
-                        "AND o.status = :status " +
-                        "AND o.orderType IN :orderTypes " +
-                        "AND o.createdAt BETWEEN :start AND :end " +
-                        "AND (o.orderType <> com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
-                        "     OR NOT EXISTS (" +
-                        "         SELECT i FROM OrderItem i WHERE i.order = o " +
-                        "         AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, "
-                        +
-                        "                          com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED)))")
+               "WHERE o.branch.id = :branchId " +
+               "AND o.status = :status " +
+               "AND o.orderType IN :orderTypes " +
+               "AND o.createdAt BETWEEN :start AND :end " +
+               "AND (o.orderType <> com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "     OR NOT EXISTS (" +
+               "         SELECT i FROM OrderItem i WHERE i.order = o " +
+               "         AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                          com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED)))")
         List<Order> findKitchenOrdersExcludingQRWithReadyItems(
-                        @Param("branchId") Long branchId,
-                        @Param("status") OrderStatus status,
-                        @Param("orderTypes") List<OrderType> orderTypes,
-                        @Param("start") LocalDateTime start,
-                        @Param("end") LocalDateTime end);
+                @Param("branchId") Long branchId,
+                @Param("status") OrderStatus status,
+                @Param("orderTypes") List<OrderType> orderTypes,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
 
-        // QR orders in PENDING/PREPARING that have at least one READY or SERVED item —
-        // for receptionist Ready tab.
-        // Using SERVED too so the order stays visible after partial serving while
-        // remaining items are still cooking.
+        // QR orders in PENDING/PREPARING that have at least one READY or SERVED item — for receptionist Ready tab.
+        // Using SERVED too so the order stays visible after partial serving while remaining items are still cooking.
         @EntityGraph(attributePaths = "items")
         @Query("SELECT DISTINCT o FROM Order o JOIN o.items i " +
-                        "WHERE o.branch.id = :branchId " +
-                        "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
-                        "AND o.status IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.PENDING, " +
-                        "                 com.ByteKnights.com.resturarent_system.entity.OrderStatus.PREPARING) " +
-                        "AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
-                        "                 com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED) " +
-                        "AND o.createdAt BETWEEN :start AND :end")
+               "WHERE o.branch.id = :branchId " +
+               "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "AND o.status IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.PENDING, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderStatus.PREPARING) " +
+               "AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED) " +
+               "AND o.createdAt BETWEEN :start AND :end")
         List<Order> findQROrdersWithAnyReadyItem(
-                        @Param("branchId") Long branchId,
-                        @Param("start") LocalDateTime start,
-                        @Param("end") LocalDateTime end);
+                @Param("branchId") Long branchId,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
 
         @EntityGraph(attributePaths = "items")
         List<Order> findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
@@ -301,87 +297,86 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         List<Object[]> findOrderTypeCounts(@Param("cid") Long customerId);
 
         @Query("""
-                        SELECT
-                            b.id,
-                            b.name,
-                            b.status,
-                            COALESCE(SUM(o.finalAmount), 0),
-                            COUNT(o.id),
-                            COALESCE(SUM(
-                                CASE
-                                    WHEN o.createdAt >= :todayStart THEN o.finalAmount
-                                    ELSE 0
-                                END
-                            ), 0),
-                            COALESCE(SUM(
-                                CASE
-                                    WHEN o.createdAt >= :todayStart THEN 1
-                                    ELSE 0
-                                END
-                            ), 0)
-                        FROM Branch b
-                        LEFT JOIN Order o
-                            ON o.branch = b
-                            AND o.paymentStatus IN :paymentStatuses
-                            AND o.createdAt BETWEEN :start AND :end
-                        GROUP BY b.id, b.name, b.status
-                        ORDER BY COALESCE(SUM(o.finalAmount), 0) DESC
-                        """)
+                SELECT
+                    b.id,
+                    b.name,
+                    b.status,
+                    COALESCE(SUM(o.finalAmount), 0),
+                    COUNT(o.id),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN o.createdAt >= :todayStart THEN o.finalAmount
+                            ELSE 0
+                        END
+                    ), 0),
+                    COALESCE(SUM(
+                        CASE
+                            WHEN o.createdAt >= :todayStart THEN 1
+                            ELSE 0
+                        END
+                    ), 0)
+                FROM Branch b
+                LEFT JOIN Order o
+                    ON o.branch = b
+                    AND o.paymentStatus IN :paymentStatuses
+                    AND o.createdAt BETWEEN :start AND :end
+                GROUP BY b.id, b.name, b.status
+                ORDER BY COALESCE(SUM(o.finalAmount), 0) DESC
+                """)
         List<Object[]> findSuperAdminBranchRevenueSummary(
-                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
-                        @Param("start") LocalDateTime start,
-                        @Param("end") LocalDateTime end,
-                        @Param("todayStart") LocalDateTime todayStart);
+                @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end,
+                @Param("todayStart") LocalDateTime todayStart
+        );
 
         // ── Receptionist Dashboard ──────────────────────────────────────────────
 
         long countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
-                        Long branchId, OrderStatus status, OrderType orderType,
-                        LocalDateTime start, LocalDateTime end);
+                Long branchId, OrderStatus status, OrderType orderType,
+                LocalDateTime start, LocalDateTime end);
 
         long countByBranchIdAndPaymentStatusAndOrderTypeAndCreatedAtBetween(
-                        Long branchId, PaymentStatus paymentStatus, OrderType orderType,
-                        LocalDateTime start, LocalDateTime end);
+                Long branchId, PaymentStatus paymentStatus, OrderType orderType,
+                LocalDateTime start, LocalDateTime end);
 
-        // QR orders in PENDING/PREPARING that have NO READY or SERVED items — for
-        // kitchen QR count
+        // QR orders in PENDING/PREPARING that have NO READY or SERVED items — for kitchen QR count
         @Query("SELECT COUNT(DISTINCT o) FROM Order o " +
-                        "WHERE o.branch.id = :branchId " +
-                        "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
-                        "AND o.status = :status " +
-                        "AND o.createdAt BETWEEN :start AND :end " +
-                        "AND NOT EXISTS (" +
-                        "    SELECT i FROM OrderItem i WHERE i.order = o " +
-                        "    AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
-                        "                     com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED))")
+               "WHERE o.branch.id = :branchId " +
+               "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "AND o.status = :status " +
+               "AND o.createdAt BETWEEN :start AND :end " +
+               "AND NOT EXISTS (" +
+               "    SELECT i FROM OrderItem i WHERE i.order = o " +
+               "    AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                     com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED))")
         long countKitchenQROrdersWithoutReadyItems(
-                        @Param("branchId") Long branchId,
-                        @Param("status") OrderStatus status,
-                        @Param("start") LocalDateTime start,
-                        @Param("end") LocalDateTime end);
+                @Param("branchId") Long branchId,
+                @Param("status") OrderStatus status,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
 
-        // QR orders in PENDING/PREPARING with at least one READY or SERVED item — for
-        // ready QR count
+        // QR orders in PENDING/PREPARING with at least one READY or SERVED item — for ready QR count
         @Query("SELECT COUNT(DISTINCT o) FROM Order o JOIN o.items i " +
-                        "WHERE o.branch.id = :branchId " +
-                        "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
-                        "AND o.status IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.PENDING, " +
-                        "                 com.ByteKnights.com.resturarent_system.entity.OrderStatus.PREPARING) " +
-                        "AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
-                        "                 com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED) " +
-                        "AND o.createdAt BETWEEN :start AND :end")
+               "WHERE o.branch.id = :branchId " +
+               "AND o.orderType = com.ByteKnights.com.resturarent_system.entity.OrderType.QR " +
+               "AND o.status IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.PENDING, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderStatus.PREPARING) " +
+               "AND i.status IN (com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.READY, " +
+               "                 com.ByteKnights.com.resturarent_system.entity.OrderItemStatus.SERVED) " +
+               "AND o.createdAt BETWEEN :start AND :end")
         long countQROrdersWithAnyReadyItem(
-                        @Param("branchId") Long branchId,
-                        @Param("start") LocalDateTime start,
-                        @Param("end") LocalDateTime end);
+                @Param("branchId") Long branchId,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
 
         // Completed orders by type in last 7 days (for pie chart)
         @Query(value = "SELECT order_type, COUNT(*) FROM orders " +
-                        "WHERE branch_id = :branchId AND status = 'SERVED' " +
-                        "AND created_at BETWEEN :start AND :end " +
-                        "GROUP BY order_type", nativeQuery = true)
+               "WHERE branch_id = :branchId AND status = 'SERVED' " +
+               "AND created_at BETWEEN :start AND :end " +
+               "GROUP BY order_type", nativeQuery = true)
         List<Object[]> countCompletedOrdersByType(
-                        @Param("branchId") Long branchId,
-                        @Param("start") LocalDateTime start,
-                        @Param("end") LocalDateTime end);
+                @Param("branchId") Long branchId,
+                @Param("start") LocalDateTime start,
+                @Param("end") LocalDateTime end);
 }
