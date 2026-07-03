@@ -31,6 +31,11 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final InventoryItemRepository inventoryItemRepository;
     private final AuditLogService auditLogService;
     private final WebSocketNotificationService webSocketNotificationService;
+    private final CustomerRepository customerRepository;
+    private final LoyaltyTransactionRepository loyaltyTransactionRepository;
+    private final CouponUsageRepository couponUsageRepository;
+    private final CouponRepository couponRepository;
+    private final PaymentRepository paymentRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -54,14 +59,35 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
 
-        List<Order> orders = orderRepository
-                .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
-                        branchId,
-                        orderStatus,
-                        List.of(OrderType.QR, OrderType.ONLINE_PICKUP),
-                        startOfDay,
-                        endOfDay
-                );
+        List<Order> orders;
+
+        if (orderStatus == OrderStatus.COMPLETED) {
+            // Ready tab: all COMPLETED orders + QR orders still PENDING/PREPARING with at least one READY/SERVED item
+            List<Order> completedOrders = orderRepository
+                    .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
+                            branchId, orderStatus,
+                            List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
+                            startOfDay, endOfDay);
+            List<Order> qrPartiallyReady = orderRepository
+                    .findQROrdersWithAnyReadyItem(branchId, startOfDay, endOfDay);
+
+            Map<Long, Order> merged = new LinkedHashMap<>();
+            for (Order o : completedOrders) merged.put(o.getId(), o);
+            for (Order o : qrPartiallyReady) merged.put(o.getId(), o);
+            orders = new ArrayList<>(merged.values());
+        } else if (orderStatus == OrderStatus.PENDING || orderStatus == OrderStatus.PREPARING) {
+            // Kitchen tab: exclude QR orders that already have a READY/SERVED item (they are in Ready tab)
+            orders = orderRepository.findKitchenOrdersExcludingQRWithReadyItems(
+                    branchId, orderStatus,
+                    List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
+                    startOfDay, endOfDay);
+        } else {
+            orders = orderRepository
+                    .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
+                            branchId, orderStatus,
+                            List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
+                            startOfDay, endOfDay);
+        }
 
         List<ReceptionistOrderSummaryDTO> result = new ArrayList<>();
 
@@ -91,6 +117,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                     order.getStatus().name(),
                     order.getPaymentStatus().name(),
                     order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
+                    order.getStatusUpdatedAt() != null ? order.getStatusUpdatedAt().format(FORMATTER) : "",
                     customerName,
                     customerPhone,
                     tableNumber,
@@ -122,7 +149,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                         item.getUnitPrice().doubleValue(),
                         item.getSubtotal() != null ? item.getSubtotal().doubleValue()
                                 : item.getUnitPrice().doubleValue() * item.getQuantity(),
-                        item.getStatus().name()
+                        item.getStatus().name(),
+                        item.getKitchenNotes()
                 ))
                 .toList();
 
@@ -157,67 +185,6 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         );
     }
 
-    // ── STOCK CHECK (read-only) ──────────────────────────────────────────
-    @Override
-    public StockCheckResultDTO checkStock(Long orderId) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
-
-        List<StockCheckResultDTO.StockItemResult> results = new ArrayList<>();
-        boolean allSufficient = true;
-
-        for (OrderItem orderItem : order.getItems()) {
-            if (orderItem.getMenuItem() == null) {
-                continue;
-            }
-
-            List<MenuItemIngredient> ingredients =
-                    menuItemIngredientRepository.findByMenuItemId(orderItem.getMenuItem().getId());
-
-            if (ingredients.isEmpty()) {
-                continue;
-            }
-
-            List<String> shortages = new ArrayList<>();
-
-            for (MenuItemIngredient ing : ingredients) {
-                InventoryItem stock = ing.getInventoryItem();
-
-                BigDecimal needed = ing.getQuantityRequired()
-                        .multiply(BigDecimal.valueOf(orderItem.getQuantity()));
-
-                BigDecimal available = stock.getQuantity() != null
-                        ? stock.getQuantity()
-                        : BigDecimal.ZERO;
-
-                if (available.compareTo(needed) < 0) {
-                    shortages.add(String.format(
-                            "%s: need %.3f %s, have %.3f %s",
-                            stock.getName(),
-                            needed,
-                            stock.getUnit(),
-                            available,
-                            stock.getUnit()
-                    ));
-                }
-            }
-
-            boolean sufficient = shortages.isEmpty();
-
-            if (!sufficient) {
-                allSufficient = false;
-            }
-
-            results.add(new StockCheckResultDTO.StockItemResult(
-                    orderItem.getItemName(),
-                    sufficient,
-                    sufficient ? null : String.join(", ", shortages)
-            ));
-        }
-
-        return new StockCheckResultDTO(allSufficient, results);
-    }
-
     // ── SEND TO KITCHEN: PLACED → PENDING ───────────────────────────────
     @Override
     @Transactional
@@ -230,7 +197,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         ensureOrderBelongsToBranch(order, actorBranchId);
 
         if (order.getStatus() != OrderStatus.PLACED) {
-            throw new RuntimeException("Order is not in PLACED status");
+            throw new RuntimeException("Order cannot be sent to kitchen from current status");
         }
 
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
@@ -238,7 +205,12 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.updateStatus(OrderStatus.PENDING);
 
         Order savedOrder = orderRepository.save(order);
-        
+
+        Long branchId = savedOrder.getBranch().getId();
+
+        // Notify kitchen: new order appeared in pending list
+        webSocketNotificationService.broadcastNewKitchenOrder(branchId, savedOrder.getOrderNumber());
+        // Notify customer: order status changed to PENDING
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
@@ -273,7 +245,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.setStatusUpdatedAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
-        
+
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
@@ -290,7 +262,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         );
     }
 
-    // ── CANCEL ───────────────────────────────────────────────────────────
+    // ── CANCEL (with loyalty rollback + coupon restock) ──────────────────
     @Override
     @Transactional
     public void cancelOrder(Long orderId, String reason, String userEmail) {
@@ -303,12 +275,73 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
+        if (order.getStatus() == OrderStatus.PREPARING
+                || order.getStatus() == OrderStatus.COMPLETED
+                || order.getStatus() == OrderStatus.CANCELLED) {
+            throw new RuntimeException(
+                    "Cannot cancel an order that is already preparing, completed, or cancelled.");
+        }
+
+        Customer customer = order.getCustomer();
+
+        // Rollback loyalty points if not already refunded
+        if (!loyaltyTransactionRepository.existsByOrderAndTransactionType(order, LoyaltyTransactionType.REFUND)) {
+            int currentPoints = customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0;
+            int redeemedPoints = order.getRewardPointsRedeemed() != null ? order.getRewardPointsRedeemed() : 0;
+            int earnedPoints   = order.getRewardPointsEarned()   != null ? order.getRewardPointsEarned()   : 0;
+
+            if (redeemedPoints > 0) {
+                customer.setLoyaltyPoints(currentPoints + redeemedPoints);
+                currentPoints = customer.getLoyaltyPoints();
+
+                loyaltyTransactionRepository.save(LoyaltyTransaction.builder()
+                        .customer(customer)
+                        .order(order)
+                        .transactionType(LoyaltyTransactionType.REFUND)
+                        .points(redeemedPoints)
+                        .description("Refunded redeemed points for cancelled order " + order.getOrderNumber())
+                        .build());
+            }
+
+            if (earnedPoints > 0) {
+                int pointsToReverse = Math.min(currentPoints, earnedPoints);
+                customer.setLoyaltyPoints(Math.max(0, currentPoints - pointsToReverse));
+
+                loyaltyTransactionRepository.save(LoyaltyTransaction.builder()
+                        .customer(customer)
+                        .order(order)
+                        .transactionType(LoyaltyTransactionType.REFUND)
+                        .points(-pointsToReverse)
+                        .description("Reversed earned points for cancelled order " + order.getOrderNumber())
+                        .build());
+            }
+        }
+
+        // Restock used coupon and remove usage record
+        if (order.getAppliedCouponCode() != null && !order.getAppliedCouponCode().isBlank()) {
+            couponUsageRepository.findByOrder(order).ifPresent(couponUsageRepository::delete);
+
+            couponRepository.findByCode(order.getAppliedCouponCode()).ifPresent(coupon -> {
+                int usedCount = coupon.getUsedCount() != null ? coupon.getUsedCount() : 0;
+                coupon.setUsedCount(Math.max(0, usedCount - 1));
+                couponRepository.save(coupon);
+            });
+        }
+
+        // Deduct from customer total spent
+        if (order.getFinalAmount() != null && customer.getTotalSpent() != null) {
+            customer.setTotalSpent(
+                    customer.getTotalSpent().subtract(order.getFinalAmount()).max(BigDecimal.ZERO));
+        }
+
+        customerRepository.save(customer);
+
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelReason(reason);
         order.setStatusUpdatedAt(LocalDateTime.now());
 
         Order savedOrder = orderRepository.save(order);
-        
+
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
@@ -342,6 +375,20 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         Order savedOrder = orderRepository.save(order);
 
+        BigDecimal amount = savedOrder.getFinalAmount() != null
+                ? savedOrder.getFinalAmount()
+                : savedOrder.getTotalAmount();
+
+        Payment payment = Payment.builder()
+                .order(savedOrder)
+                .paymentMethod(PaymentMethod.CASH)
+                .paymentStatus(PaymentStatus.PAID)
+                .amount(amount)
+                .paidAt(LocalDateTime.now())
+                .build();
+
+        paymentRepository.save(payment);
+
         auditLogService.logCurrentUserAction(
                 AuditModule.PAYMENT,
                 AuditEventType.PAYMENT_STATUS_UPDATED,
@@ -373,10 +420,16 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         Map<String, Object> oldValues = buildReceptionistOrderAuditSnapshot(order);
 
+        // Mark all items as SERVED so line chefs see them in their Done tab
+        order.getItems().forEach(item -> {
+            item.setStatus(OrderItemStatus.SERVED);
+            orderItemRepository.save(item);
+        });
+
         order.updateStatus(OrderStatus.SERVED);
 
         Order savedOrder = orderRepository.save(order);
-        
+
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
         auditLogService.logCurrentUserAction(
@@ -466,7 +519,6 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
     /*
      * Builds safe audit JSON for receptionist order actions.
-     * We do not store the full entity because Order has many relationships.
      */
     private Map<String, Object> buildReceptionistOrderAuditSnapshot(Order order) {
         Map<String, Object> snapshot = new LinkedHashMap<>();

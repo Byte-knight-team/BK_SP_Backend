@@ -21,6 +21,8 @@ public class PlaceOrderRequest {
     private String contactPhone;
     private String contactEmail;
     private String deliveryAddress;
+    private Double latitude;
+    private Double longitude;
     private String kitchenNotes;
     private PaymentMethod paymentMethod; // CASH or CARD
 

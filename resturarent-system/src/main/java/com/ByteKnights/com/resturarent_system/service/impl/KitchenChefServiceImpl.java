@@ -131,14 +131,15 @@ public class KitchenChefServiceImpl implements KitchenChefService {
                 LocalDate.now(),
                 branchId,
                 ChefAttendanceStatus.ON_DUTY,
-                List.of(ChefWorkStatus.AVAILABLE)
+                List.of(ChefWorkStatus.AVAILABLE, ChefWorkStatus.COOKING)
         );
 
         return records.stream()
                 .map(ca -> new AvailableChefDTO(
                         ca.getStaff().getId(),
                         ca.getStaff().getUser().getFullName(),
-                        ca.getWorkStatus().name()
+                        ca.getWorkStatus().name(),
+                        orderItemRepository.countActiveItemsByLineChef(ca.getStaff().getId())
                 ))
                 .toList();
     }

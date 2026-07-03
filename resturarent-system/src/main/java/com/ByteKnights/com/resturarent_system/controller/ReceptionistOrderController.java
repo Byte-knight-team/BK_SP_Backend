@@ -5,7 +5,6 @@ import com.ByteKnights.com.resturarent_system.dto.request.receptionist.Reception
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.ReceptionistHoldOrderRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistOrderDetailDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReceptionistOrderSummaryDTO;
-import com.ByteKnights.com.resturarent_system.dto.response.receptionist.StockCheckResultDTO;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistOrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -42,13 +41,6 @@ public class ReceptionistOrderController {
         ReceptionistOrderDetailDTO detail =
                 receptionistOrderService.getOrderDetail(id, principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Success", detail), HttpStatus.OK);
-    }
-
-    @GetMapping("/{id}/stock-check")
-    @PreAuthorize("hasAuthority('RECEPTIONIST_ORDER_VIEW')")
-    public ResponseEntity<StandardResponse> checkStock(@PathVariable Long id) {
-        StockCheckResultDTO result = receptionistOrderService.checkStock(id);
-        return new ResponseEntity<>(new StandardResponse(200, "Success", result), HttpStatus.OK);
     }
 
     @PutMapping("/{id}/send-to-kitchen")
