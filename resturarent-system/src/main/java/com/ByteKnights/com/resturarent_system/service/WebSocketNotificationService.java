@@ -1,6 +1,8 @@
 package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ActiveAlertDTO;
+import com.ByteKnights.com.resturarent_system.entity.Order;
+import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 public class WebSocketNotificationService {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final OrderRepository orderRepository;
 
     /**
      * Broadcast a new kitchen alert to all receptionist clients in the same branch.
@@ -157,22 +160,47 @@ public class WebSocketNotificationService {
     }
 
     /**
-     * Broadcast an order status update to a specific customer's order topic.
+     * Broadcast an order status update to:
+     *   1. /topic/order/{orderId}/status   → Order Confirmation page (real-time timeline)
+     *   2. /topic/user/{userId}/orders     → Global toast notifications (menu, orders, profile, cart, etc.)
      *
-     * Topic: /topic/order/{orderId}/status
-     * Subscribers: Customer Order Confirmation Page
+     * The user-level broadcast is resolved internally via OrderRepository,
+     * so callers only need to pass orderId and newStatus.
      *
-     * @param orderId   The order ID to scope the broadcast
+     * @param orderId   The order ID
      * @param newStatus The new status of the order (e.g. "PREPARING")
      */
     public void broadcastOrderStatusUpdate(Long orderId, String newStatus) {
-        String destination = "/topic/order/" + orderId + "/status";
-        log.info("Broadcasting order status update to {}: {}", destination, newStatus);
+        // 1. Per-order topic (Order Confirmation page real-time timeline)
+        String orderDestination = "/topic/order/" + orderId + "/status";
+        log.info("Broadcasting order status update to {}: {}", orderDestination, newStatus);
 
         java.util.Map<String, String> payload = new java.util.HashMap<>();
         payload.put("orderId", String.valueOf(orderId));
         payload.put("orderStatus", newStatus);
 
-        messagingTemplate.convertAndSend(destination, payload);
+        messagingTemplate.convertAndSend(orderDestination, payload);
+
+        // 2. Global user-level topic (toast notifications across all customer pages)
+        try {
+            Order order = orderRepository.findById(orderId).orElse(null);
+            if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                Long userId = order.getCustomer().getUser().getId();
+                String orderNumber = order.getOrderNumber();
+
+                String userDestination = "/topic/user/" + userId + "/orders";
+                log.info("Broadcasting global order update to {}: {} -> {}", userDestination, orderNumber, newStatus);
+
+                java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
+                globalPayload.put("orderId", String.valueOf(orderId));
+                globalPayload.put("orderNumber", orderNumber != null ? orderNumber : "");
+                globalPayload.put("orderStatus", newStatus);
+
+                messagingTemplate.convertAndSend(userDestination, globalPayload);
+            }
+        } catch (Exception e) {
+            // Don't let global notification failure break the main flow
+            log.warn("Failed to broadcast global order update for order {}: {}", orderId, e.getMessage());
+        }
     }
 }
