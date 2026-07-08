@@ -158,6 +158,12 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 ? order.getFinalAmount().doubleValue()
                 : order.getTotalAmount().doubleValue();
 
+        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+        Double cashReceived = (payment != null && payment.getCashReceived() != null)
+                ? payment.getCashReceived().doubleValue() : null;
+        Double changeReturned = (payment != null && payment.getChangeReturned() != null)
+                ? payment.getChangeReturned().doubleValue() : null;
+
         return new ReceptionistOrderDetailDTO(
                 order.getId(),
                 order.getOrderNumber(),
@@ -179,6 +185,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 order.getDiscountAmount() != null ? order.getDiscountAmount().doubleValue() : 0,
                 order.getAppliedCouponCode(),
                 finalAmount,
+                cashReceived,
+                changeReturned,
                 order.getKitchenNotes(),
                 order.getHoldReason(),
                 order.getCancelReason()
@@ -361,7 +369,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     // ── COLLECT CASH PAYMENT ─────────────────────────────────────────────
     @Override
     @Transactional
-    public void collectPayment(Long orderId, String userEmail) {
+    public void collectPayment(Long orderId, java.math.BigDecimal cashReceived, String userEmail) {
         Long actorBranchId = getBranchId(userEmail);
 
         Order order = orderRepository.findById(orderId)
@@ -379,11 +387,17 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 ? savedOrder.getFinalAmount()
                 : savedOrder.getTotalAmount();
 
+        BigDecimal changeReturned = (cashReceived != null && cashReceived.compareTo(amount) > 0)
+                ? cashReceived.subtract(amount)
+                : BigDecimal.ZERO;
+
         Payment payment = Payment.builder()
                 .order(savedOrder)
                 .paymentMethod(PaymentMethod.CASH)
                 .paymentStatus(PaymentStatus.PAID)
                 .amount(amount)
+                .cashReceived(cashReceived)
+                .changeReturned(changeReturned)
                 .paidAt(LocalDateTime.now())
                 .build();
 

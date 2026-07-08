@@ -37,6 +37,12 @@ public class Payment {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
+    @Column(name = "cash_received", precision = 12, scale = 2)
+    private BigDecimal cashReceived;
+
+    @Column(name = "change_returned", precision = 12, scale = 2)
+    private BigDecimal changeReturned;
+
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
 }
