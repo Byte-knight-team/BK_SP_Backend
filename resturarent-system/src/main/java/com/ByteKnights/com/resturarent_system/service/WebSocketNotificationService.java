@@ -175,4 +175,16 @@ public class WebSocketNotificationService {
 
         messagingTemplate.convertAndSend(destination, payload);
     }
+
+    /**
+     * Notify receptionist clients that reservation data has changed (created or cancelled).
+     *
+     * Topic: /topic/branch/{branchId}/reservation-update
+     * Subscribers: Receptionist dashboard (UpcomingReservationsCard)
+     */
+    public void broadcastReservationUpdate(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/reservation-update";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
+        log.info("Broadcasting reservation update to {}", destination);
+    }
 }

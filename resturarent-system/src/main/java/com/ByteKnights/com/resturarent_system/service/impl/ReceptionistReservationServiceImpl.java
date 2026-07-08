@@ -6,6 +6,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.receptionist.Reservat
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistReservationService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     private final RestaurantTableRepository tableRepository;
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     @Override
     @Transactional
@@ -61,6 +63,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .build();
 
         Reservation saved = reservationRepository.save(reservation);
+        webSocketNotificationService.broadcastReservationUpdate(branchId);
 
         return toDTO(saved);
     }
@@ -102,6 +105,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         reservation.setStatus(ReservationStatus.CANCELLED);
         reservation.setCancelReason(request.getReason());
         reservationRepository.save(reservation);
+        webSocketNotificationService.broadcastReservationUpdate(reservation.getTable().getBranch().getId());
     }
 
     private ReservationResponseDTO toDTO(Reservation r) {
