@@ -31,7 +31,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     private final WebSocketNotificationService webSocketNotificationService;
 
     // Tunable business rules
-    private static final int MIN_RESERVATION_LEAD_HOURS = 2; // earliest a booking can start from now
+    private static final int MIN_RESERVATION_LEAD_HOURS = 0; // 0 = future-only (booking just has to be later than now)
     private static final int MAX_WASTE_SEATS = 2;            // biggest allowed (capacity - party size)
 
     @Override
@@ -52,10 +52,9 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("Table does not belong to your branch");
         }
 
-        // Enforce minimum lead time
+        // Reservation must be for a future time
         if (request.getReservationTime().isBefore(LocalDateTime.now().plusHours(MIN_RESERVATION_LEAD_HOURS))) {
-            throw new RuntimeException("Reservations must be made at least " + MIN_RESERVATION_LEAD_HOURS
-                    + " hours in advance.");
+            throw new RuntimeException("Reservation time must be in the future.");
         }
 
         List<Reservation> overlapping = reservationRepository.findOverlappingReservations(
@@ -102,8 +101,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         if (start.isBefore(earliestAllowed)) {
             return CheckAvailabilityResponse.builder()
                     .possible(false)
-                    .reason("Reservations must be made at least " + MIN_RESERVATION_LEAD_HOURS
-                            + " hours in advance.")
+                    .reason("Reservation time must be in the future.")
                     .earliestAllowed(earliestAllowed)
                     .tables(new ArrayList<>())
                     .build();
@@ -158,12 +156,16 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                     .tableNumber(t.getTableNumber())
                     .capacity(t.getCapacity());
 
+            // Current occupancy only matters for a TODAY booking — for a future day,
+            // whoever is seated now will be long gone, so ignore it.
+            boolean bookingIsToday = start.toLocalDate().equals(today);
+
             if (!overlapping.isEmpty()) {
                 Reservation clash = overlapping.get(0);
                 dto.status("RESERVED")
                         .conflictStart(clash.getReservationTime())
                         .conflictEnd(clash.getEndTime());
-            } else if (t.getState() == TableStatus.OCCUPIED) {
+            } else if (t.getState() == TableStatus.OCCUPIED && bookingIsToday) {
                 long activeOrders = orderRepository.findByTableIdAndStatusNotIn(
                                 t.getId(), List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD))
                         .stream()
