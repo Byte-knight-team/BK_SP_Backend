@@ -158,7 +158,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 ? order.getFinalAmount().doubleValue()
                 : order.getTotalAmount().doubleValue();
 
-        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+        Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order).orElse(null);
         Double cashReceived = (payment != null && payment.getCashReceived() != null)
                 ? payment.getCashReceived().doubleValue() : null;
         Double changeReturned = (payment != null && payment.getChangeReturned() != null)
@@ -401,15 +401,16 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 ? cashReceived.subtract(amount)
                 : BigDecimal.ZERO;
 
-        Payment payment = Payment.builder()
-                .order(savedOrder)
-                .paymentMethod(PaymentMethod.CASH)
-                .paymentStatus(PaymentStatus.PAID)
-                .amount(amount)
-                .cashReceived(cashReceived)
-                .changeReturned(changeReturned)
-                .paidAt(LocalDateTime.now())
-                .build();
+        // Reuse the payment row created when the order was placed (don't insert a second one).
+        // Only create a fresh row if none exists yet.
+        Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(savedOrder)
+                .orElseGet(() -> Payment.builder().order(savedOrder).build());
+        payment.setPaymentMethod(PaymentMethod.CASH);
+        payment.setPaymentStatus(PaymentStatus.PAID);
+        payment.setAmount(amount);
+        payment.setCashReceived(cashReceived);
+        payment.setChangeReturned(changeReturned);
+        payment.setPaidAt(LocalDateTime.now());
 
         paymentRepository.save(payment);
 
