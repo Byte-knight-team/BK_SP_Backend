@@ -60,6 +60,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                     List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD)
             ).stream()
                     .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
+                    .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt())) // oldest first (top)
                     .toList();
 
             List<TableOrderSummary> orderSummaries = activeOrders.stream()
@@ -148,6 +149,45 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         table.setStatusUpdatedAt(LocalDateTime.now());
 
         // Save the changes
+        tableRepository.save(table);
+
+        webSocketNotificationService.broadcastTableUpdate(branchId);
+    }
+
+    // update ONLY the guest count of an already-occupied table.
+    // Does NOT touch state or statusUpdatedAt, so the "sitting for X" timer keeps running.
+    @Override
+    @Auditable(
+            module = AuditModule.TABLE,
+            eventType = AuditEventType.TABLE_STATUS_UPDATED,
+            targetType = AuditTargetType.TABLE,
+            description = "Table guest count updated successfully",
+            captureResultAsNewValue = false
+    )
+    @Transactional
+    public void updateGuestCount(Long tableId, Integer guestCount, String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        RestaurantTable table = tableRepository.findByIdForUpdate(tableId)
+                .orElseThrow(() -> new RuntimeException("Table not found"));
+
+        if (!table.getBranch().getId().equals(branchId)) {
+            throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
+        }
+
+        if (table.getState() != TableStatus.OCCUPIED) {
+            throw new RuntimeException("Only an occupied table's guest count can be updated");
+        }
+
+        // ONLY the guest count changes — state and seated time are left untouched
+        table.setCurrentGuestCount(guestCount);
+
         tableRepository.save(table);
 
         webSocketNotificationService.broadcastTableUpdate(branchId);
