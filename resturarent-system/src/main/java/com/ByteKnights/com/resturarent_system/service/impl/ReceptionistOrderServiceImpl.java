@@ -35,6 +35,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final LoyaltyTransactionRepository loyaltyTransactionRepository;
     private final CouponUsageRepository couponUsageRepository;
     private final CouponRepository couponRepository;
+    private final PaymentRepository paymentRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -58,14 +59,35 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
 
-        List<Order> orders = orderRepository
-                .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
-                        branchId,
-                        orderStatus,
-                        List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
-                        startOfDay,
-                        endOfDay
-                );
+        List<Order> orders;
+
+        if (orderStatus == OrderStatus.COMPLETED) {
+            // Ready tab: all COMPLETED orders + QR orders still PENDING/PREPARING with at least one READY/SERVED item
+            List<Order> completedOrders = orderRepository
+                    .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
+                            branchId, orderStatus,
+                            List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
+                            startOfDay, endOfDay);
+            List<Order> qrPartiallyReady = orderRepository
+                    .findQROrdersWithAnyReadyItem(branchId, startOfDay, endOfDay);
+
+            Map<Long, Order> merged = new LinkedHashMap<>();
+            for (Order o : completedOrders) merged.put(o.getId(), o);
+            for (Order o : qrPartiallyReady) merged.put(o.getId(), o);
+            orders = new ArrayList<>(merged.values());
+        } else if (orderStatus == OrderStatus.PENDING || orderStatus == OrderStatus.PREPARING) {
+            // Kitchen tab: exclude QR orders that already have a READY/SERVED item (they are in Ready tab)
+            orders = orderRepository.findKitchenOrdersExcludingQRWithReadyItems(
+                    branchId, orderStatus,
+                    List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
+                    startOfDay, endOfDay);
+        } else {
+            orders = orderRepository
+                    .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
+                            branchId, orderStatus,
+                            List.of(OrderType.QR, OrderType.ONLINE_PICKUP, OrderType.ONLINE_DELIVERY),
+                            startOfDay, endOfDay);
+        }
 
         List<ReceptionistOrderSummaryDTO> result = new ArrayList<>();
 
@@ -127,7 +149,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                         item.getUnitPrice().doubleValue(),
                         item.getSubtotal() != null ? item.getSubtotal().doubleValue()
                                 : item.getUnitPrice().doubleValue() * item.getQuantity(),
-                        item.getStatus().name()
+                        item.getStatus().name(),
+                        item.getKitchenNotes()
                 ))
                 .toList();
 
@@ -351,6 +374,20 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         order.setPaymentStatus(PaymentStatus.PAID);
 
         Order savedOrder = orderRepository.save(order);
+
+        BigDecimal amount = savedOrder.getFinalAmount() != null
+                ? savedOrder.getFinalAmount()
+                : savedOrder.getTotalAmount();
+
+        Payment payment = Payment.builder()
+                .order(savedOrder)
+                .paymentMethod(PaymentMethod.CASH)
+                .paymentStatus(PaymentStatus.PAID)
+                .amount(amount)
+                .paidAt(LocalDateTime.now())
+                .build();
+
+        paymentRepository.save(payment);
 
         auditLogService.logCurrentUserAction(
                 AuditModule.PAYMENT,

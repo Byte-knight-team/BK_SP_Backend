@@ -1,6 +1,8 @@
 package com.ByteKnights.com.resturarent_system.service;
 
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.ActiveAlertDTO;
+import com.ByteKnights.com.resturarent_system.entity.Order;
+import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 public class WebSocketNotificationService {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final OrderRepository orderRepository;
 
     /**
      * Broadcast a new kitchen alert to all receptionist clients in the same branch.
@@ -66,14 +69,15 @@ public class WebSocketNotificationService {
      * @param newItemStatus  The new item status (PREPARING or READY)
      * @param newOrderStatus The new order status
      */
-    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String itemName, String newItemStatus, String newOrderStatus) {
+    public void broadcastKitchenItemUpdate(Long branchId, Long orderId, String orderNumber, String itemName, String newItemStatus, String newOrderStatus, String orderType) {
         String destination = "/topic/branch/" + branchId + "/kitchen-item-update";
-        java.util.Map<String, String> payload = java.util.Map.of(
-                "orderId", String.valueOf(orderId),
-                "itemName", itemName,
-                "newStatus", newItemStatus,
-                "orderStatus", newOrderStatus
-        );
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderId", String.valueOf(orderId));
+        payload.put("orderNumber", orderNumber);
+        payload.put("itemName", itemName);
+        payload.put("newStatus", newItemStatus);
+        payload.put("orderStatus", newOrderStatus);
+        payload.put("orderType", orderType);
         log.info("Broadcasting item update to kitchen {}: {} -> {} (order: {})", destination, itemName, newItemStatus, newOrderStatus);
         messagingTemplate.convertAndSend(destination, payload);
     }
@@ -84,13 +88,13 @@ public class WebSocketNotificationService {
      * Topic: /topic/line-chef/{lineChefUserId}/new-item
      * Subscribers: Line chef dashboard
      */
-    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName) {
+    public void broadcastLineChefItemAssigned(Long lineChefUserId, String orderNumber, String itemName, String kitchenNotes) {
         String destination = "/topic/line-chef/" + lineChefUserId + "/new-item";
-        java.util.Map<String, String> payload = java.util.Map.of(
-                "orderNumber", orderNumber,
-                "itemName", itemName,
-                "message", "New item assigned: " + itemName + " (Order " + orderNumber + ")"
-        );
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderNumber", orderNumber);
+        payload.put("itemName", itemName);
+        payload.put("message", "New item assigned: " + itemName + " (Order " + orderNumber + ")");
+        payload.put("kitchenNotes", kitchenNotes);
         log.info("Broadcasting item assignment to line chef {}: {}", lineChefUserId, itemName);
         messagingTemplate.convertAndSend(destination, payload);
     }
@@ -100,10 +104,11 @@ public class WebSocketNotificationService {
      * Topic: /topic/branch/{branchId}/order-status-update
      * Used for: kitchen holds order (→ receptionist), receptionist sends back (→ kitchen)
      */
-    public void broadcastOrderStatusChanged(Long branchId, Long orderId, String newStatus) {
+    public void broadcastOrderStatusChanged(Long branchId, Long orderId, String orderNumber, String newStatus) {
         String destination = "/topic/branch/" + branchId + "/order-status-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of(
                 "orderId", String.valueOf(orderId),
+                "orderNumber", orderNumber,
                 "newStatus", newStatus
         ));
     }
@@ -125,22 +130,77 @@ public class WebSocketNotificationService {
     }
 
     /**
-     * Broadcast an order status update to a specific customer's order topic.
+     * Notify all receptionist clients in a branch that table data has changed.
+     * Called when: a table is occupied/cleared, or a QR order is placed/completed.
      *
-     * Topic: /topic/order/{orderId}/status
-     * Subscribers: Customer Order Confirmation Page
+     * Topic: /topic/branch/{branchId}/table-update
+     * Subscribers: Receptionist Table Management page
+     */
+    /**
+     * Broadcast a reservation reminder to the receptionist.
+     * type: REMINDER_1HR or REMINDER_15MIN
      *
-     * @param orderId   The order ID to scope the broadcast
+     * Topic: /topic/branch/{branchId}/reservation-reminder
+     * Subscribers: Receptionist Table Management page
+     */
+    public void broadcastReservationReminder(Long branchId, String type, Integer tableNumber, String reservationTime) {
+        String destination = "/topic/branch/" + branchId + "/reservation-reminder";
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("type", type);
+        payload.put("tableNumber", String.valueOf(tableNumber));
+        payload.put("reservationTime", reservationTime);
+        log.info("Broadcasting reservation reminder [{}] to branch {}, table {}", type, branchId, tableNumber);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
+    public void broadcastTableUpdate(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/table-update";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
+        log.info("Broadcasting table update to {}", destination);
+    }
+
+    /**
+     * Broadcast an order status update to:
+     *   1. /topic/order/{orderId}/status   → Order Confirmation page (real-time timeline)
+     *   2. /topic/user/{userId}/orders     → Global toast notifications (menu, orders, profile, cart, etc.)
+     *
+     * The user-level broadcast is resolved internally via OrderRepository,
+     * so callers only need to pass orderId and newStatus.
+     *
+     * @param orderId   The order ID
      * @param newStatus The new status of the order (e.g. "PREPARING")
      */
     public void broadcastOrderStatusUpdate(Long orderId, String newStatus) {
-        String destination = "/topic/order/" + orderId + "/status";
-        log.info("Broadcasting order status update to {}: {}", destination, newStatus);
+        // 1. Per-order topic (Order Confirmation page real-time timeline)
+        String orderDestination = "/topic/order/" + orderId + "/status";
+        log.info("Broadcasting order status update to {}: {}", orderDestination, newStatus);
 
         java.util.Map<String, String> payload = new java.util.HashMap<>();
         payload.put("orderId", String.valueOf(orderId));
         payload.put("orderStatus", newStatus);
 
-        messagingTemplate.convertAndSend(destination, payload);
+        messagingTemplate.convertAndSend(orderDestination, payload);
+
+        // 2. Global user-level topic (toast notifications across all customer pages)
+        try {
+            Order order = orderRepository.findById(orderId).orElse(null);
+            if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                Long userId = order.getCustomer().getUser().getId();
+                String orderNumber = order.getOrderNumber();
+
+                String userDestination = "/topic/user/" + userId + "/orders";
+                log.info("Broadcasting global order update to {}: {} -> {}", userDestination, orderNumber, newStatus);
+
+                java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
+                globalPayload.put("orderId", String.valueOf(orderId));
+                globalPayload.put("orderNumber", orderNumber != null ? orderNumber : "");
+                globalPayload.put("orderStatus", newStatus);
+
+                messagingTemplate.convertAndSend(userDestination, globalPayload);
+            }
+        } catch (Exception e) {
+            // Don't let global notification failure break the main flow
+            log.warn("Failed to broadcast global order update for order {}: {}", orderId, e.getMessage());
+        }
     }
 }
