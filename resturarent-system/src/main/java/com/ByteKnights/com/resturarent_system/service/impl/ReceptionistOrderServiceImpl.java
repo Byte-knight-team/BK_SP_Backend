@@ -256,6 +256,11 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
+        // QR order held → remove it from the receptionist table monitor live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            webSocketNotificationService.broadcastTableUpdate(actorBranchId);
+        }
+
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
                 AuditEventType.ORDER_ON_HOLD,
@@ -351,6 +356,11 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         Order savedOrder = orderRepository.save(order);
 
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+
+        // QR order cancelled → remove it from the receptionist table monitor live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            webSocketNotificationService.broadcastTableUpdate(actorBranchId);
+        }
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,

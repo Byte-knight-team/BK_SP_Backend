@@ -53,10 +53,11 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             // Always fetch today's orders directly — don't rely on activeOrderCount field
             // which is only updated by the customer service when an order is placed
             // Include today's SERVED orders too — a served-but-unpaid order must stay
-            // visible so the receptionist can still collect payment before clearing the table
+            // visible so the receptionist can still collect payment before clearing the table.
+            // Exclude CANCELLED, REJECTED and ON_HOLD — held/cancelled orders drop off the table.
             List<Order> activeOrders = orderRepository.findByTableIdAndStatusNotIn(
                     table.getId(),
-                    List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED)
+                    List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD)
             ).stream()
                     .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
                     .toList();

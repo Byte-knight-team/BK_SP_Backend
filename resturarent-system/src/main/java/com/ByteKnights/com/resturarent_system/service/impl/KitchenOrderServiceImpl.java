@@ -189,6 +189,10 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         // Notify receptionist (cross-role tab switch to Hold)
         webSocketNotificationService.broadcastOrderStatusChanged(branchId, orderId, savedOrder.getOrderNumber(), "ON_HOLD");
+        // QR order held → remove it from the receptionist table monitor live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            webSocketNotificationService.broadcastTableUpdate(branchId);
+        }
 
         auditLogService.logCurrentUserAction(
                 AuditModule.KITCHEN,
