@@ -2,12 +2,11 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryOrderDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHistoryDTO;
-import com.ByteKnights.com.resturarent_system.entity.Delivery;
-import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
-import com.ByteKnights.com.resturarent_system.entity.Staff;
+import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
@@ -16,10 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
 
 @Service
 @RequiredArgsConstructor
@@ -291,5 +291,43 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         }
 
         return delivery.getOrder().getBranch().getId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeliveryHistoryDTO> getDeliveryHistory(Long userId) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Staff member not found for user ID: " + userId
+                ));
+
+        List<Delivery> history = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+                staff.getId(),
+                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED)
+        );
+
+        return history.stream()
+                .map(d -> {
+                    Order order = d.getOrder();
+                    String customerName = null;
+                    String customerPhone = null;
+                    if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                        customerName = order.getCustomer().getUser().getFullName();
+                        customerPhone = order.getCustomer().getUser().getPhone();
+                    }
+                    return DeliveryHistoryDTO.builder()
+                            .id(d.getId())
+                            .orderId(order != null ? order.getId() : null)
+                            .orderNumber(order != null ? order.getOrderNumber() : null)
+                            .customerName(customerName)
+                            .customerPhone(customerPhone)
+                            .deliveryAddress(order != null ? order.getDeliveryAddress() : null)
+                            .amount(order != null ? order.getFinalAmount() : null)
+                            .status(d.getDeliveryStatus() != null ? d.getDeliveryStatus().name() : null)
+                            .completedAt(d.getDeliveredAt())
+                            .cancelledReason(d.getCancelledReason())
+                            .build();
+                })
+                .collect(Collectors.toList());
     }
 }

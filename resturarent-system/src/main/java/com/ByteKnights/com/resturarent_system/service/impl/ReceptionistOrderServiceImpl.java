@@ -37,15 +37,15 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final CouponRepository couponRepository;
     private final PaymentRepository paymentRepository;
 
-        private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
-        // ── helper: resolve branch from logged-in receptionist ──────────────
-        private Long getBranchId(String userEmail) {
-                User user = userRepository.findByEmail(userEmail)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+    // ── helper: resolve branch from logged-in receptionist ──────────────
+    private Long getBranchId(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-                Staff staff = staffRepository.findByUser(user)
-                                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
 
         return staff.getBranch().getId();
     }
@@ -126,24 +126,20 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
             ));
         }
 
-        // ── GET orders by status (today, QR + ONLINE_PICKUP only) ───────────
-        @Override
-        public List<ReceptionistOrderSummaryDTO> getOrdersByStatus(String status, String userEmail) {
-                Long branchId = getBranchId(userEmail);
-                OrderStatus orderStatus = OrderStatus.valueOf(status);
+        return result;
+    }
 
-                LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
-                LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
+    // ── GET full order detail ────────────────────────────────────────────
+    @Override
+    public ReceptionistOrderDetailDTO getOrderDetail(Long orderId, String userEmail) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
 
-                List<Order> orders = orderRepository
-                                .findByBranchIdAndStatusAndOrderTypeInAndCreatedAtBetween(
-                                                branchId,
-                                                orderStatus,
-                                                List.of(OrderType.QR, OrderType.ONLINE_PICKUP),
-                                                startOfDay,
-                                                endOfDay);
+        String customerName = order.getCustomer().getUser().getFullName();
+        String customerPhone = order.getCustomer().getUser().getPhone();
+        String customerEmail = order.getCustomer().getUser().getEmail();
 
-                List<ReceptionistOrderSummaryDTO> result = new ArrayList<>();
+        Integer tableNumber = (order.getTable() != null) ? order.getTable().getTableNumber() : null;
 
         List<ReceptionistOrderItemDTO> items = order.getItems().stream()
                 .map(item -> new ReceptionistOrderItemDTO(
@@ -158,11 +154,36 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 ))
                 .toList();
 
-                        String customerPhone = (order.getContactPhone() != null && !order.getContactPhone().isBlank())
-                                        ? order.getContactPhone()
-                                        : order.getCustomer().getUser().getPhone();
+        double finalAmount = order.getFinalAmount() != null
+                ? order.getFinalAmount().doubleValue()
+                : order.getTotalAmount().doubleValue();
 
-                        Integer tableNumber = (order.getTable() != null) ? order.getTable().getTableNumber() : null;
+        return new ReceptionistOrderDetailDTO(
+                order.getId(),
+                order.getOrderNumber(),
+                order.getOrderType().name(),
+                order.getStatus().name(),
+                order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
+                customerName,
+                customerPhone,
+                customerEmail,
+                order.getContactName(),
+                order.getContactPhone(),
+                order.getContactEmail(),
+                tableNumber,
+                items,
+                order.getPaymentStatus().name(),
+                order.getTotalAmount().doubleValue(),
+                order.getTaxAmount() != null ? order.getTaxAmount().doubleValue() : 0,
+                order.getServiceCharge() != null ? order.getServiceCharge().doubleValue() : 0,
+                order.getDiscountAmount() != null ? order.getDiscountAmount().doubleValue() : 0,
+                order.getAppliedCouponCode(),
+                finalAmount,
+                order.getKitchenNotes(),
+                order.getHoldReason(),
+                order.getCancelReason()
+        );
+    }
 
     // ── SEND TO KITCHEN: PLACED → PENDING ───────────────────────────────
     @Override
@@ -170,20 +191,10 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     public void sendToKitchen(Long orderId, String userEmail) {
         Long actorBranchId = getBranchId(userEmail);
 
-                Integer tableNumber = (order.getTable() != null) ? order.getTable().getTableNumber() : null;
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
 
-                List<ReceptionistOrderItemDTO> items = order.getItems().stream()
-                                .map(item -> new ReceptionistOrderItemDTO(
-                                                item.getId(),
-                                                item.getItemName(),
-                                                item.getQuantity(),
-                                                item.getUnitPrice().doubleValue(),
-                                                item.getSubtotal() != null
-                                                                ? item.getSubtotal().doubleValue()
-                                                                : item.getUnitPrice().doubleValue()
-                                                                                * item.getQuantity(),
-                                                item.getStatus().name()))
-                                .toList();
+        ensureOrderBelongsToBranch(order, actorBranchId);
 
         if (order.getStatus() != OrderStatus.PLACED) {
             throw new RuntimeException("Order cannot be sent to kitchen from current status");
@@ -452,18 +463,9 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         oldValues.put("orderItem", buildReceptionistOrderItemAuditSnapshot(item));
         oldValues.put("order", buildReceptionistOrderAuditSnapshot(order));
 
-                if (order == null) {
-                        return snapshot;
-                }
+        item.setStatus(OrderItemStatus.SERVED);
 
-                snapshot.put("orderId", order.getId());
-                snapshot.put("orderNumber", order.getOrderNumber());
-                snapshot.put("branchId", getOrderBranchId(order));
-                snapshot.put("branchName", order.getBranch() != null ? order.getBranch().getName() : null);
-                snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
-                snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
-                snapshot.put("paymentStatus",
-                                order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
+        OrderItem savedItem = orderItemRepository.save(item);
 
         boolean allServed = order.getItems().stream()
                 .allMatch(i -> i.getStatus() == OrderItemStatus.SERVED);
@@ -474,27 +476,33 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
             webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 
-        /*
-         * Builds safe audit JSON for one order item.
-         */
-        private Map<String, Object> buildReceptionistOrderItemAuditSnapshot(OrderItem item) {
-                Map<String, Object> snapshot = new LinkedHashMap<>();
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("orderItem", buildReceptionistOrderItemAuditSnapshot(savedItem));
+        newValues.put("order", buildReceptionistOrderAuditSnapshot(order));
 
-                if (item == null) {
-                        return snapshot;
-                }
+        auditLogService.logCurrentUserAction(
+                AuditModule.ORDER,
+                AuditEventType.ORDER_ITEM_STATUS_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.ORDER_ITEM,
+                savedItem.getId(),
+                getOrderBranchId(order),
+                "Order item served successfully",
+                oldValues,
+                newValues
+        );
+    }
 
-                snapshot.put("orderItemId", item.getId());
-                snapshot.put("orderId", item.getOrder() != null ? item.getOrder().getId() : null);
-                snapshot.put("orderNumber", item.getOrder() != null ? item.getOrder().getOrderNumber() : null);
-                snapshot.put("itemName", item.getItemName());
-                snapshot.put("quantity", item.getQuantity());
-                snapshot.put("unitPrice", item.getUnitPrice());
-                snapshot.put("subtotal", item.getSubtotal());
-                snapshot.put("itemStatus", item.getStatus() != null ? item.getStatus().name() : null);
-                snapshot.put("menuItemId", item.getMenuItem() != null ? item.getMenuItem().getId() : null);
+    /*
+     * Extra branch safety for receptionist actions.
+     * Receptionist should only update orders from their own branch.
+     */
+    private void ensureOrderBelongsToBranch(Order order, Long actorBranchId) {
+        Long orderBranchId = getOrderBranchId(order);
 
-                return snapshot;
+        if (orderBranchId == null || !orderBranchId.equals(actorBranchId)) {
+            throw new RuntimeException("Security Alert: Access Denied! This order does not belong to your branch.");
         }
     }
 

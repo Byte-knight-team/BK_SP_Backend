@@ -27,6 +27,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         private final OrderRepository orderRepository;
         private final StaffRepository staffRepository;
         private final DeliveryRepository deliveryRepository;
+        private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
 
         /**
@@ -37,8 +38,6 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
          * @param userId         The ID of the currently authenticated manager.
          * @return A comprehensive summary of driver activity and dispatch status.
          */
-        private final WebSocketNotificationService webSocketNotificationService;
-        private final AuditLogService auditLogService;
 
         @Override
         @Transactional(readOnly = true)
@@ -193,7 +192,6 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
          * @param driverId ID of the driver receiving the assignment.
          */
         @Override
-        @org.springframework.transaction.annotation.Transactional
         @Transactional
         public void assignDriver(Long orderId, Long driverId) {
                 Order order = orderRepository.findById(orderId)
