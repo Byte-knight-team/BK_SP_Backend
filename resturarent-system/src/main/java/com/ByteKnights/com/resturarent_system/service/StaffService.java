@@ -345,36 +345,57 @@ public class StaffService {
     public List<StaffResponse> getAllStaff() {
         User creator = getCurrentAuthenticatedUser();
         String creatorRole = normalize(creator.getRole().getName());
-
-        // SUPER_ADMIN has global access, so return all staff users.
-        if ("SUPER_ADMIN".equals(creatorRole)) {
-            return userRepository.findAll().stream()
-                    .filter(this::isStaffUser)
-                    .map(this::mapToStaffResponse)
-                    .sorted(Comparator.comparing(StaffResponse::getId))
-                    .toList();
-        }
-
+    
         /*
-            ADMIN is branch-scoped.
-            First get the ADMIN's staff profile to find their assigned branch.
-        */
-        if ("ADMIN".equals(creatorRole)) {
-            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
-                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
-
-            Long adminBranchId = creatorStaff.getBranch().getId();
-
-            //Return only staff users who belong to the same branch as the ADMIN
-            return userRepository.findAll().stream()
+         * SUPER_ADMIN has global access.
+         * Old logic loaded all users, filtered in Java, then queried staff repeatedly.
+         * New logic loads branch-linked staff directly with User + Role + Branch.
+         */
+        if ("SUPER_ADMIN".equals(creatorRole)) {
+            Map<Long, StaffResponse> responsesByUserId = new LinkedHashMap<>();
+    
+            /*
+             * SUPER_ADMIN users usually do not have Staff rows, so load them separately.
+             */
+            userRepository.findSuperAdminUsersWithRole()
+                    .stream()
                     .filter(this::isStaffUser)
-                    .filter(user -> belongsToBranch(user, adminBranchId))
                     .map(this::mapToStaffResponse)
-                    //Sort the results by ID for consistent ordering and convert to list
+                    .forEach(response -> responsesByUserId.put(response.getUserId(), response));
+    
+            /*
+             * Load all branch-linked staff in one optimized query.
+             */
+            staffRepository.findAllStaffWithUserRoleBranch()
+                    .stream()
+                    .filter(staff -> staff.getUser() != null && isStaffUser(staff.getUser()))
+                    .map(this::mapToStaffResponse)
+                    .forEach(response -> responsesByUserId.put(response.getUserId(), response));
+    
+            return responsesByUserId.values()
+                    .stream()
                     .sorted(Comparator.comparing(StaffResponse::getId))
                     .toList();
         }
-
+    
+        /*
+         * ADMIN is branch-scoped.
+         * Load only staff from ADMIN's own branch.
+         */
+        if ("ADMIN".equals(creatorRole)) {
+            Staff creatorStaff = staffRepository.findByUserIdWithBranch(creator.getId())
+                    .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
+    
+            Long adminBranchId = creatorStaff.getBranch().getId();
+    
+            return staffRepository.findByBranchIdWithUserRoleBranch(adminBranchId)
+                    .stream()
+                    .filter(staff -> staff.getUser() != null && isStaffUser(staff.getUser()))
+                    .map(this::mapToStaffResponse)
+                    .sorted(Comparator.comparing(StaffResponse::getId))
+                    .toList();
+        }
+    
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff");
     }
 
@@ -821,8 +842,8 @@ public class StaffService {
 
     //map user to staff response
     private StaffResponse mapToStaffResponse(User user) {
-        Staff staff = staffRepository.findByUserId(user.getId()).orElse(null);
-
+        Staff staff = staffRepository.findByUserIdWithBranch(user.getId()).orElse(null);
+    
         return StaffResponse.builder()
                 .id(user.getId())
                 .userId(user.getId())
@@ -840,7 +861,32 @@ public class StaffService {
                 .employmentStatus(staff != null && staff.getEmploymentStatus() != null
                         ? staff.getEmploymentStatus().name()
                         : null)
-                .salary(staff != null ? staff.getSalary() : null) /* Return actual staff salary to frontend. */
+                .salary(staff != null ? staff.getSalary() : null)
+                .build();
+    }
+
+    private StaffResponse mapToStaffResponse(Staff staff) {
+        User user = staff.getUser();
+        Branch branch = staff.getBranch();
+    
+        return StaffResponse.builder()
+                .id(user.getId())
+                .userId(user.getId())
+                .fullName(user.getFullName())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .roleName(user.getRole() != null ? user.getRole().getName() : null)
+                .active(user.getIsActive())
+                .passwordChanged(user.getPasswordChanged())
+                .inviteStatus(user.getInviteStatus())
+                .emailSent(user.getEmailSent())
+                .branchId(branch != null ? branch.getId() : null)
+                .branchName(branch != null ? branch.getName() : null)
+                .employmentStatus(staff.getEmploymentStatus() != null
+                        ? staff.getEmploymentStatus().name()
+                        : null)
+                .salary(staff.getSalary())
                 .build();
     }
 
@@ -879,39 +925,37 @@ public class StaffService {
     public List<StaffResponse> getStaffByBranch(Long branchId) {
         User creator = getCurrentAuthenticatedUser();
         String creatorRole = normalize(creator.getRole().getName());
-
+    
         Branch branch = branchRepository.findById(branchId)
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
-
-        //SUPER_ADMIN can view all staff
+    
         if ("SUPER_ADMIN".equals(creatorRole)) {
-            return userRepository.findAll().stream()
-                    .filter(this::isStaffUser)
-                    .filter(user -> belongsToBranch(user, branch.getId()))
+            return staffRepository.findByBranchIdWithUserRoleBranch(branch.getId())
+                    .stream()
+                    .filter(staff -> staff.getUser() != null && isStaffUser(staff.getUser()))
                     .map(this::mapToStaffResponse)
                     .sorted(Comparator.comparing(StaffResponse::getId))
                     .toList();
         }
-
-        //ADMIN can view only staff in their own branch
+    
         if ("ADMIN".equals(creatorRole)) {
-            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+            Staff creatorStaff = staffRepository.findByUserIdWithBranch(creator.getId())
                     .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
-
+    
             Long adminBranchId = creatorStaff.getBranch().getId();
-
+    
             if (!adminBranchId.equals(branchId)) {
                 throw new RuntimeException("ADMIN can view staff only in their own branch");
             }
-
-            return userRepository.findAll().stream()
-                    .filter(this::isStaffUser)
-                    .filter(user -> belongsToBranch(user, adminBranchId))
+    
+            return staffRepository.findByBranchIdWithUserRoleBranch(adminBranchId)
+                    .stream()
+                    .filter(staff -> staff.getUser() != null && isStaffUser(staff.getUser()))
                     .map(this::mapToStaffResponse)
                     .sorted(Comparator.comparing(StaffResponse::getId))
                     .toList();
         }
-
+    
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff by branch");
     }
 
@@ -921,39 +965,46 @@ public class StaffService {
         User creator = getCurrentAuthenticatedUser();
         String creatorRole = normalize(creator.getRole().getName());
         String normalizedRoleName = normalize(roleName);
-
+    
         if (!isStaffRoleName(normalizedRoleName)) {
             throw new RuntimeException("Invalid staff role");
         }
-
-        //SUPER_ADMIN can view all staff by role
+    
         if ("SUPER_ADMIN".equals(creatorRole)) {
-            return userRepository.findAll().stream()
-                    .filter(this::isStaffUser)
-                    .filter(user -> user.getRole() != null
-                            && normalizedRoleName.equals(normalize(user.getRole().getName())))
+            /*
+             * SUPER_ADMIN users may not have Staff rows, so handle them separately.
+             */
+            if ("SUPER_ADMIN".equals(normalizedRoleName) || "ROLE_SUPER_ADMIN".equals(normalizedRoleName)) {
+                return userRepository.findSuperAdminUsersWithRole()
+                        .stream()
+                        .filter(this::isStaffUser)
+                        .map(this::mapToStaffResponse)
+                        .sorted(Comparator.comparing(StaffResponse::getId))
+                        .toList();
+            }
+    
+            return staffRepository.findByRoleNameWithUserRoleBranch(normalizedRoleName)
+                    .stream()
+                    .filter(staff -> staff.getUser() != null && isStaffUser(staff.getUser()))
                     .map(this::mapToStaffResponse)
                     .sorted(Comparator.comparing(StaffResponse::getId))
                     .toList();
         }
-
-        //ADMIN can view only staff in their own branch by role
+    
         if ("ADMIN".equals(creatorRole)) {
-            Staff creatorStaff = staffRepository.findByUserId(creator.getId())
+            Staff creatorStaff = staffRepository.findByUserIdWithBranch(creator.getId())
                     .orElseThrow(() -> new RuntimeException("Admin staff profile not found"));
-
+    
             Long adminBranchId = creatorStaff.getBranch().getId();
-
-            return userRepository.findAll().stream()
-                    .filter(this::isStaffUser)
-                    .filter(user -> user.getRole() != null
-                            && normalizedRoleName.equals(normalize(user.getRole().getName())))
-                    .filter(user -> belongsToBranch(user, adminBranchId))
+    
+            return staffRepository.findByBranchIdAndRoleNameWithUserRoleBranch(adminBranchId, normalizedRoleName)
+                    .stream()
+                    .filter(staff -> staff.getUser() != null && isStaffUser(staff.getUser()))
                     .map(this::mapToStaffResponse)
                     .sorted(Comparator.comparing(StaffResponse::getId))
                     .toList();
         }
-
+    
         throw new RuntimeException("Only SUPER_ADMIN or ADMIN can view staff by role");
     }
 

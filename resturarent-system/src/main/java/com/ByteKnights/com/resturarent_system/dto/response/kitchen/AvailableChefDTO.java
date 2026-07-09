@@ -9,4 +9,5 @@ public class AvailableChefDTO {
     private Long staffId;
     private String chefName;
     private String workStatus;
+    private long activeItemCount;
 }

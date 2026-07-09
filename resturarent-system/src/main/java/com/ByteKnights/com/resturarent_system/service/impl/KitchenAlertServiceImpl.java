@@ -69,7 +69,9 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
                 savedAlert.getId(),
                 savedAlert.getMessage(),
                 savedAlert.getType(),
-                "0m"
+                "just now",
+                false,
+                null
         );
 
         webSocketNotificationService.broadcastKitchenAlert(staff.getBranch().getId(), alertDTO);
@@ -96,7 +98,9 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
                     alert.getId(),
                     alert.getMessage(),
                     alert.getType(),
-                    timeAgo
+                    timeAgo,
+                    false,
+                    null
             );
 
             activeAlertDTOs.add(dto);

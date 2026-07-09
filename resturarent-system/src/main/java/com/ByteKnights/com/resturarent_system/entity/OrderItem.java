@@ -39,14 +39,17 @@ public class OrderItem {
     @Column(precision = 12, scale = 2)
     private BigDecimal subtotal;
 
+    @Column(name = "kitchen_notes", length = 500)
+    private String kitchenNotes;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     @Builder.Default
     private OrderItemStatus status = OrderItemStatus.PENDING;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_chef_id")
-    private Staff assignedChef;
+    @JoinColumn(name = "assigned_line_chef_id")
+    private Staff assignedLineChef;
 
     @Column(name = "cooking_started_at")
     private LocalDateTime cookingStartedAt;

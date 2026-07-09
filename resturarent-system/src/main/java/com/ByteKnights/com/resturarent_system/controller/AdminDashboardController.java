@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.AdminDashboardOrderFlowResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.AdminDashboardRevenuePointResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.AdminDashboardSummaryResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.superadmin.SuperAdminBranchRevenueResponse;
 import com.ByteKnights.com.resturarent_system.service.AdminDashboardService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -40,5 +41,12 @@ public class AdminDashboardController {
     public ResponseEntity<List<AdminDashboardRevenuePointResponse>> getRevenueTrend(
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(adminDashboardService.getRevenueTrend(days));
+    }
+
+    @GetMapping("/superadmin/branch-revenue")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<SuperAdminBranchRevenueResponse>> getSuperAdminBranchRevenue(
+            @RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(adminDashboardService.getSuperAdminBranchRevenueSummary(days));
     }
 }

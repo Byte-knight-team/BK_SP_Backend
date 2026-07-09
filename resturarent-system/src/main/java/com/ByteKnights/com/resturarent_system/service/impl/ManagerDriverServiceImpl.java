@@ -8,6 +8,7 @@ import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ManagerDriverService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,9 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
          * @param userId         The ID of the currently authenticated manager.
          * @return A comprehensive summary of driver activity and dispatch status.
          */
+        private final WebSocketNotificationService webSocketNotificationService;
+        private final AuditLogService auditLogService;
+
         @Override
         @Transactional(readOnly = true)
         public ManagerDriverSummaryDTO getDriverSummary(Long targetBranchId, Long userId) {
@@ -190,6 +194,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
          */
         @Override
         @org.springframework.transaction.annotation.Transactional
+        @Transactional
         public void assignDriver(Long orderId, Long driverId) {
                 Order order = orderRepository.findById(orderId)
                                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -240,6 +245,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 // Update Order status
                 order.setStatus(OrderStatus.OUT_FOR_DELIVERY);
                 Order savedOrder = orderRepository.save(order);
+                webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
 
                 /*
                  * Capture new values after assignment.
@@ -262,18 +268,19 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 newValues);
         }
 
-        /**
-         * Helper method to determine the correct branch context.
-         */
         private Long resolveBranchId(Long targetBranchId, Long userId) {
-                if (targetBranchId != null)
+                if (targetBranchId != null) {
                         return targetBranchId;
+                }
+
                 Staff staff = staffRepository.findByUserId(userId)
                                 .orElseThrow(() -> new IllegalArgumentException(
                                                 "User is not assigned to any branch as staff"));
+
                 if (staff.getBranch() == null) {
                         throw new IllegalArgumentException("Staff member is not assigned to a branch");
                 }
+
                 return staff.getBranch().getId();
         }
 
