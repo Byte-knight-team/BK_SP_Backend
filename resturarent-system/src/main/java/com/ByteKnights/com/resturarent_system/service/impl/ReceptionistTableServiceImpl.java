@@ -222,6 +222,21 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
         }
 
+        // Block clearing while any order still needs serving or payment.
+        // Cancelled / rejected / on-hold orders are ignored — a held order is heading for
+        // cancellation, so it has nothing to serve or collect.
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        boolean allOrdersDone = orderRepository.findByTableIdAndStatusNotIn(
+                        tableId, List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD))
+                .stream()
+                .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
+                .allMatch(o -> o.getStatus() == OrderStatus.SERVED
+                        && o.getPaymentStatus() == PaymentStatus.PAID);
+
+        if (!allOrdersDone) {
+            throw new RuntimeException("Cannot clear this table — all orders must be served and paid first.");
+        }
+
         // If a reservation starts within 15 minutes, lock the table as RESERVED instead of AVAILABLE
         LocalDateTime now = LocalDateTime.now();
         boolean hasImmediateReservation = !reservationRepository
