@@ -2,7 +2,9 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CheckAvailabilityRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistReservationService;
 import jakarta.validation.Valid;
@@ -35,6 +37,18 @@ public class ReceptionistReservationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 new StandardResponse(201, "Reservation created successfully", response)
         );
+    }
+
+    @PostMapping("/check-availability")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
+    public ResponseEntity<StandardResponse> checkAvailability(
+            @Valid @RequestBody CheckAvailabilityRequest request,
+            Principal principal) {
+
+        CheckAvailabilityResponse response = receptionistReservationService
+                .checkAvailability(request, principal.getName());
+
+        return ResponseEntity.ok(new StandardResponse(200, "Availability checked", response));
     }
 
     @GetMapping
