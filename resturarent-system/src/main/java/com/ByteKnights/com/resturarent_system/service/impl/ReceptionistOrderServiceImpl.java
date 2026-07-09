@@ -403,6 +403,14 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         paymentRepository.save(payment);
 
+        // QR order: refresh the table monitor so the payment badge flips to "Paid" live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            Long paymentBranchId = getOrderBranchId(savedOrder);
+            if (paymentBranchId != null) {
+                webSocketNotificationService.broadcastTableUpdate(paymentBranchId);
+            }
+        }
+
         auditLogService.logCurrentUserAction(
                 AuditModule.PAYMENT,
                 AuditEventType.PAYMENT_STATUS_UPDATED,
@@ -488,6 +496,12 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
             order.updateStatus(OrderStatus.SERVED);
             orderRepository.save(order);
             webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+        }
+
+        // Refresh the receptionist table monitor so the ready indicator updates/disappears live
+        Long tableBranchId = getOrderBranchId(order);
+        if (tableBranchId != null) {
+            webSocketNotificationService.broadcastTableUpdate(tableBranchId);
         }
 
         Map<String, Object> newValues = new LinkedHashMap<>();

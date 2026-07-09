@@ -12,6 +12,8 @@ import lombok.NoArgsConstructor;
 public class TableOrderSummary {
 
     private String orderNumber;
-    private String contactName;
     private String paymentStatus;
+    private String orderStatus;      // to detect SERVED vs still preparing
+    private int readyItemCount;       // items cooked & waiting to be served
+    private double finalAmount;       // bill amount, for "Rs. X due"
 }

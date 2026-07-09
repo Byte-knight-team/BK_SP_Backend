@@ -52,9 +52,11 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         for (RestaurantTable table : tables) {
             // Always fetch today's orders directly — don't rely on activeOrderCount field
             // which is only updated by the customer service when an order is placed
+            // Include today's SERVED orders too — a served-but-unpaid order must stay
+            // visible so the receptionist can still collect payment before clearing the table
             List<Order> activeOrders = orderRepository.findByTableIdAndStatusNotIn(
                     table.getId(),
-                    List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.SERVED)
+                    List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED)
             ).stream()
                     .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
                     .toList();
@@ -62,8 +64,13 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             List<TableOrderSummary> orderSummaries = activeOrders.stream()
                     .map(o -> TableOrderSummary.builder()
                             .orderNumber(o.getOrderNumber())
-                            .contactName(o.getContactName())
                             .paymentStatus(o.getPaymentStatus() != null ? o.getPaymentStatus().name() : "PENDING")
+                            .orderStatus(o.getStatus() != null ? o.getStatus().name() : null)
+                            .readyItemCount((int) o.getItems().stream()
+                                    .filter(i -> i.getStatus() == OrderItemStatus.READY)
+                                    .count())
+                            .finalAmount(o.getFinalAmount() != null ? o.getFinalAmount().doubleValue()
+                                    : (o.getTotalAmount() != null ? o.getTotalAmount().doubleValue() : 0))
                             .build())
                     .toList();
 
