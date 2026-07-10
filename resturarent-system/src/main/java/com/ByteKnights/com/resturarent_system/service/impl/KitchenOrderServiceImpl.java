@@ -85,7 +85,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                     item.getItemName(),
                     item.getQuantity(),
                     item.getStatus().toString(),
-                    item.getAssignedLineChef() != null ? item.getAssignedLineChef().getUser().getFullName() : "Not Assigned"
+                    item.getAssignedLineChef() != null ? item.getAssignedLineChef().getUser().getFullName() : "Not Assigned",
+                    item.getKitchenNotes()
             ));
         }
 
@@ -134,7 +135,8 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         webSocketNotificationService.broadcastLineChefItemAssigned(
                 chef.getUser().getId(),
                 item.getOrder().getOrderNumber(),
-                item.getItemName()
+                item.getItemName(),
+                item.getKitchenNotes()
         );
 
         auditLogService.logCurrentUserAction(
@@ -179,7 +181,7 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         // Notify customer (order tracking)
         webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         // Notify receptionist (cross-role tab switch to Hold)
-        webSocketNotificationService.broadcastOrderStatusChanged(branchId, orderId, "ON_HOLD");
+        webSocketNotificationService.broadcastOrderStatusChanged(branchId, orderId, savedOrder.getOrderNumber(), "ON_HOLD");
 
         auditLogService.logCurrentUserAction(
                 AuditModule.KITCHEN,

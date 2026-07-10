@@ -15,4 +15,6 @@ public class LineChefItemDTO {
     private String orderType;
     private Integer tableNumber;
     private String placedAt;
+    private String itemKitchenNotes;
+    private String orderKitchenNotes;
 }

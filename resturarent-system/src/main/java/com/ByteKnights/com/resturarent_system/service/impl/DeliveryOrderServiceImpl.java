@@ -2,16 +2,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryOrderDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHistoryDTO;
-import com.ByteKnights.com.resturarent_system.entity.Delivery;
-import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
-import com.ByteKnights.com.resturarent_system.entity.Order;
-import com.ByteKnights.com.resturarent_system.entity.OrderStatus;
-import com.ByteKnights.com.resturarent_system.entity.Staff;
-import com.ByteKnights.com.resturarent_system.entity.AuditModule;
-import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
-import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
-import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
-import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
+import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
@@ -40,256 +31,266 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
 
-        @Override
-        @Transactional(readOnly = true)
-        public List<DeliveryOrderDTO> getAssignedOrders(Long userId) {
-                Staff staff = staffRepository.findByUserId(userId)
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Staff member not found for user ID: " + userId));
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeliveryOrderDTO> getAssignedOrders(Long userId) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Staff member not found for user ID: " + userId
+                ));
 
-                List<Delivery> assignments = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatus(
-                                staff.getId(),
-                                DeliveryStatus.ASSIGNED);
+        List<Delivery> assignments = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatus(
+                staff.getId(),
+                DeliveryStatus.ASSIGNED
+        );
 
-                return assignments.stream()
-                                .map(this::mapToDTO)
-                                .collect(Collectors.toList());
+        return assignments.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<DeliveryOrderDTO> getActiveOrder(Long userId) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Staff member not found for user ID: " + userId
+                ));
+
+        List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+                staff.getId(),
+                Arrays.asList(DeliveryStatus.ACCEPTED, DeliveryStatus.OUT_FOR_DELIVERY)
+        );
+
+        if (activeDeliveries.isEmpty()) {
+            return Optional.empty();
         }
 
-        @Override
-        @Transactional(readOnly = true)
-        public Optional<DeliveryOrderDTO> getActiveOrder(Long userId) {
-                Staff staff = staffRepository.findByUserId(userId)
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Staff member not found for user ID: " + userId));
+        // Return the first one, assuming one active delivery at a time.
+        return Optional.of(mapToDTO(activeDeliveries.get(0)));
+    }
 
-                List<Delivery> activeDeliveries = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
-                                staff.getId(),
-                                Arrays.asList(DeliveryStatus.ACCEPTED, DeliveryStatus.OUT_FOR_DELIVERY));
-
-                if (activeDeliveries.isEmpty()) {
-                        return Optional.empty();
-                }
-
-                // Return the first one, assuming one active delivery at a time.
-                return Optional.of(mapToDTO(activeDeliveries.get(0)));
-        }
-
-        private DeliveryOrderDTO mapToDTO(Delivery d) {
-                return DeliveryOrderDTO.builder()
-                                .id(d.getOrder().getId())
-                                .orderNumber(d.getOrder().getOrderNumber() != null
-                                                ? d.getOrder().getOrderNumber()
-                                                : "ORD-" + d.getOrder().getId())
-                                .location(d.getOrder().getDeliveryAddress())
+    private DeliveryOrderDTO mapToDTO(Delivery d) {
+        return DeliveryOrderDTO.builder()
+                .id(d.getOrder().getId())
+                .orderNumber(d.getOrder().getOrderNumber() != null
+                        ? d.getOrder().getOrderNumber()
+                        : "ORD-" + d.getOrder().getId())
+                .location(d.getOrder().getDeliveryAddress())
                                 .deliveryAddress(d.getOrder().getDeliveryAddress())
                                 .customerName(d.getOrder().getContactName())
                                 .customerPhone(d.getOrder().getContactPhone())
-                                .paymentType("CASH ON DELIVERY")
-                                .amount(d.getOrder().getFinalAmount())
-                                .status(d.getDeliveryStatus().name())
+                .paymentType("CASH ON DELIVERY")
+                .amount(d.getOrder().getFinalAmount())
+                .status(d.getDeliveryStatus().name())
                                 .latitude(d.getOrder().getLatitude())
                                 .longitude(d.getOrder().getLongitude())
-                                .build();
-        }
+                .build();
+    }
 
 
-        @Override
-        @Transactional
-        public void acceptOrder(Long orderId, Long userId) {
-                Staff staff = staffRepository.findByUserId(userId)
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Staff member not found for user ID: " + userId));
+    @Override
+    @Transactional
+    public void acceptOrder(Long orderId, Long userId) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Staff member not found for user ID: " + userId
+                ));
 
-                Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Assignment not found for order ID: " + orderId));
+        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Assignment not found for order ID: " + orderId
+                ));
 
-                /*
-                 * Manual audit is used because this method changes delivery status.
-                 * oldValuesJson shows ASSIGNED and newValuesJson shows ACCEPTED.
-                 */
-                Map<String, Object> oldValues = buildDeliveryAuditSnapshot(delivery);
+        /*
+         * Manual audit is used because this method changes delivery status.
+         * oldValuesJson shows ASSIGNED and newValuesJson shows ACCEPTED.
+         */
+        Map<String, Object> oldValues = buildDeliveryAuditSnapshot(delivery);
 
-                delivery.setDeliveryStatus(DeliveryStatus.ACCEPTED);
+        delivery.setDeliveryStatus(DeliveryStatus.ACCEPTED);
 
-                Delivery savedDelivery = deliveryRepository.save(delivery);
+        Delivery savedDelivery = deliveryRepository.save(delivery);
 
-                auditLogService.logCurrentUserAction(
-                                AuditModule.DELIVERY,
-                                AuditEventType.DELIVERY_ACCEPTED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.INFO,
-                                AuditTargetType.DELIVERY,
-                                savedDelivery.getId(),
-                                getDeliveryBranchId(savedDelivery),
-                                "Delivery order accepted successfully",
-                                oldValues,
-                                buildDeliveryAuditSnapshot(savedDelivery));
-        }
+        auditLogService.logCurrentUserAction(
+                AuditModule.DELIVERY,
+                AuditEventType.DELIVERY_ACCEPTED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.DELIVERY,
+                savedDelivery.getId(),
+                getDeliveryBranchId(savedDelivery),
+                "Delivery order accepted successfully",
+                oldValues,
+                buildDeliveryAuditSnapshot(savedDelivery)
+        );
+    }
 
-        @Override
-        @Transactional
-        public void rejectOrder(Long orderId, Long userId, String reason) {
-                Staff staff = staffRepository.findByUserId(userId)
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Staff member not found for user ID: " + userId));
+    @Override
+    @Transactional
+    public void rejectOrder(Long orderId, Long userId, String reason) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Staff member not found for user ID: " + userId
+                ));
 
-                Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Assignment not found for order ID: " + orderId));
+        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Assignment not found for order ID: " + orderId
+                ));
 
-                /*
-                 * Manual audit is used because this method changes delivery status
-                 * and saves a rejection/cancel reason.
-                 */
-                Map<String, Object> oldValues = buildDeliveryAuditSnapshot(delivery);
+        /*
+         * Manual audit is used because this method changes delivery status
+         * and saves a rejection/cancel reason.
+         */
+        Map<String, Object> oldValues = buildDeliveryAuditSnapshot(delivery);
 
-                delivery.setDeliveryStatus(DeliveryStatus.CANCELLED);
-                delivery.setCancelledReason(reason);
+        delivery.setDeliveryStatus(DeliveryStatus.CANCELLED);
+        delivery.setCancelledReason(reason);
 
-                Delivery savedDelivery = deliveryRepository.save(delivery);
+        Delivery savedDelivery = deliveryRepository.save(delivery);
 
-                auditLogService.logCurrentUserAction(
-                                AuditModule.DELIVERY,
-                                AuditEventType.DELIVERY_REJECTED,
-                                AuditStatus.SUCCESS,
-                                AuditSeverity.WARN,
-                                AuditTargetType.DELIVERY,
-                                savedDelivery.getId(),
-                                getDeliveryBranchId(savedDelivery),
-                                "Delivery order rejected successfully",
-                                oldValues,
-                                buildDeliveryAuditSnapshot(savedDelivery));
-        }
+        auditLogService.logCurrentUserAction(
+                AuditModule.DELIVERY,
+                AuditEventType.DELIVERY_REJECTED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.DELIVERY,
+                savedDelivery.getId(),
+                getDeliveryBranchId(savedDelivery),
+                "Delivery order rejected successfully",
+                oldValues,
+                buildDeliveryAuditSnapshot(savedDelivery)
+        );
+    }
 
-        @Override
-        @Transactional
-        public void updateStatus(Long orderId, Long userId, DeliveryStatus status) {
-                Staff staff = staffRepository.findByUserId(userId)
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Staff member not found for user ID: " + userId));
+    @Override
+    @Transactional
+    public void updateStatus(Long orderId, Long userId, DeliveryStatus status) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Staff member not found for user ID: " + userId
+                ));
 
-                Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Assignment not found for order ID: " + orderId));
+        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Assignment not found for order ID: " + orderId
+                ));
 
-                /*
-                 * Manual audit is used because this method may update both delivery status
-                 * and the parent order status when the delivery is completed.
-                 */
-                Map<String, Object> oldValues = new LinkedHashMap<>();
-                oldValues.put("delivery", buildDeliveryAuditSnapshot(delivery));
-                oldValues.put("order", buildDeliveryOrderAuditSnapshot(delivery.getOrder()));
+        /*
+         * Manual audit is used because this method may update both delivery status
+         * and the parent order status when the delivery is completed.
+         */
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        oldValues.put("delivery", buildDeliveryAuditSnapshot(delivery));
+        oldValues.put("order", buildDeliveryOrderAuditSnapshot(delivery.getOrder()));
 
                 delivery.setDeliveryStatus(status);
 
-                if (status == DeliveryStatus.DELIVERED) {
-                        delivery.setDeliveredAt(LocalDateTime.now());
+        if (status == DeliveryStatus.DELIVERED) {
+            delivery.setDeliveredAt(LocalDateTime.now());
 
-                        /*
-                         * Explicitly save the Order status to SERVED via OrderRepository,
-                         * because the Delivery -> Order relationship has no cascade.
-                         */
-                        delivery.getOrder().setStatus(OrderStatus.SERVED);
-                        orderRepository.save(delivery.getOrder());
-                        webSocketNotificationService.broadcastOrderStatusUpdate(delivery.getOrder().getId(),
-                                        delivery.getOrder().getStatus().name());
-                }
-
-                Delivery savedDelivery = deliveryRepository.save(delivery);
-
-                Map<String, Object> newValues = new LinkedHashMap<>();
-                newValues.put("delivery", buildDeliveryAuditSnapshot(savedDelivery));
-                newValues.put("order", buildDeliveryOrderAuditSnapshot(savedDelivery.getOrder()));
-
-                auditLogService.logCurrentUserAction(
-                                AuditModule.DELIVERY,
-                                AuditEventType.DELIVERY_STATUS_UPDATED,
-                                AuditStatus.SUCCESS,
-                                status == DeliveryStatus.DELIVERED ? AuditSeverity.INFO : AuditSeverity.INFO,
-                                AuditTargetType.DELIVERY,
-                                savedDelivery.getId(),
-                                getDeliveryBranchId(savedDelivery),
-                                "Delivery status updated successfully",
-                                oldValues,
-                                newValues);
+            /*
+             * Explicitly save the Order status to SERVED via OrderRepository,
+             * because the Delivery -> Order relationship has no cascade.
+             */
+            delivery.getOrder().setStatus(OrderStatus.SERVED);
+            orderRepository.save(delivery.getOrder());
         }
 
-        /*
-         * Builds safe audit JSON for delivery changes.
-         * We store only useful fields instead of saving the full entity object.
-         */
-        private Map<String, Object> buildDeliveryAuditSnapshot(Delivery delivery) {
-                Map<String, Object> snapshot = new LinkedHashMap<>();
+        Delivery savedDelivery = deliveryRepository.save(delivery);
 
-                if (delivery == null) {
-                        return snapshot;
-                }
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("delivery", buildDeliveryAuditSnapshot(savedDelivery));
+        newValues.put("order", buildDeliveryOrderAuditSnapshot(savedDelivery.getOrder()));
 
-                Order order = delivery.getOrder();
-                Staff deliveryStaff = delivery.getDeliveryStaff();
+        auditLogService.logCurrentUserAction(
+                AuditModule.DELIVERY,
+                AuditEventType.DELIVERY_STATUS_UPDATED,
+                AuditStatus.SUCCESS,
+                status == DeliveryStatus.DELIVERED ? AuditSeverity.INFO : AuditSeverity.INFO,
+                AuditTargetType.DELIVERY,
+                savedDelivery.getId(),
+                getDeliveryBranchId(savedDelivery),
+                "Delivery status updated successfully",
+                oldValues,
+                newValues
+        );
+    }
 
-                snapshot.put("deliveryId", delivery.getId());
+    /*
+     * Builds safe audit JSON for delivery changes.
+     * We store only useful fields instead of saving the full entity object.
+     */
+    private Map<String, Object> buildDeliveryAuditSnapshot(Delivery delivery) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
 
-                snapshot.put("orderId", order != null ? order.getId() : null);
-                snapshot.put("orderNumber", order != null ? order.getOrderNumber() : null);
-                snapshot.put("branchId", getDeliveryBranchId(delivery));
-
-                snapshot.put("deliveryStatus",
-                                delivery.getDeliveryStatus() != null
-                                                ? delivery.getDeliveryStatus().name()
-                                                : null);
-
-                snapshot.put("deliveryAddress", order != null ? order.getDeliveryAddress() : null);
-                snapshot.put("cancelledReason", delivery.getCancelledReason());
-                snapshot.put("deliveredAt", delivery.getDeliveredAt());
-
-                snapshot.put("deliveryStaffId", deliveryStaff != null ? deliveryStaff.getId() : null);
-                snapshot.put("deliveryStaffUserId",
-                                deliveryStaff != null && deliveryStaff.getUser() != null
-                                                ? deliveryStaff.getUser().getId()
-                                                : null);
-                snapshot.put("deliveryStaffName",
-                                deliveryStaff != null && deliveryStaff.getUser() != null
-                                                ? deliveryStaff.getUser().getFullName()
-                                                : null);
-
-                return snapshot;
+        if (delivery == null) {
+            return snapshot;
         }
 
-        /*
-         * Builds safe audit JSON for the parent order.
-         * This is useful when delivery completion also changes order status to SERVED.
-         */
-        private Map<String, Object> buildDeliveryOrderAuditSnapshot(Order order) {
-                Map<String, Object> snapshot = new LinkedHashMap<>();
+        Order order = delivery.getOrder();
+        Staff deliveryStaff = delivery.getDeliveryStaff();
 
-                if (order == null) {
-                        return snapshot;
-                }
+        snapshot.put("deliveryId", delivery.getId());
 
-                snapshot.put("orderId", order.getId());
-                snapshot.put("orderNumber", order.getOrderNumber());
-                snapshot.put("branchId", order.getBranch() != null ? order.getBranch().getId() : null);
-                snapshot.put("branchName", order.getBranch() != null ? order.getBranch().getName() : null);
+        snapshot.put("orderId", order != null ? order.getId() : null);
+        snapshot.put("orderNumber", order != null ? order.getOrderNumber() : null);
+        snapshot.put("branchId", getDeliveryBranchId(delivery));
 
-                snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
-                snapshot.put("paymentStatus",
-                                order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
-                snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
+        snapshot.put("deliveryStatus",
+                delivery.getDeliveryStatus() != null
+                        ? delivery.getDeliveryStatus().name()
+                        : null);
 
-                snapshot.put("deliveryAddress", order.getDeliveryAddress());
-                snapshot.put("finalAmount", order.getFinalAmount());
-                snapshot.put("createdAt", order.getCreatedAt());
-                snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
+        snapshot.put("deliveryAddress", order != null ? order.getDeliveryAddress() : null);
+        snapshot.put("cancelledReason", delivery.getCancelledReason());
+        snapshot.put("deliveredAt", delivery.getDeliveredAt());
 
-                return snapshot;
+        snapshot.put("deliveryStaffId", deliveryStaff != null ? deliveryStaff.getId() : null);
+        snapshot.put("deliveryStaffUserId",
+                deliveryStaff != null && deliveryStaff.getUser() != null
+                        ? deliveryStaff.getUser().getId()
+                        : null);
+        snapshot.put("deliveryStaffName",
+                deliveryStaff != null && deliveryStaff.getUser() != null
+                        ? deliveryStaff.getUser().getFullName()
+                        : null);
+
+        return snapshot;
+    }
+
+    /*
+     * Builds safe audit JSON for the parent order.
+     * This is useful when delivery completion also changes order status to SERVED.
+     */
+    private Map<String, Object> buildDeliveryOrderAuditSnapshot(Order order) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (order == null) {
+            return snapshot;
         }
 
-        /*
-         * Gets branch ID for audit branch filtering.
-         */
+        snapshot.put("orderId", order.getId());
+        snapshot.put("orderNumber", order.getOrderNumber());
+        snapshot.put("branchId", order.getBranch() != null ? order.getBranch().getId() : null);
+        snapshot.put("branchName", order.getBranch() != null ? order.getBranch().getName() : null);
+
+        snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
+        snapshot.put("paymentStatus", order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
+        snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
+
+        snapshot.put("deliveryAddress", order.getDeliveryAddress());
+        snapshot.put("finalAmount", order.getFinalAmount());
+        snapshot.put("createdAt", order.getCreatedAt());
+        snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
+
+        return snapshot;
+    }
+
+    /*
+     * Gets branch ID for audit branch filtering.
+     */
     private Long getDeliveryBranchId(Delivery delivery) {
         if (delivery == null || delivery.getOrder() == null || delivery.getOrder().getBranch() == null) {
             return null;
@@ -298,51 +299,41 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         return delivery.getOrder().getBranch().getId();
     }
 
-        /*
-         * Retrieves historical deliveries (DELIVERED or CANCELLED) for a specific
-         * driver, sorted by completion time descending.
-         */
-        @Override
-        @Transactional(readOnly = true)
-        public List<DeliveryHistoryDTO> getDeliveryHistory(Long userId) {
-                Staff staff = staffRepository.findByUserId(userId)
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                                "Staff member not found for user ID: " + userId));
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeliveryHistoryDTO> getDeliveryHistory(Long userId) {
+        Staff staff = staffRepository.findByUserId(userId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Staff member not found for user ID: " + userId
+                ));
 
-                List<Delivery> history = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
-                                staff.getId(),
-                                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED));
+        List<Delivery> history = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+                staff.getId(),
+                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED)
+        );
 
-                return history.stream().map(d -> {
-                        LocalDateTime completedAt = d.getDeliveryStatus() == DeliveryStatus.DELIVERED
-                                        ? d.getDeliveredAt()
-                                        : (d.getDeliveredAt() != null ? d.getDeliveredAt() : d.getAssignedAt());
-
-                        return DeliveryHistoryDTO.builder()
-                                        .id(d.getId())
-                                        .orderId(d.getOrder().getId())
-                                        .orderNumber(d.getOrder().getOrderNumber() != null
-                                                        ? d.getOrder().getOrderNumber()
-                                                        : "ORD-" + d.getOrder().getId())
-                                        .customerName(d.getOrder().getContactName())
-                                        .customerPhone(d.getOrder().getContactPhone())
-                                        .deliveryAddress(d.getOrder().getDeliveryAddress())
-                                        .amount(d.getOrder().getFinalAmount())
-                                        .status(d.getDeliveryStatus().name())
-                                        .completedAt(completedAt)
-                                        .cancelledReason(d.getCancelledReason())
-                                        .build();
+        return history.stream()
+                .map(d -> {
+                    Order order = d.getOrder();
+                    String customerName = null;
+                    String customerPhone = null;
+                    if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                        customerName = order.getCustomer().getUser().getFullName();
+                        customerPhone = order.getCustomer().getUser().getPhone();
+                    }
+                    return DeliveryHistoryDTO.builder()
+                            .id(d.getId())
+                            .orderId(order != null ? order.getId() : null)
+                            .orderNumber(order != null ? order.getOrderNumber() : null)
+                            .customerName(customerName)
+                            .customerPhone(customerPhone)
+                            .deliveryAddress(order != null ? order.getDeliveryAddress() : null)
+                            .amount(order != null ? order.getFinalAmount() : null)
+                            .status(d.getDeliveryStatus() != null ? d.getDeliveryStatus().name() : null)
+                            .completedAt(d.getDeliveredAt())
+                            .cancelledReason(d.getCancelledReason())
+                            .build();
                 })
-                                .sorted((a, b) -> {
-                                        if (a.getCompletedAt() == null && b.getCompletedAt() == null)
-                                                return 0;
-                                        if (a.getCompletedAt() == null)
-                                                return 1;
-                                        if (b.getCompletedAt() == null)
-                                                return -1;
-                                        return b.getCompletedAt().compareTo(a.getCompletedAt());
-                                })
-                                .collect(Collectors.toList());
-        }
+                .collect(Collectors.toList());
+    }
 }
-

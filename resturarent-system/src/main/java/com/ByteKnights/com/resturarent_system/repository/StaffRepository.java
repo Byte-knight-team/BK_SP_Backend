@@ -71,6 +71,8 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     /*
      * Optimized branch + role staff query.
      * Used when ADMIN filters by role inside own branch.
+     * We fetch all the data in one go to avoid N+1 query problem.
+     * (this is the optimized version)
      */
     @Query("""
             SELECT DISTINCT s
@@ -108,7 +110,6 @@ public interface StaffRepository extends JpaRepository<Staff, Long> {
     boolean existsByUser(User user);
 
     // --- Kitchen Queries START ---
-
     @Query("SELECT s FROM Staff s WHERE s.branch.id = :branchId " +
             "AND s.user.role.name = 'LINE_CHEF' " +
             "AND s.employmentStatus = 'ACTIVE' " +

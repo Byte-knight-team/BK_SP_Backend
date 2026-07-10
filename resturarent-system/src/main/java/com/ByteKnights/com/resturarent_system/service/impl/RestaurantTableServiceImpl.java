@@ -4,6 +4,11 @@ import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateTableReque
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableStatusRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.TableResponse;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
@@ -12,6 +17,7 @@ import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.RestaurantTableService;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
@@ -22,7 +28,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -36,6 +44,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     private final BranchRepository branchRepository;
     private final QrCodeRepository qrCodeRepository;
     private final StaffRepository staffRepository;
+    private final AuditLogService auditLogService;
 
     /**
      * Creates a table after validating branch state and uniqueness.
@@ -45,7 +54,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     public TableResponse createTable(CreateTableRequest request) {
         enforceAdminBranchAccess(request.getBranchId());
 
-        // 1. Validate branch exists
         Branch branch = branchRepository.findById(request.getBranchId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Branch not found with id: " + request.getBranchId()));
@@ -54,7 +62,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
             throw new InvalidOperationException("Cannot create table in an inactive branch: " + branch.getName());
         }
 
-        // 2. Check for duplicate table number within branch
         if (tableRepository.existsByBranchIdAndTableNumber(
                 request.getBranchId(), request.getTableNumber())) {
             throw new DuplicateResourceException(
@@ -62,10 +69,8 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
                             + " already exists in branch " + branch.getName());
         }
 
-        // 3. Parse status (default to AVAILABLE)
         TableStatus status = parseStatus(request.getStatus());
 
-        // 4. Build and save entity
         RestaurantTable table = RestaurantTable.builder()
                 .branch(branch)
                 .tableNumber(request.getTableNumber())
@@ -74,6 +79,20 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
                 .build();
 
         RestaurantTable saved = tableRepository.save(table);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.TABLE,
+                AuditEventType.TABLE_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.TABLE,
+                saved.getId(),
+                getTableBranchId(saved),
+                "Table created successfully",
+                null,
+                buildTableAuditSnapshot(saved)
+        );
+
         return mapToResponse(saved);
     }
 
@@ -97,8 +116,8 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
 
         List<RestaurantTable> tables = adminBranchId == null
-            ? tableRepository.findAll()
-            : tableRepository.findByBranchId(adminBranchId);
+                ? tableRepository.findAll()
+                : tableRepository.findByBranchId(adminBranchId);
 
         return tables
                 .stream()
@@ -115,30 +134,43 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         RestaurantTable table = findTableOrThrow(id);
         enforceAdminBranchAccess(table.getBranch().getId());
 
-        // Update table number if provided
+        Map<String, Object> oldValues = buildTableAuditSnapshot(table);
+
         if (request.getTableNumber() != null) {
-            // Check for duplicate table number within same branch (exclude current table)
             if (!table.getTableNumber().equals(request.getTableNumber())
                     && tableRepository.existsByBranchIdAndTableNumberAndIdNot(
-                            table.getBranch().getId(), request.getTableNumber(), id)) {
+                    table.getBranch().getId(), request.getTableNumber(), id)) {
                 throw new DuplicateResourceException(
                         "Table number " + request.getTableNumber()
                                 + " already exists in branch " + table.getBranch().getName());
             }
+
             table.setTableNumber(request.getTableNumber());
         }
 
-        // Update capacity if provided
         if (request.getCapacity() != null) {
             table.setCapacity(request.getCapacity());
         }
 
-        // Update status if provided
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
             table.setState(parseStatus(request.getStatus()));
         }
 
         RestaurantTable updated = tableRepository.save(table);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.TABLE,
+                AuditEventType.TABLE_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.TABLE,
+                updated.getId(),
+                getTableBranchId(updated),
+                "Table updated successfully",
+                oldValues,
+                buildTableAuditSnapshot(updated)
+        );
+
         return mapToResponse(updated);
     }
 
@@ -151,17 +183,12 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         RestaurantTable table = findTableOrThrow(id);
         enforceAdminBranchAccess(table.getBranch().getId());
 
-        // Capture the current persisted active order count before applying manual status input.
-        // This lets us enforce a business rule for the common transition from 0 -> 1 active orders.
+        Map<String, Object> oldValues = buildTableAuditSnapshot(table);
+
         Integer activeOrderCount = table.getActiveOrderCount() == null ? 0 : table.getActiveOrderCount();
 
-        // Apply the requested status first so administrators can still drive explicit state changes.
         table.setState(parseStatus(request.getStatus()));
 
-        // Automatic status sync rules:
-        // 1) If active orders are present, AVAILABLE must transition to OCCUPIED.
-        // 2) If active orders are zero, OCCUPIED must transition back to AVAILABLE.
-        // These rules keep table state consistent with real-time order load.
         if (table.getState() == TableStatus.AVAILABLE && activeOrderCount > 0) {
             table.setState(TableStatus.OCCUPIED);
         } else if (table.getState() == TableStatus.OCCUPIED && activeOrderCount == 0) {
@@ -169,6 +196,20 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         }
 
         RestaurantTable updated = tableRepository.save(table);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.TABLE,
+                AuditEventType.TABLE_STATUS_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.TABLE,
+                updated.getId(),
+                getTableBranchId(updated),
+                "Table status updated successfully",
+                oldValues,
+                buildTableAuditSnapshot(updated)
+        );
+
         return mapToResponse(updated);
     }
 
@@ -181,9 +222,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         RestaurantTable table = findTableOrThrow(id);
         enforceAdminBranchAccess(table.getBranch().getId());
 
-        // Enforce a hard business rule: once a table has QR references, the row must not be
-        // physically deleted. This keeps QR audit/history intact and avoids database FK errors
-        // from qr_codes.table_id -> restaurant_tables.id.
         if (qrCodeRepository.existsByTableId(id)) {
             throw new InvalidOperationException(
                     "Cannot delete table: QR code history exists for this table. "
@@ -202,7 +240,23 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
             throw new InvalidOperationException("Cannot delete: The table is reserved");
         }
 
+        Map<String, Object> oldValues = buildTableAuditSnapshot(table);
+        Long branchId = getTableBranchId(table);
+
         tableRepository.delete(table);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.TABLE,
+                AuditEventType.TABLE_DELETED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.TABLE,
+                id,
+                branchId,
+                "Table deleted successfully",
+                oldValues,
+                null
+        );
     }
 
     // ─────────────────────────── Helper Methods ───────────────────────────
@@ -223,6 +277,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         if (status == null || status.isBlank()) {
             return TableStatus.AVAILABLE;
         }
+
         try {
             return TableStatus.valueOf(status.toUpperCase());
         } catch (IllegalArgumentException e) {
@@ -272,6 +327,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         }
 
         Object principal = authentication.getPrincipal();
+
         if (!(principal instanceof JwtUserPrincipal jwtUser)
                 || jwtUser.getUser() == null
                 || jwtUser.getUser().getId() == null) {
@@ -281,5 +337,42 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         return staffRepository.findByUserId(jwtUser.getUser().getId())
                 .map(staff -> staff.getBranch().getId())
                 .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
+    }
+
+    /*
+     * Builds safe audit JSON for table actions.
+     */
+    private Map<String, Object> buildTableAuditSnapshot(RestaurantTable table) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (table == null) {
+            return snapshot;
+        }
+
+        //This used to get the snapshot before updating values
+        snapshot.put("tableId", table.getId());
+        snapshot.put("tableNumber", table.getTableNumber());
+        snapshot.put("capacity", table.getCapacity());
+        snapshot.put("status", table.getState() != null ? table.getState().name() : null);
+        snapshot.put("currentGuestCount", table.getCurrentGuestCount());
+        snapshot.put("activeOrderCount", table.getActiveOrderCount());
+
+        snapshot.put("branchId", table.getBranch() != null ? table.getBranch().getId() : null);
+        snapshot.put("branchName", table.getBranch() != null ? table.getBranch().getName() : null);
+
+        snapshot.put("createdAt", table.getCreatedAt());
+
+        return snapshot;
+    }
+
+    /*
+     * Gets table branch ID for audit branch filtering.
+     */
+    private Long getTableBranchId(RestaurantTable table) {
+        if (table == null || table.getBranch() == null) {
+            return null;
+        }
+
+        return table.getBranch().getId();
     }
 }

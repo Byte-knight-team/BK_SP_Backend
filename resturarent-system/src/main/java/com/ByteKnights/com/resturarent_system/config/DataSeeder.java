@@ -236,7 +236,8 @@ public class DataSeeder implements CommandLineRunner {
                                 receptionistReservationUpdate,
                                 receptionistOrderView,
                                 receptionistOrderUpdate,
-                                receptionistPaymentCollect));
+                                receptionistPaymentCollect,
+                                kitchenAlertView));
 
                 createRoleWithDefaultPermissions("DELIVERY", Set.of(
                                 updateDeliveryStatus,

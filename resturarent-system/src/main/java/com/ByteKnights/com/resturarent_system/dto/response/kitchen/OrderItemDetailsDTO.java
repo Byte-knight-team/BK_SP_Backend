@@ -13,4 +13,5 @@ public class OrderItemDetailsDTO {
     private Integer quantity;
     private String status;
     private String assignedLineChefName;
+    private String kitchenNotes;
 }

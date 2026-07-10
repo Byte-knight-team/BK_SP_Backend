@@ -38,8 +38,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     public MenuCategoryServiceImpl(
             MenuCategoryRepository menuCategoryRepository,
             MenuItemRepository menuItemRepository,
-            AuditLogService auditLogService
-    ) {
+            AuditLogService auditLogService) {
         this.menuCategoryRepository = menuCategoryRepository;
         this.menuItemRepository = menuItemRepository;
         this.auditLogService = auditLogService;
@@ -62,19 +61,12 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     }
 
     @Override
-    @Auditable(
-            module = AuditModule.MENU,
-            eventType = AuditEventType.MENU_CATEGORY_CREATED,
-            targetType = AuditTargetType.MENU_CATEGORY,
-            description = "Menu category created successfully",
-            captureResultAsNewValue = false
-    )
+    @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_CATEGORY_CREATED, targetType = AuditTargetType.MENU_CATEGORY, description = "Menu category created successfully", captureResultAsNewValue = false)
     @Transactional
     public MenuCategoryResponse createCategory(CreateMenuCategoryRequest request) {
         String normalizedName = validateAndNormalizeRequiredName(request != null ? request.getName() : null);
         String normalizedDescription = validateAndNormalizeOptionalDescription(
-                request != null ? request.getDescription() : null
-        );
+                request != null ? request.getDescription() : null);
 
         if (menuCategoryRepository.existsByNameIgnoreCase(normalizedName)) {
             throw new DuplicateResourceException("Category already exists: " + normalizedName);
@@ -95,13 +87,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     }
 
     @Override
-    @Auditable(
-            module = AuditModule.MENU,
-            eventType = AuditEventType.MENU_CATEGORY_UPDATED,
-            targetType = AuditTargetType.MENU_CATEGORY,
-            description = "Menu category updated successfully",
-            captureResultAsNewValue = false
-    )
+    @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_CATEGORY_UPDATED, targetType = AuditTargetType.MENU_CATEGORY, description = "Menu category updated successfully", captureResultAsNewValue = false)
     @Transactional
     public MenuCategoryResponse updateCategory(Long id, UpdateMenuCategoryRequest request) {
         MenuCategory category = findCategoryOrThrow(id);
@@ -162,8 +148,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
                 null,
                 "Menu category deleted successfully",
                 oldValues,
-                null
-        );
+                null);
 
         return response;
     }
@@ -200,8 +185,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
         if (normalizedDescription.length() > MAX_DESCRIPTION_LENGTH) {
             throw new InvalidOperationException(
-                    "Category description must be at most " + MAX_DESCRIPTION_LENGTH + " characters"
-            );
+                    "Category description must be at most " + MAX_DESCRIPTION_LENGTH + " characters");
         }
 
         return normalizedDescription;
