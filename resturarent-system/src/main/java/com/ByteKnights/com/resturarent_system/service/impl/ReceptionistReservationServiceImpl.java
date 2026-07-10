@@ -33,6 +33,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     // Tunable business rules
     private static final int MIN_RESERVATION_LEAD_HOURS = 0; // 0 = future-only (booking just has to be later than now)
     private static final int MAX_WASTE_SEATS = 2;            // biggest allowed (capacity - party size)
+    private static final int GAP_HOURS = 1;                  // required gap between two reservations on the same table
 
     @Override
     @Transactional
@@ -57,14 +58,21 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("Reservation time must be in the future.");
         }
 
+        // Enforce a 1-hour gap between reservations: widen the requested window by an hour on
+        // each side, so a booking too close to an existing one (even without a direct overlap) clashes.
         List<Reservation> overlapping = reservationRepository.findOverlappingReservations(
                 request.getTableId(),
-                request.getReservationTime(),
-                request.getEndTime()
+                request.getReservationTime().minusHours(GAP_HOURS),
+                request.getEndTime().plusHours(GAP_HOURS)
         );
 
         if (!overlapping.isEmpty()) {
-            throw new RuntimeException("Table is already reserved for this time slot");
+            Reservation clash = overlapping.get(0);
+            boolean directOverlap = clash.getReservationTime().isBefore(request.getEndTime())
+                    && clash.getEndTime().isAfter(request.getReservationTime());
+            throw new RuntimeException(directOverlap
+                    ? "Table is already reserved for this time slot"
+                    : "Table needs at least a 1-hour gap between reservations");
         }
 
         Reservation reservation = Reservation.builder()
@@ -163,7 +171,9 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         LocalDate today = LocalDate.now();
         List<TableAvailabilityDTO> result = new ArrayList<>();
         for (RestaurantTable t : eligible) {
-            List<Reservation> overlapping = reservationRepository.findOverlappingReservations(t.getId(), start, end);
+            // Widen the window by the required gap so bookings too close to an existing reservation clash too.
+            List<Reservation> nearby = reservationRepository.findOverlappingReservations(
+                    t.getId(), start.minusHours(GAP_HOURS), end.plusHours(GAP_HOURS));
             TableAvailabilityDTO.TableAvailabilityDTOBuilder dto = TableAvailabilityDTO.builder()
                     .tableId(t.getId())
                     .tableNumber(t.getTableNumber())
@@ -173,11 +183,22 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             // whoever is seated now will be long gone, so ignore it.
             boolean bookingIsToday = start.toLocalDate().equals(today);
 
-            if (!overlapping.isEmpty()) {
-                Reservation clash = overlapping.get(0);
+            // Prefer a real time overlap; otherwise it's a gap-only clash (within an hour, no overlap).
+            Reservation directClash = nearby.stream()
+                    .filter(r -> r.getReservationTime().isBefore(end) && r.getEndTime().isAfter(start))
+                    .findFirst().orElse(null);
+
+            if (directClash != null) {
+                dto.status("RESERVED")
+                        .conflictStart(directClash.getReservationTime())
+                        .conflictEnd(directClash.getEndTime())
+                        .gapConflict(false);
+            } else if (!nearby.isEmpty()) {
+                Reservation clash = nearby.get(0);
                 dto.status("RESERVED")
                         .conflictStart(clash.getReservationTime())
-                        .conflictEnd(clash.getEndTime());
+                        .conflictEnd(clash.getEndTime())
+                        .gapConflict(true);
             } else if (t.getState() == TableStatus.OCCUPIED && bookingIsToday) {
                 long activeOrders = orderRepository.findByTableIdAndStatusNotIn(
                                 t.getId(), List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD))

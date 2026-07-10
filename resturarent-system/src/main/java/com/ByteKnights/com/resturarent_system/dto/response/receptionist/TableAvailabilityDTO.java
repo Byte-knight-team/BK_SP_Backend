@@ -24,6 +24,10 @@ public class TableAvailabilityDTO {
     private LocalDateTime conflictStart;
     private LocalDateTime conflictEnd;
 
+    // true when the clash isn't a direct time overlap but the required 1-hour gap between
+    // reservations (the requested slot is within an hour of the clashing reservation)
+    private boolean gapConflict;
+
     // populated only when status == OCCUPIED (so the receptionist can judge manually)
     private LocalDateTime occupiedSince;
     private Integer activeOrderCount;
