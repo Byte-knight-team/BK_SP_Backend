@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.repository;
 import com.ByteKnights.com.resturarent_system.entity.Delivery;
 import com.ByteKnights.com.resturarent_system.entity.Order;
 import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -85,4 +86,24 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
     List<Delivery> findActiveDeliveriesForStaffBatch(
             @Param("staffIds") Collection<Long> staffIds,
             @Param("statuses") Collection<DeliveryStatus> statuses);
+
+    /**
+     * Paginated history query for a single driver.
+     * Uses JOIN FETCH to eagerly load the associated Order in the same SQL query, preventing
+     * N+1 lazy-load hits per row when mapping delivery history to DTOs.
+     * Sorts by completedAt (COALESCE with assignedAt for cancelled orders) descending in SQL,
+     * so no in-memory sort is needed in the service layer.
+     * Accepts a Pageable to cap the result set (e.g., last 50 deliveries), preventing
+     * unbounded memory growth for long-serving drivers.
+     * <p>
+     * Replaces the unbounded findByDeliveryStaffIdAndDeliveryStatusIn() call in
+     * DeliveryOrderServiceImpl.getDeliveryHistory().
+     */
+    @Query("SELECT d FROM Delivery d JOIN FETCH d.order WHERE d.deliveryStaff.id = :staffId " +
+           "AND d.deliveryStatus IN :statuses " +
+           "ORDER BY COALESCE(d.deliveredAt, d.assignedAt) DESC")
+    List<Delivery> findHistoryByStaffIdPaged(
+            @Param("staffId") Long staffId,
+            @Param("statuses") Collection<DeliveryStatus> statuses,
+            Pageable pageable);
 }

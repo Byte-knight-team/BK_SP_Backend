@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageRequest;
 
 @Service
 @RequiredArgsConstructor
@@ -307,9 +308,14 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         "Staff member not found for user ID: " + userId
                 ));
 
-        List<Delivery> history = deliveryRepository.findByDeliveryStaffIdAndDeliveryStatusIn(
+        // Fetches the 50 most recent DELIVERED/CANCELLED entries for this driver.
+        // JOIN FETCH d.order loads the Order in the same SQL query (no lazy-load N+1 per row).
+        // DB-level ORDER BY replaces the previous in-memory sort.
+        // PageRequest.of(0, 50) prevents unbounded memory growth for long-serving drivers.
+        List<Delivery> history = deliveryRepository.findHistoryByStaffIdPaged(
                 staff.getId(),
-                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED)
+                Arrays.asList(DeliveryStatus.DELIVERED, DeliveryStatus.CANCELLED),
+                PageRequest.of(0, 50)
         );
 
         return history.stream()
