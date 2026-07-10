@@ -237,10 +237,31 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         Reservation reservation = reservationRepository.findById(reservationId)
                 .orElseThrow(() -> new RuntimeException("Reservation not found"));
 
+        RestaurantTable table = reservation.getTable();
+        Long branchId = table.getBranch().getId();
+
         reservation.setStatus(ReservationStatus.CANCELLED);
         reservation.setCancelReason(request.getReason());
         reservationRepository.save(reservation);
-        webSocketNotificationService.broadcastReservationUpdate(reservation.getTable().getBranch().getId());
+
+        // If the table was locked (RESERVED) for this now-cancelled slot, free it — unless another
+        // PENDING reservation is still within the 15-minute window (then keep it held for that one).
+        // Cancelling a merely upcoming reservation (table not RESERVED) never changes table status.
+        if (table.getState() == TableStatus.RESERVED) {
+            LocalDateTime now = LocalDateTime.now();
+            boolean stillHasImmediateReservation = !reservationRepository
+                    .findOverlappingReservations(table.getId(), now, now.plusMinutes(15))
+                    .isEmpty();
+            if (!stillHasImmediateReservation) {
+                table.setState(TableStatus.AVAILABLE);
+                table.setCurrentGuestCount(0);
+                table.setStatusUpdatedAt(now);
+                tableRepository.save(table);
+                webSocketNotificationService.broadcastTableUpdate(branchId);
+            }
+        }
+
+        webSocketNotificationService.broadcastReservationUpdate(branchId);
     }
 
     @Override
