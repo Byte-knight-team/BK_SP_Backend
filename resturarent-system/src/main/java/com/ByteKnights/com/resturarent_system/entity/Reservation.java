@@ -46,7 +46,7 @@ public class Reservation {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private ReservationStatus status = ReservationStatus.CONFIRMED;
+    private ReservationStatus status = ReservationStatus.PENDING;
 
     @Column(name = "cancel_reason", length = 255)
     private String cancelReason;

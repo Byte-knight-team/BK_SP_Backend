@@ -74,11 +74,24 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .reservationTime(request.getReservationTime())
                 .endTime(request.getEndTime())
                 .guestCount(request.getGuestCount())
-                .status(ReservationStatus.CONFIRMED)
+                .notes(request.getNotes())
+                .status(ReservationStatus.PENDING)
                 .build();
 
         Reservation saved = reservationRepository.save(reservation);
+
+        // If the reservation starts within the 15-minute lock window and the table is free,
+        // lock it to RESERVED right now — the scheduler's 15-min window would otherwise miss
+        // a booking made less than 15 minutes ahead.
+        if (table.getState() == TableStatus.AVAILABLE
+                && !saved.getReservationTime().isAfter(LocalDateTime.now().plusMinutes(15))) {
+            table.setState(TableStatus.RESERVED);
+            table.setStatusUpdatedAt(LocalDateTime.now());
+            tableRepository.save(table);
+        }
+
         webSocketNotificationService.broadcastReservationUpdate(branchId);
+        webSocketNotificationService.broadcastTableUpdate(branchId);
 
         return toDTO(saved);
     }
@@ -230,6 +243,51 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         webSocketNotificationService.broadcastReservationUpdate(reservation.getTable().getBranch().getId());
     }
 
+    @Override
+    @Transactional
+    public void seatReservation(Long reservationId, Integer guestCount, String userEmail) {
+        Long branchId = getBranchId(userEmail);
+
+        Reservation r = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new RuntimeException("Reservation not found"));
+
+        RestaurantTable table = r.getTable();
+        if (table.getBranch() == null || !table.getBranch().getId().equals(branchId)) {
+            throw new RuntimeException("Reservation does not belong to your branch");
+        }
+        if (r.getStatus() != ReservationStatus.PENDING) {
+            throw new RuntimeException("This reservation is not active");
+        }
+
+        // Seat the reserved party: occupy the table and mark the reservation completed
+        table.setState(TableStatus.OCCUPIED);
+        table.setCurrentGuestCount(guestCount != null ? guestCount : r.getGuestCount());
+        table.setStatusUpdatedAt(LocalDateTime.now());
+        tableRepository.save(table);
+
+        r.setStatus(ReservationStatus.COMPLETED);
+        reservationRepository.save(r);
+
+        webSocketNotificationService.broadcastTableUpdate(branchId);
+        webSocketNotificationService.broadcastReservationUpdate(branchId);
+    }
+
+    @Override
+    public List<ReservationResponseDTO> getAllReservations(String userEmail) {
+        Long branchId = getBranchId(userEmail);
+        return reservationRepository.findAllByBranch(branchId).stream()
+                .map(this::toDTO)
+                .toList();
+    }
+
+    private Long getBranchId(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+        return staff.getBranch().getId();
+    }
+
     private ReservationResponseDTO toDTO(Reservation r) {
         return ReservationResponseDTO.builder()
                 .id(r.getId())
@@ -240,6 +298,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .reservationTime(r.getReservationTime())
                 .endTime(r.getEndTime())
                 .guestCount(r.getGuestCount())
+                .notes(r.getNotes())
                 .status(r.getStatus().name())
                 .createdAt(r.getCreatedAt())
                 .build();

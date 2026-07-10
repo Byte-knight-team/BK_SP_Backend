@@ -49,7 +49,7 @@ public class ReservationScheduler {
         List<Reservation> all = reservationRepository.findAll();
 
         for (Reservation r : all) {
-            if (r.getStatus() != ReservationStatus.CONFIRMED) continue;
+            if (r.getStatus() != ReservationStatus.PENDING) continue;
 
             LocalDateTime reservationTime = r.getReservationTime();
             Long branchId = r.getTable().getBranch().getId();

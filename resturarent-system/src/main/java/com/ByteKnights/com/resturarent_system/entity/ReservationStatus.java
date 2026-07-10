@@ -1,7 +1,7 @@
 package com.ByteKnights.com.resturarent_system.entity;
 
 public enum ReservationStatus {
-    CONFIRMED,
+    PENDING,     // reservation placed, upcoming (was CONFIRMED)
     CANCELLED,
-    COMPLETED
+    COMPLETED    // reserved party seated
 }

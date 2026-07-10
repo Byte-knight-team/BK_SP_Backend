@@ -58,6 +58,27 @@ public class ReceptionistReservationController {
         return ResponseEntity.ok(new StandardResponse(200, "Upcoming reservations fetched", list));
     }
 
+    // All reservations for the branch (any status) — for the Reservations page
+    @GetMapping("/all")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
+    public ResponseEntity<StandardResponse> getAllReservations(Principal principal) {
+        List<ReservationResponseDTO> list = receptionistReservationService.getAllReservations(principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "All reservations fetched", list));
+    }
+
+    // Seat the reserved party: occupy the table and mark the reservation completed
+    @PostMapping("/{reservationId}/seat")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> seatReservation(
+            @PathVariable Long reservationId,
+            @RequestBody(required = false) java.util.Map<String, Integer> body,
+            Principal principal) {
+
+        Integer guestCount = body != null ? body.get("guestCount") : null;
+        receptionistReservationService.seatReservation(reservationId, guestCount, principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "Reservation seated", null));
+    }
+
     @GetMapping("/table/{tableId}")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
     public ResponseEntity<StandardResponse> getTableNextReservation(

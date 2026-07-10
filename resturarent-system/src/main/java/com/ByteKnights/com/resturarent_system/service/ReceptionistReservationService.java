@@ -16,6 +16,10 @@ public interface ReceptionistReservationService {
 
     List<ReservationResponseDTO> getUpcomingReservations(String userEmail);
 
+    List<ReservationResponseDTO> getAllReservations(String userEmail);
+
+    void seatReservation(Long reservationId, Integer guestCount, String userEmail);
+
     ReservationResponseDTO getTableNextReservation(Long tableId, String userEmail);
 
     void cancelReservation(Long reservationId, CancelReservationRequest request);
