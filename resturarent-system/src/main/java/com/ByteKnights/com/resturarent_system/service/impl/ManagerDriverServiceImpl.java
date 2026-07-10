@@ -15,9 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -44,12 +46,16 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 OrderType.ONLINE_DELIVERY,
                                 OrderStatus.COMPLETED);
 
-                // Filter out orders that already have a delivery assignment
+                // Batch-check which completed orders already have a delivery assignment.
+                // Previously, this was a per-order loop calling findByOrder() (N+1 queries).
+                // Now we fetch all assigned order IDs in a single query and filter in-memory.
+                Set<Long> alreadyAssignedOrderIds = allCompleted.isEmpty()
+                                ? Collections.emptySet()
+                                : deliveryRepository.findOrderIdsAlreadyAssigned(
+                                                allCompleted.stream().map(Order::getId).collect(Collectors.toList()));
+
                 List<Order> dispatchableOrders = allCompleted.stream()
-                                .filter(order -> {
-                                        java.util.Optional<Delivery> existing = deliveryRepository.findByOrder(order);
-                                        return existing.isEmpty();
-                                })
+                                .filter(order -> !alreadyAssignedOrderIds.contains(order.getId()))
                                 .collect(Collectors.toList());
 
                 // 3. Map Riders and calculate metrics
@@ -58,17 +64,22 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 DeliveryStatus.ACCEPTED,
                                 DeliveryStatus.OUT_FOR_DELIVERY);
 
-                int driversOnline = 0;
-                int available = 0;
-                int busy = 0;
+                // Batch-fetch all active deliveries for every rider in a single query.
+                // Previously, this called findByDeliveryStaffIdAndDeliveryStatusIn() once per rider
+                // inside the stream (N+1 queries). Now we load all active deliveries at once and
+                // group them by staffId for O(1) lookup inside the mapping stream.
+                List<Long> riderIds = riders.stream().map(Staff::getId).collect(Collectors.toList());
+                Map<Long, List<Delivery>> activeDeliveryByRider = riderIds.isEmpty()
+                                ? Collections.emptyMap()
+                                : deliveryRepository.findActiveDeliveriesForStaffBatch(riderIds, activeStatuses)
+                                                .stream()
+                                                .collect(Collectors.groupingBy(d -> d.getDeliveryStaff().getId()));
 
                 List<ManagerDriverSummaryDTO.DriverStatusDTO> driverDTOs = riders.stream()
                                 .map(rider -> {
-                                        // Find active delivery
-                                        List<Delivery> activeDeliveries = deliveryRepository
-                                                        .findByDeliveryStaffIdAndDeliveryStatusIn(
-                                                                        rider.getId(),
-                                                                        activeStatuses);
+                                        // O(1) map lookup — no extra DB query per rider
+                                        List<Delivery> activeDeliveries = activeDeliveryByRider
+                                                        .getOrDefault(rider.getId(), Collections.emptyList());
 
                                         boolean isBusy = !activeDeliveries.isEmpty();
 
@@ -110,6 +121,10 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                                         .build();
                                 })
                                 .collect(Collectors.toList());
+
+                int driversOnline = 0;
+                int available = 0;
+                int busy = 0;
 
                 // Update metrics
                 for (ManagerDriverSummaryDTO.DriverStatusDTO d : driverDTOs) {
