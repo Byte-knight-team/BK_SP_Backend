@@ -165,6 +165,25 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         LocalDateTime start,
                         LocalDateTime end);
 
+        /**
+         * Counts orders matching a specific branch, order type, set of statuses,
+         * and updated after a given timestamp — all filtered in SQL.
+         * <p>
+         * Replaces the Java-loop pattern in ManagerDashboardServiceImpl where all orders
+         * across all branches were fetched into memory and then filtered by branchId and
+         * orderType in application code (N+all-orders anti-pattern).
+         * Used to calculate pendingDeliveries and fleetActiveDeliveries on the manager dashboard.
+         */
+        @Query("SELECT COUNT(o) FROM Order o WHERE o.branch.id = :branchId " +
+               "AND o.orderType = :orderType " +
+               "AND o.status IN :statuses " +
+               "AND o.statusUpdatedAt >= :since")
+        long countByBranchIdAndOrderTypeAndStatusInAndStatusUpdatedAtAfter(
+                        @Param("branchId") Long branchId,
+                        @Param("orderType") OrderType orderType,
+                        @Param("statuses") Collection<OrderStatus> statuses,
+                        @Param("since") LocalDateTime since);
+
         // kitchen dashboard stats
 
         @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +

@@ -54,22 +54,23 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         int activeOrders = (int) orderRepository.countByBranchIdAndStatusIn(finalBranchId, activeStatuses);
 
         // 3. Pending Deliveries
-        // Filters orders specifically assigned to online delivery for the current day.
-        int pendingDeliveries = 0;
-        List<Order> deliveries = orderRepository.findByStatusAndStatusUpdatedAtAfter(OrderStatus.READY, startOfDay,
-                org.springframework.data.domain.Sort.by("createdAt"));
-        for (Order o : deliveries) {
-            if (o.getBranch().getId().equals(finalBranchId) && o.getOrderType() == OrderType.ONLINE_DELIVERY) {
-                pendingDeliveries++;
-            }
-        }
-        List<Order> outDeliveries = orderRepository.findByStatusAndStatusUpdatedAtAfter(OrderStatus.OUT_FOR_DELIVERY,
-                startOfDay, org.springframework.data.domain.Sort.by("createdAt"));
-        for (Order o : outDeliveries) {
-            if (o.getBranch().getId().equals(finalBranchId) && o.getOrderType() == OrderType.ONLINE_DELIVERY) {
-                pendingDeliveries++;
-            }
-        }
+        // Counts today's ONLINE_DELIVERY orders that are READY and waiting for driver assignment.
+        // Previously: fetched ALL orders across ALL branches into Java memory, then filtered
+        // by branchId and orderType in a for-loop. Now done entirely in SQL.
+        int pendingDeliveries = (int) orderRepository
+                .countByBranchIdAndOrderTypeAndStatusInAndStatusUpdatedAtAfter(
+                        finalBranchId,
+                        OrderType.ONLINE_DELIVERY,
+                        Arrays.asList(OrderStatus.READY),
+                        startOfDay);
+
+        // Counts today's ONLINE_DELIVERY orders actively out with a driver.
+        int fleetActiveDeliveries = (int) orderRepository
+                .countByBranchIdAndOrderTypeAndStatusInAndStatusUpdatedAtAfter(
+                        finalBranchId,
+                        OrderType.ONLINE_DELIVERY,
+                        Arrays.asList(OrderStatus.OUT_FOR_DELIVERY),
+                        startOfDay);
 
         // 4. Low Stock Alerts
         int lowStockAlerts = (int) inventoryItemRepository.countLowStockByBranchId(finalBranchId);
@@ -135,8 +136,7 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                 .orderDistribution(distribution)
                 .recentOrders(recentOrders)
                 .staff(staff)
-                .fleetActiveDeliveries(
-                        (int) outDeliveries.stream().filter(o -> o.getBranch().getId().equals(finalBranchId)).count())
+                .fleetActiveDeliveries(fleetActiveDeliveries)
                 .build();
     }
 
