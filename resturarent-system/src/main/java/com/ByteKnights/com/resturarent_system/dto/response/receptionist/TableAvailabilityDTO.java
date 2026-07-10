@@ -31,4 +31,9 @@ public class TableAvailabilityDTO {
     // populated only when status == OCCUPIED (so the receptionist can judge manually)
     private LocalDateTime occupiedSince;
     private Integer activeOrderCount;
+
+    // populated when the OCCUPIED table was seated from a reservation — its reserved window,
+    // so the receptionist knows when it should free up
+    private LocalDateTime occupiedReservationStart;
+    private LocalDateTime occupiedReservationEnd;
 }

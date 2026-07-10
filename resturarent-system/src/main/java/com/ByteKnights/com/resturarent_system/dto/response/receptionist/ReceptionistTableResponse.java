@@ -19,4 +19,8 @@ public class ReceptionistTableResponse {
     private LocalDateTime statusUpdatedAt;
     private List<TableOrderSummary> activeOrders;
     private List<TableReservationSummary> todayReservations;
+
+    // Set only when the table is OCCUPIED because a reservation was seated — carries that
+    // reservation's window so the card/modal can show "Occupied for reservation …" and blink at end time.
+    private TableReservationSummary seatedReservation;
 }

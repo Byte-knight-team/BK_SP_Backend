@@ -50,16 +50,19 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         LocalDateTime endOfToday = startOfToday.plusDays(1);
 
         for (RestaurantTable table : tables) {
-            // Always fetch today's orders directly — don't rely on activeOrderCount field
-            // which is only updated by the customer service when an order is placed
-            // Include today's SERVED orders too — a served-but-unpaid order must stay
-            // visible so the receptionist can still collect payment before clearing the table.
-            // Exclude CANCELLED, REJECTED and ON_HOLD — held/cancelled orders drop off the table.
+            // Show only the CURRENT sitting's orders — not previous parties' orders from earlier today.
+            // Filters: (1) not CANCELLED/REJECTED/ON_HOLD — held/cancelled orders drop off; SERVED-but-unpaid
+            // stays so payment can still be collected; (2) created today; (3) created at/after this sitting
+            // started (statusUpdatedAt is set when the table is occupied/seated, untouched by guest-count
+            // updates), so a prior occupancy's already-paid orders don't leak into the new party's view.
+            LocalDateTime sittingStart = table.getStatusUpdatedAt();
             List<Order> activeOrders = orderRepository.findByTableIdAndStatusNotIn(
                     table.getId(),
                     List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD)
             ).stream()
-                    .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().isAfter(startOfToday))
+                    .filter(o -> o.getCreatedAt() != null
+                            && o.getCreatedAt().isAfter(startOfToday)
+                            && (sittingStart == null || !o.getCreatedAt().isBefore(sittingStart)))
                     .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt())) // oldest first (top)
                     .toList();
 
@@ -91,6 +94,20 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                             .build())
                     .toList();
 
+            // If this occupancy came from a reservation, attach that reservation's window.
+            TableReservationSummary seatedReservation = null;
+            if (table.getSeatedReservationId() != null) {
+                seatedReservation = reservationRepository.findById(table.getSeatedReservationId())
+                        .map(r -> TableReservationSummary.builder()
+                                .reservationId(r.getId())
+                                .customerName(r.getCustomerName())
+                                .customerPhone(r.getCustomerPhone())
+                                .reservationTime(r.getReservationTime())
+                                .endTime(r.getEndTime())
+                                .build())
+                        .orElse(null);
+            }
+
             ReceptionistTableResponse response = ReceptionistTableResponse.builder()
                     .id(table.getId())
                     .tableNumber(table.getTableNumber())
@@ -101,6 +118,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                     .statusUpdatedAt(table.getStatusUpdatedAt())
                     .activeOrders(orderSummaries)
                     .todayReservations(todayReservations)
+                    .seatedReservation(seatedReservation)
                     .build();
 
             dtoList.add(response);
@@ -143,9 +161,10 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             throw new RuntimeException("Table is not available for seating");
         }
 
-        // Update status and guest count
+        // Update status and guest count. This is a walk-in seating (no reservation), so clear any link.
         table.setState(TableStatus.OCCUPIED);
         table.setCurrentGuestCount(guestCount);
+        table.setSeatedReservationId(null);
         table.setStatusUpdatedAt(LocalDateTime.now());
 
         // Save the changes
@@ -245,6 +264,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
 
         table.setState(hasImmediateReservation ? TableStatus.RESERVED : TableStatus.AVAILABLE);
         table.setCurrentGuestCount(0);
+        table.setSeatedReservationId(null);
         table.setStatusUpdatedAt(LocalDateTime.now());
 
         // Save

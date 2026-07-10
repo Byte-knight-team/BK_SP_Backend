@@ -44,6 +44,12 @@ public class RestaurantTable {
     @Column(name = "active_order_count")
     private Integer activeOrderCount = 0;
 
+    // When the current occupancy came from seating a reservation, this holds that reservation's id
+    // (so the card/modal can show "Occupied for reservation …" and blink when its time is up).
+    // Null for walk-in occupancy. Cleared when the table is cleared.
+    @Column(name = "seated_reservation_id")
+    private Long seatedReservationId;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

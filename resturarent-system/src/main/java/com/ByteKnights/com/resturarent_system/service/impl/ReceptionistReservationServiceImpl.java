@@ -208,6 +208,13 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 dto.status("OCCUPIED")
                         .occupiedSince(t.getStatusUpdatedAt())
                         .activeOrderCount((int) activeOrders);
+                // If this occupancy came from a reservation, include its window too.
+                if (t.getSeatedReservationId() != null) {
+                    reservationRepository.findById(t.getSeatedReservationId()).ifPresent(sr -> {
+                        dto.occupiedReservationStart(sr.getReservationTime());
+                        dto.occupiedReservationEnd(sr.getEndTime());
+                    });
+                }
             } else {
                 dto.status("FREE");
             }
@@ -301,9 +308,11 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("This reservation is not active");
         }
 
-        // Seat the reserved party: occupy the table and mark the reservation completed
+        // Seat the reserved party: occupy the table and mark the reservation completed.
+        // Remember which reservation this occupancy is for, so the card/modal can show its window.
         table.setState(TableStatus.OCCUPIED);
         table.setCurrentGuestCount(guestCount != null ? guestCount : r.getGuestCount());
+        table.setSeatedReservationId(r.getId());
         table.setStatusUpdatedAt(LocalDateTime.now());
         tableRepository.save(table);
 
