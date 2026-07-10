@@ -76,12 +76,12 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                             .build())
                     .toList();
 
-            // Check if there is a confirmed reservation for this table today
-            List<Reservation> todayReservations = reservationRepository.findByBranchAndDate(
+            // All of today's confirmed reservations for this table (ordered by time — the
+            // findByBranchAndDate query already sorts by reservationTime ASC)
+            List<Reservation> branchTodayReservations = reservationRepository.findByBranchAndDate(
                     branchId, startOfToday, endOfToday);
-            TableReservationSummary todayReservation = todayReservations.stream()
+            List<TableReservationSummary> todayReservations = branchTodayReservations.stream()
                     .filter(r -> r.getTable().getId().equals(table.getId()))
-                    .findFirst()
                     .map(r -> TableReservationSummary.builder()
                             .reservationId(r.getId())
                             .customerName(r.getCustomerName())
@@ -89,7 +89,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                             .reservationTime(r.getReservationTime())
                             .endTime(r.getEndTime())
                             .build())
-                    .orElse(null);
+                    .toList();
 
             ReceptionistTableResponse response = ReceptionistTableResponse.builder()
                     .id(table.getId())
@@ -100,7 +100,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                     .activeOrderCount(activeOrders.size())
                     .statusUpdatedAt(table.getStatusUpdatedAt())
                     .activeOrders(orderSummaries)
-                    .todayReservation(todayReservation)
+                    .todayReservations(todayReservations)
                     .build();
 
             dtoList.add(response);
