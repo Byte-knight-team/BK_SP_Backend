@@ -43,7 +43,7 @@ public class ManagerNotificationServiceImpl implements ManagerNotificationServic
         // Ping the manager frontend so it knows to re-fetch the notifications
         String destination = "/topic/branch/" + branchId + "/manager-notifications";
         log.info("Pinging manager notifications at {}: {}", destination, message);
-        messagingTemplate.convertAndSend(destination, "NEW_NOTIFICATION");
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("message", "NEW_NOTIFICATION"));
     }
 
     @Override
