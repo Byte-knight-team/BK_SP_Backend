@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
 import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
 import com.ByteKnights.com.resturarent_system.entity.AuditModule;
@@ -24,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -186,6 +188,52 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 oldValues,
                 buildInventoryItemAuditSnapshot(savedItem)
         );
+    }
+
+    @Override
+    public List<ChefRequestDTO> getMyRequests(String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        // Requests are stored with the chef's full name — match this chef's own requests
+        List<ChefRequest> requests = chefRequestRepository
+                .findByBranchIdAndChefNameOrderByCreatedAtDesc(branchId, user.getFullName());
+
+        List<ChefRequestDTO> dtoList = new ArrayList<>();
+        for (ChefRequest req : requests) {
+            dtoList.add(toChefRequestDTO(req));
+        }
+        return dtoList;
+    }
+
+    /*
+     * Maps a ChefRequest entity to the DTO the frontend expects.
+     * The "time" field carries date + time here (requests can span days),
+     * and "quantity" combines the amount with its unit (e.g. "20.00 kg").
+     */
+    private ChefRequestDTO toChefRequestDTO(ChefRequest req) {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM d, HH:mm");
+
+        String formattedTime = req.getCreatedAt() != null
+                ? req.getCreatedAt().format(formatter)
+                : "";
+
+        return ChefRequestDTO.builder()
+                .id(req.getId())
+                .chefName(req.getChefName())
+                .time(formattedTime)
+                .item(req.getItemName())
+                .quantity(req.getRequestedQuantity() + " " + req.getUnit())
+                .note(req.getChefNote())
+                .managerNote(req.getManagerNote())
+                .status(req.getStatus() != null ? req.getStatus().name() : "PENDING")
+                .requestType(req.getRequestType() != null ? req.getRequestType().name() : null)
+                .build();
     }
 
     /*
