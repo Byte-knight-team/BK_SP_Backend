@@ -136,6 +136,31 @@ public class ReservationScheduler {
                     log.info("Locked tables of reservation {} as RESERVED", reservationId);
                 }
             }
+
+            // #5 GUEST LATE — the slot has started but the guest still isn't seated (still PENDING;
+            // past-end no-shows were auto-cancelled above, so this window is still active). Fire once.
+            String keyLate = reservationId + "-LATE";
+            if (!sentNotifications.contains(keyLate) && reservationTime.isBefore(now)) {
+                webSocketNotificationService.broadcastReservationReminder(branchId, "GUEST_LATE", tableNumber, timeStr);
+                sentNotifications.add(keyLate);
+                log.info("Guest-late notice for table {} reservation {}", tableNumber, reservationId);
+            }
+        }
+
+        // #6 TIME'S UP — a table occupied for a reservation whose reserved window has ended. Notify once
+        // per booking (the reserved time is over — ask them to leave / clear the table).
+        for (RestaurantTable table : tableRepository.findAll()) {
+            if (table.getState() != TableStatus.OCCUPIED || table.getSeatedReservationId() == null) continue;
+            Reservation sr = reservationRepository.findById(table.getSeatedReservationId()).orElse(null);
+            if (sr == null || sr.getEndTime() == null || !sr.getEndTime().isBefore(now)) continue;
+            String keyUp = "TIMEUP-" + sr.getId();
+            if (sentNotifications.contains(keyUp)) continue;
+            Long upBranchId = table.getBranch() != null ? table.getBranch().getId() : null;
+            if (upBranchId == null) continue;
+            webSocketNotificationService.broadcastReservationReminder(
+                    upBranchId, "TIME_UP", table.getTableNumber(), sr.getEndTime().format(TIME_FORMATTER));
+            sentNotifications.add(keyUp);
+            log.info("Time's-up notice for table {} reservation {}", table.getTableNumber(), sr.getId());
         }
     }
 }

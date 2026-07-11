@@ -36,6 +36,19 @@ public class WebSocketNotificationService {
     }
 
     /**
+     * Notify the branch that a kitchen alert/issue has been resolved (same /alerts topic).
+     * The receptionist clients toast it and refresh their active-alert count.
+     */
+    public void broadcastKitchenAlertResolved(Long branchId, String message) {
+        String destination = "/topic/branch/" + branchId + "/alerts";
+        log.info("Broadcasting kitchen alert RESOLVED to {}: {}", destination, message);
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "type", "RESOLVED",
+                "message", message
+        ));
+    }
+
+    /**
      * Broadcast a new order notification to all kitchen clients in the same branch.
      *
      * Topic: /topic/branch/{branchId}/kitchen-orders
