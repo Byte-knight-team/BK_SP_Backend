@@ -47,6 +47,7 @@ public enum AuditEventType {
 
     QR_SESSION_STARTED,
     QR_SESSION_ENDED,
+    QR_CODE_DOWNLOADED,
 
     ORDER_CREATED,
     ORDER_CANCELLED,

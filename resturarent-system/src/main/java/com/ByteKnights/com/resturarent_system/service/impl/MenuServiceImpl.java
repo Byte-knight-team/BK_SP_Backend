@@ -43,12 +43,35 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * MenuServiceImpl - Core service for managing restaurant menu items and categories.
+ * 
+ * This service handles all menu operations including:
+ * - Creating, updating, retrieving, and deleting menu items
+ * - Managing menu item approval workflows (pending -> active/rejected)
+ * - Toggling menu item availability
+ * - Counting menu categories, sub-categories, and items
+ * - Generating distinct sub-category lists
+ * 
+ * Key Features:
+ * - Branch-scoped access control: staff can only manage their assigned branch's menu
+ * - Status-based workflow: items transition from PENDING -> ACTIVE (approved) or REJECTED
+ * - Admin approval required: only ADMIN users can approve/reject pending items
+ * - Immediate activation: items created by admin are automatically ACTIVE
+ * - Comprehensive validation: price ranges, preparation times, and required fields
+ * - Transaction management: all operations are transactional for data consistency
+ * 
+ * Access Control:
+ * - ADMIN: Can approve/reject items, access their branch's menu
+ * - CHEF: Can create/update items, view their branch's menu
+ * - Admin users creating items bypass the PENDING approval workflow
+ **/
+
 @Service
 public class MenuServiceImpl implements MenuService {
 
-    private static final BigDecimal MAX_MENU_ITEM_PRICE = new BigDecimal("99999999.99");
+    private static final BigDecimal MAX_MENU_ITEM_PRICE = new BigDecimal("99999999.99");    
     private static final int MAX_PREPARATION_TIME_MINUTES = 240;
-
     private final MenuItemRepository menuItemRepository;
     private final BranchRepository branchRepository;
     private final MenuCategoryRepository menuCategoryRepository;
@@ -73,6 +96,7 @@ public class MenuServiceImpl implements MenuService {
         this.auditLogService = auditLogService;
     }
 
+    // Retrieves the count of distinct menu categories.
     @Override
     @Transactional(readOnly = true)
     public long getCategoryCount() {
@@ -84,6 +108,8 @@ public class MenuServiceImpl implements MenuService {
             return menuCategoryRepository.count();
         }
     }
+
+    //Retrieves the count of distinct menu sub-categories.
 
     @Override
     @Transactional(readOnly = true)
@@ -97,6 +123,8 @@ public class MenuServiceImpl implements MenuService {
         }
     }
 
+    //Retrieves the total count of menu items.
+
     @Override
     @Transactional(readOnly = true)
     public long getMenuItemCount() {
@@ -108,6 +136,13 @@ public class MenuServiceImpl implements MenuService {
             return menuItemRepository.count();
         }
     }
+
+    /**
+     * Retrieves the count of available (in-stock) menu items.
+     * 
+     * Available items are those marked as isAvailable=true, indicating they can be
+     * ordered by customers.
+     **/
 
     @Override
     @Transactional(readOnly = true)
@@ -121,6 +156,26 @@ public class MenuServiceImpl implements MenuService {
         }
     }
 
+    /**
+     * Creates a new menu item in the authenticated user's branch.
+     * 
+     * Workflow:
+     * 1. Validates all required fields (name, price, preparation time, category)
+     * 2. Checks for duplicate item names within the branch-category combination
+     * 3. Sets initial status based on creator role:
+     *    - ADMIN: Item is immediately ACTIVE and available
+     *    - CHEF: Item is PENDING and requires ADMIN approval
+     * 4. Saves the item to the database
+     * 
+     * Validation Rules:
+     * - Name: Required, minimum 3 characters, trimmed and case-sensitive unique per branch-category
+     * - Price: Required, positive, maximum 99,999,999.99
+     * - Preparation Time: Required, positive, maximum 240 minutes
+     * - Category: Must exist in the database
+     * - Sub-Category: Optional, max 50 characters, converted to title case
+     * - Description: Optional, trimmed if provided
+     * - Image URL: Optional, must be valid HTTP/HTTPS URL if provided
+     **/
     @Override
     @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_ITEM_CREATED, targetType = AuditTargetType.MENU_ITEM, description = "Menu item created successfully", captureResultAsNewValue = false)
     @Transactional
@@ -178,6 +233,7 @@ public class MenuServiceImpl implements MenuService {
         return mapToResponse(saved);
     }
 
+    // Retrieves all menu items for the authenticated user's branch.
     @Override
     @Transactional(readOnly = true)
     public List<MenuItemResponse> getAllMenuItems() {
@@ -191,6 +247,7 @@ public class MenuServiceImpl implements MenuService {
                 .collect(Collectors.toList());
     }
 
+    // Retrieves all menu items in PENDING status for the authenticated admin user.
     @Override
     @Transactional(readOnly = true)
     public List<MenuItemResponse> getPendingChefMenuItems() {
@@ -204,6 +261,7 @@ public class MenuServiceImpl implements MenuService {
                 .collect(Collectors.toList());
     }
 
+    // Retrieves a single menu item by its ID.
     @Override
     @Transactional(readOnly = true)
     public MenuItemResponse getMenuItemById(Long id) {
@@ -247,6 +305,7 @@ public class MenuServiceImpl implements MenuService {
         }).collect(Collectors.toList());
     }
 
+    // Retrieves all distinct sub-category names for a given category in a branch.
     @Override
     @Transactional(readOnly = true)
     public List<String> getDistinctSubCategories(Long branchId, Long categoryId) {
@@ -256,6 +315,18 @@ public class MenuServiceImpl implements MenuService {
 
         return menuItemRepository.findDistinctSubCategories(branchId, categoryId);
     }
+
+    /**
+     * Updates an existing menu item with new values.
+     * 
+     * Supports partial updates: only non-null fields in the request are applied.
+     * 
+     * Update Rules:
+     * 1. Branch cannot be changed to a different branch the user doesn't have access to
+     * 2. Item name must be unique within the new branch-category combination
+     * 3. Status updates automatically adjust availability if not explicitly provided
+     * 4. All validations (price range, preparation time) apply to new values
+     **/
 
     @Override
     @Transactional
@@ -350,6 +421,20 @@ public class MenuServiceImpl implements MenuService {
         return mapToResponse(updated);
     }
 
+    /**
+     * Approves a pending menu item, transitioning it to ACTIVE status.
+     * 
+     * Workflow:
+     * 1. Ensures the user is an ADMIN
+     * 2. Verifies the menu item is in PENDING status
+     * 3. Validates the item has all required fields (name, price, category, preparation time)
+     * 4. Transitions the item to ACTIVE status and marks it as available
+     * 5. Records the approval timestamp
+     * 6. Generates a notification payload for the item creator
+     * 
+     * Once approved, the item becomes immediately available for customers to order.
+     **/
+
     @Override
     @Transactional
     public MenuItemActionResponse approveMenuItem(Long id, ApproveMenuItemRequest request) {
@@ -400,6 +485,19 @@ public class MenuServiceImpl implements MenuService {
                 buildMenuDecisionNotificationPayload("APPROVED", saved, null));
     }
 
+    /**
+     * Rejects a pending menu item, transitioning it to REJECTED status.
+     * 
+     * Workflow:
+     * 1. Ensures the user is an ADMIN
+     * 2. Verifies the menu item is in PENDING status
+     * 3. Validates that a rejection reason is provided
+     * 4. Transitions the item to REJECTED status and marks it as unavailable
+     * 5. Records the rejection timestamp and reason
+     * 6. Generates a notification payload with the rejection reason for the item creator
+     * 
+     * Once rejected, the item cannot be ordered by customers and requires re-submission.
+     **/
     @Override
     @Transactional
     public MenuItemActionResponse rejectMenuItem(Long id, RejectMenuItemRequest request) {
@@ -451,6 +549,16 @@ public class MenuServiceImpl implements MenuService {
                 buildMenuDecisionNotificationPayload("REJECTED", saved, rejectionReason.trim()));
     }
 
+    /**
+     * Toggles the availability status of a menu item.
+     * 
+     * Used to temporarily mark items as unavailable (out of stock) without removing them
+     * from the menu or changing their ACTIVE status.
+     * 
+     * Precondition:
+     * - Item must be in ACTIVE status (only ACTIVE items can be toggled)
+     **/
+
     @Override
     @Transactional
     public MenuItemActionResponse toggleMenuItemAvailability(Long id, boolean isAvailable) {
@@ -491,6 +599,14 @@ public class MenuServiceImpl implements MenuService {
                 "Availability updated");
     }
 
+    /**
+     * Permanently deletes a menu item from the system.
+     * 
+     * Precondition:
+     * - Item cannot be in ACTIVE status (only inactive items can be deleted)
+     * - This prevents accidental deletion of items currently available to customers
+     **/
+    
     @Override
     @Transactional
     public MenuItemActionResponse deleteMenuItem(Long id, DeleteMenuItemRequest request) {
@@ -529,20 +645,33 @@ public class MenuServiceImpl implements MenuService {
         return response;
     }
 
+    // Helper method: Retrieves a menu item by ID or throws an exception if not found.
+
     private MenuItem findMenuItemOrThrow(Long id) {
         return menuItemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Menu item not found with id: " + id));
     }
+
+    // Helper method: Retrieves a branch by ID or throws an exception if not found.
 
     private Branch findBranchOrThrow(Long id) {
         return branchRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Branch not found with id: " + id));
     }
 
+    // Helper method: Retrieves a menu category by ID or throws an exception if not found.
+
     private MenuCategory findCategoryOrThrow(Long id) {
         return menuCategoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Menu category not found with id: " + id));
     }
+
+    /**
+     * Helper method: Parses a status string into MenuItemStatus enum.
+     * 
+     * Handles case-insensitive conversion and provides a default fallback.
+     * Valid status values: PENDING, ACTIVE, INACTIVE, REJECTED
+    **/
 
     private MenuItemStatus parseStatus(String status, MenuItemStatus defaultStatus) {
         if (status == null || status.isBlank()) {
@@ -557,6 +686,15 @@ public class MenuServiceImpl implements MenuService {
         }
     }
 
+    /**
+     * Helper method: Validates and normalizes a required menu item name.
+     * 
+     * Validation Rules:
+     * - Cannot be null or blank
+     * - Minimum 3 characters after trimming
+     * - Whitespace is trimmed but not otherwise modified
+    **/ 
+
     private String validateAndNormalizeRequiredName(String name) {
         if (name == null || name.isBlank()) {
             throw new InvalidOperationException("Name is required");
@@ -570,6 +708,15 @@ public class MenuServiceImpl implements MenuService {
 
         return normalizedName;
     }
+
+    /**
+     * Helper method: Validates menu item price is within acceptable range.
+     * 
+     * Validation Rules:
+     * - Price cannot be null
+     * - Price must be greater than zero
+     * - Price cannot exceed MAX_MENU_ITEM_PRICE (99,999,999.99)
+    **/
 
     private void validatePriceRange(BigDecimal price) {
         if (price == null) {
@@ -586,6 +733,15 @@ public class MenuServiceImpl implements MenuService {
         }
     }
 
+    /**
+     * Helper method: Validates optional preparation time is within acceptable range.
+     * 
+     * Validation Rules:
+     * - If provided, must be greater than zero
+     * - Cannot exceed MAX_PREPARATION_TIME_MINUTES (240 minutes)
+     * - Null is acceptable (optional field)
+    **/
+
     private void validatePreparationTime(Integer preparationTime) {
         if (preparationTime == null) {
             return;
@@ -601,6 +757,13 @@ public class MenuServiceImpl implements MenuService {
         }
     }
 
+    /**
+     * Helper method: Validates that preparation time is required and within range.
+     * 
+     * Similar to validatePreparationTime but enforces that the value is required
+     * (cannot be null). Used during item creation.
+    **/
+
     private void validateRequiredPreparationTime(Integer preparationTime) {
         if (preparationTime == null) {
             throw new InvalidOperationException("Preparation time is required");
@@ -608,6 +771,16 @@ public class MenuServiceImpl implements MenuService {
 
         validatePreparationTime(preparationTime);
     }
+
+    /**
+     * Helper method: Validates and normalizes an image URL.
+     * 
+     * Validation Rules:
+     * - Null values are acceptable (optional field) and return null
+     * - Must be a valid URI with HTTP or HTTPS scheme
+     * - Must have a valid hostname
+     * - Whitespace is trimmed
+    **/
 
     private String validateAndNormalizeImageUrl(String imageUrl) {
         if (imageUrl == null) {
@@ -639,6 +812,16 @@ public class MenuServiceImpl implements MenuService {
         return normalizedImageUrl;
     }
 
+    /**
+     * Helper method: Validates and normalizes an optional description.
+     * 
+     * Validation Rules:
+     * - Null values are acceptable (optional field) and return null
+     * - Empty strings after trimming return null
+     * - Whitespace is trimmed
+     * - No maximum length enforced
+    **/
+
     private String validateAndNormalizeOptionalDescription(String description) {
         if (description == null) {
             return null;
@@ -652,6 +835,16 @@ public class MenuServiceImpl implements MenuService {
 
         return normalizedDescription;
     }
+
+    /**
+     * Helper method: Validates and normalizes an optional sub-category name.
+     * 
+     * Validation Rules:
+     * - Null values are acceptable (optional field) and return null
+     * - Cannot be blank if provided
+     * - Maximum 50 characters
+     * - Converted to title case (e.g., "spicy chicken" -> "Spicy Chicken")
+    **/
 
     private String validateAndNormalizeOptionalSubCategory(String subCategory) {
         if (subCategory == null) {
@@ -672,6 +865,13 @@ public class MenuServiceImpl implements MenuService {
         return toTitleCase(normalizedSubCategory);
     }
 
+    /**
+     * Helper method: Converts a string to title case.
+     * 
+     * Example: "spicy chicken" -> "Spicy Chicken"
+     * Words are split by whitespace and first letter of each word is capitalized.
+    **/
+
     private String toTitleCase(String input) {
         String[] words = input.toLowerCase().split("\\s+");
         StringBuilder result = new StringBuilder();
@@ -688,6 +888,16 @@ public class MenuServiceImpl implements MenuService {
         return result.toString();
     }
 
+    /**
+     * Helper method: Validates that a menu item has all required fields for approval.
+     * 
+     * Pre-approval Validation:
+     * - Name: Must not be null or blank
+     * - Price: Must be greater than zero
+     * - Category: Must not be null
+     * - Preparation Time: Must be greater than zero
+    **/
+
     private boolean isMenuItemValidForApproval(MenuItem menuItem) {
         boolean hasValidName = menuItem.getName() != null && !menuItem.getName().isBlank();
         boolean hasValidPrice = menuItem.getPrice() != null && menuItem.getPrice().compareTo(BigDecimal.ZERO) > 0;
@@ -697,9 +907,18 @@ public class MenuServiceImpl implements MenuService {
         return hasValidName && hasValidPrice && hasValidCategory && hasValidPreparationTime;
     }
 
+    // Helper method: Builds a MenuItemActionResponse without notification payload.
+
     private MenuItemActionResponse buildActionResponse(String type, MenuItem menuItem, String message) {
         return buildActionResponse(type, menuItem, message, null);
     }
+
+    /**
+     * Helper method: Builds a complete MenuItemActionResponse with all details.
+     * 
+     * Creates a response object containing the action result, menu item details,
+     * message, and optional notification payload for real-time notification systems.
+    **/
 
     private MenuItemActionResponse buildActionResponse(
             String type,
@@ -716,6 +935,13 @@ public class MenuServiceImpl implements MenuService {
                 .build();
     }
 
+    /**
+     * Helper method: Resolves the authenticated user's ID from the security context.
+     * 
+     * Extracts the user ID from the JWT principal in the current authentication.
+     * Used to record who created or modified a menu item.
+     * */
+
     private Long resolveCreatedByUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
@@ -727,6 +953,12 @@ public class MenuServiceImpl implements MenuService {
 
         throw new InvalidOperationException("Authenticated user not found");
     }
+
+    /**
+     * Helper method: Checks if the authenticated user has ADMIN role.
+     * 
+     * Searches the user's granted authorities for the ROLE_ADMIN authority.
+     * */
 
     private boolean isCurrentUserAdmin() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -746,11 +978,24 @@ public class MenuServiceImpl implements MenuService {
                 .anyMatch(authority -> "ROLE_ADMIN".equals(authority));
     }
 
+    /**
+     * Helper method: Ensures the current user is an ADMIN for approval workflow.
+     * 
+     * Used as a precondition check for admin-only operations like approve/reject.
+     * */
+
     private void ensureCurrentUserIsAdminForWorkflow() {
         if (!isCurrentUserAdmin()) {
             throw new InvalidOperationException("Only ADMIN can approve/reject pending menu items");
         }
     }
+
+    /**
+     * Helper method: Enforces that the authenticated user has access to a specific branch.
+     * 
+     * Verifies that the target branch matches the user's assigned branch.
+     * Prevents users from accessing or modifying items in other branches.
+     * */
 
     private void enforceCurrentUserBranchAccess(Long targetBranchId) {
         Long userBranchId = resolveCurrentUserBranchId();
@@ -759,6 +1004,17 @@ public class MenuServiceImpl implements MenuService {
             throw new InvalidOperationException("Menu item access is restricted to your branch");
         }
     }
+
+    /**
+     * Helper method: Resolves the authenticated user's assigned branch ID.
+     * 
+     * Extracts the branch ID from the user's staff profile. Only ADMIN and CHEF
+     * roles are supported for branch-scoped operations.
+     * 
+     * Access Control:
+     * - Requires ROLE_ADMIN or ROLE_CHEF
+     * - User must have a staff profile with an assigned branch
+     * */
 
     private Long resolveCurrentUserBranchId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -787,6 +1043,14 @@ public class MenuServiceImpl implements MenuService {
                 .orElseThrow(() -> new InvalidOperationException("Staff profile not found for authenticated user"));
     }
 
+    /**
+     * Helper method: Resolves the authenticated admin user's assigned branch ID, or returns null.
+     * 
+     * Similar to resolveCurrentUserBranchId() but is more lenient:
+     * - Returns null if user is not an ADMIN (instead of throwing exception)
+     * - Used for optional branch filtering in count/list operations
+     * */
+
     private Long resolveCurrentAdminBranchIdOrNull() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
@@ -814,6 +1078,19 @@ public class MenuServiceImpl implements MenuService {
                 .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
     }
 
+    /**
+     * Helper method: Builds a notification payload for menu approval/rejection decisions.
+     * 
+     * Creates a map of all relevant information about a menu item decision that should
+     * be sent to the item creator (chef) via a notification system (WebSocket, email, etc.).
+     * 
+     * Payload includes:
+     * - Decision: "APPROVED" or "REJECTED"
+     * - Menu item details: ID, name, category, branch, creation metadata
+     * - Timestamps: when approved or rejected
+     * - Rejection reason: only populated if decision is "REJECTED"
+     * */
+
     private Map<String, Object> buildMenuDecisionNotificationPayload(
             String decision,
             MenuItem menuItem,
@@ -834,6 +1111,13 @@ public class MenuServiceImpl implements MenuService {
 
         return payload;
     }
+
+    /**
+     * Helper method: Converts a MenuItem entity to a MenuItemResponse DTO.
+     * 
+     * Transforms the JPA entity into a response object suitable for API responses.
+     * Safely handles null relationships (branch, category) to prevent null pointer exceptions.
+     * */
 
     private MenuItemResponse mapToResponse(MenuItem item) {
         return MenuItemResponse.builder()

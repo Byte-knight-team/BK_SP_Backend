@@ -29,6 +29,15 @@ import java.time.LocalDateTime;
 @CrossOrigin
 public class MenuController {
 
+    /**
+     * Controller responsible for menu-related operations.
+     *
+     * Exposes endpoints used by administrators and chefs to manage menu
+     * categories and items (create, update, approve/reject, toggle
+     * availability, delete, and various counts). Customer-facing endpoints
+     * are present below and intentionally not documented here per request.
+     */
+
     private final MenuService menuService;
     private final MenuCategoryService menuCategoryService;
     private final MenuItemIngredientService menuItemIngredientService;
@@ -42,71 +51,82 @@ public class MenuController {
     }
 
     @GetMapping("/pending-chef-items")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_PENDING_ITEMS')")
     public ResponseEntity<List<MenuItemResponse>> getPendingChefMenuItems() {
+        // Retrieve items submitted by chefs that are awaiting admin review
         List<MenuItemResponse> menuItems = menuService.getPendingChefMenuItems();
         return ResponseEntity.ok(menuItems);
     }
 
     @GetMapping("/categories/count")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN') or hasAuthority('VIEW_CATEGORY_COUNT')")
     public ResponseEntity<Long> getCategoriesCount() {
+        // Return the total number of menu categories in the system
         long count = menuService.getCategoryCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/subcategories/count")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_SUBCATEGORY_COUNT')")
     public ResponseEntity<Long> getSubCategoriesCount() {
+        // Return the total number of distinct subcategories
         long count = menuService.getSubCategoryCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_ITEMS_COUNT')")
     public ResponseEntity<Long> getMenuItemsCount() {
+        // Return the total number of menu items in the system
         long count = menuService.getMenuItemCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/available/count")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_AVAILABLE_ITEMS_COUNT')")
     public ResponseEntity<Long> getAvailableItemsCount() {
+        // Return the count of items currently marked as available
         long count = menuService.getAvailableItemCount();
         return ResponseEntity.ok(count);
     }
 
     @GetMapping("/categories")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF','SUPER_ADMIN') or hasAuthority('VIEW_CATEGORIES')")
     public ResponseEntity<List<MenuCategoryResponse>> getMenuCategories() {
         List<MenuCategoryResponse> categories = menuCategoryService.getAllCategories();
         return ResponseEntity.ok(categories);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','CHEF')")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF') or hasAuthority('VIEW_ALL_ITEMS')")
     public ResponseEntity<List<MenuItemResponse>> getAllMenuItems() {
+        // Retrieve all menu items (regardless of availability/approval)
         List<MenuItemResponse> menuItems = menuService.getAllMenuItems();
         return ResponseEntity.ok(menuItems);
     }
 
     @GetMapping("/{id:\\d+}")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF') or hasAuthority('VIEW_ITEM_BY_ID')")
     public ResponseEntity<MenuItemResponse> getMenuItemById(@PathVariable Long id) {
+        // Get a single menu item by its numeric ID
         MenuItemResponse menuItem = menuService.getMenuItemById(id);
         return ResponseEntity.ok(menuItem);
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CHEF','ADMIN')")
+    @PreAuthorize("hasAnyRole('CHEF','ADMIN') or hasAuthority('CREATE_ITEM')")
     public ResponseEntity<MenuItemResponse> createMenuItem(@Valid @RequestBody CreateMenuItemRequest request) {
+        // Create a new menu item (accessible to chefs and admins)
         MenuItemResponse created = menuService.createMenuItem(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @PutMapping("/{id:\\d+}")
+    @PreAuthorize("hasAnyRole('ADMIN') or hasAuthority('UPDATE_ITEM')")
     public ResponseEntity<MenuItemResponse> updateMenuItem(
             @PathVariable Long id,
             @Valid @RequestBody UpdateMenuItemRequest request) {
+        // Update an existing menu item identified by ID
         MenuItemResponse updated = menuService.updateMenuItem(id, request);
         return ResponseEntity.ok(updated);
     }
@@ -135,6 +155,7 @@ public class MenuController {
             @RequestBody Map<String, Boolean> payload) {
         Boolean isAvailable = payload != null ? payload.get("isAvailable") : null;
         if (isAvailable == null) {
+            // Bad request if the required field is missing
             return ResponseEntity.badRequest().body(MenuItemActionResponse.builder()
                     .type("BAD_REQUEST")
                     .menuItemId(id)
@@ -164,7 +185,18 @@ public class MenuController {
         return ResponseEntity.ok(ApiResponse.success("Menu fetched successfully", menuItems));
     }
 
+    /**
+     * Retrieve a list of distinct subcategory names.
+     *
+     * Optional query parameters filter the result set:
+     * - `branchId`: limits subcategories to a specific branch
+     * - `categoryId`: limits subcategories to a specific category
+     *
+     * Returns unique subcategory names currently registered for the
+     * (optional) branch/category combination.
+     */
     @GetMapping("/subcategories")
+    @PreAuthorize("hasAnyRole('ADMIN') or hasAuthority('VIEW_ALL_SUBCATEGORIES')")
     public ResponseEntity<List<String>> getDistinctSubCategories(
             @RequestParam(required = false) Long branchId,
             @RequestParam(required = false) Long categoryId) {
