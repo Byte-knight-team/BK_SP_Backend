@@ -5,7 +5,13 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "deliveries")
+@Table(name = "deliveries", indexes = {
+    // 1. Speeds up: Active deliveries for drivers list and Driver Delivery History
+    @Index(name = "idx_delivery_staff_status", columnList = "delivery_staff_id, delivery_status"),
+    
+    // 2. Speeds up: Manager Dashboard looking up active deliveries by branch
+    @Index(name = "idx_delivery_order_status", columnList = "order_id, delivery_status")
+})
 @Getter
 @Setter
 @NoArgsConstructor

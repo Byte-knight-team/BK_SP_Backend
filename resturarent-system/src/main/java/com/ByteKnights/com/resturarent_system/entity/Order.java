@@ -9,6 +9,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
@@ -24,7 +25,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", indexes = {
+    // 1. Speeds up: Manager Dashboard Active/Pending/Fleet Deliveries
+    @Index(name = "idx_orders_branch_type_status_date", columnList = "branch_id, order_type, status, status_updated_at"),
+    
+    // 2. Speeds up: Manager Dashboard Revenue calculation (summing paid orders by date)
+    @Index(name = "idx_orders_branch_payment_date", columnList = "branch_id, payment_status, created_at"),
+    
+    // 3. Speeds up: Recent Orders List (Top 50 by branch)
+    @Index(name = "idx_orders_branch_created", columnList = "branch_id, created_at")
+})
 @Getter
 @Setter
 public class Order {
