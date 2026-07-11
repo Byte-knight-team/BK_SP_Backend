@@ -124,7 +124,7 @@ public class InventoryServiceImpl implements InventoryService {
             }
         }
 
-        List<ChefRequest> pendingRequests = chefRequestRepository.findByBranchIdAndStatus(
+        List<ChefRequest> pendingRequests = chefRequestRepository.findByBranchIdAndStatusOrderByCreatedAtDesc(
                 finalBranchId,
                 ChefRequestStatus.PENDING
         );
