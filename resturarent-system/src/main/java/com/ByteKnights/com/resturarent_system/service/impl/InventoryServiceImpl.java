@@ -69,6 +69,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final com.ByteKnights.com.resturarent_system.repository.ManagerNotificationRepository notificationRepository;
+    private final com.ByteKnights.com.resturarent_system.service.ManagerNotificationService managerNotificationService;
 
     /**
      * Helper method to securely resolve the branch ID.
@@ -416,6 +418,22 @@ public class InventoryServiceImpl implements InventoryService {
                 oldValues,
                 buildChefRequestAuditSnapshot(updatedRequest)
         );
+
+        // Auto-mark any corresponding notifications as read
+        List<com.ByteKnights.com.resturarent_system.entity.ManagerNotification> unreadNotifications = 
+            notificationRepository.findByReferenceIdAndTypeAndIsReadFalse(
+                updatedRequest.getId(), 
+                com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.CHEF_REQUEST
+            );
+            
+        for (com.ByteKnights.com.resturarent_system.entity.ManagerNotification notif : unreadNotifications) {
+            notif.setRead(true);
+            notificationRepository.save(notif);
+        }
+        
+        if (!unreadNotifications.isEmpty()) {
+            managerNotificationService.pingNotificationResolved(getChefRequestBranchId(updatedRequest));
+        }
 
         return toChefRequestDTO(updatedRequest);
     }

@@ -66,6 +66,12 @@ public class ManagerNotificationServiceImpl implements ManagerNotificationServic
         notification.setRead(true);
         notificationRepository.save(notification);
     }
+    
+    @Override
+    public void pingNotificationResolved(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/manager-notifications";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("message", "NOTIFICATION_RESOLVED"));
+    }
 
     private ManagerNotificationDTO mapToDTO(ManagerNotification entity) {
         return ManagerNotificationDTO.builder()

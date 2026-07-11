@@ -11,5 +11,7 @@ public interface ManagerNotificationRepository extends JpaRepository<ManagerNoti
 
     List<ManagerNotification> findByBranchIdAndIsReadFalseOrderByCreatedAtDesc(Long branchId);
     
+    List<ManagerNotification> findByReferenceIdAndTypeAndIsReadFalse(Long referenceId, com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType type);
+    
     long countByBranchIdAndIsReadFalse(Long branchId);
 }
