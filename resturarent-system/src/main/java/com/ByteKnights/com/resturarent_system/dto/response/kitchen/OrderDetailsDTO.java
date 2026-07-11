@@ -12,10 +12,11 @@ import java.util.List;
 @Data
 public class OrderDetailsDTO {
     private Long id;
+    private String orderNumber;
     private LocalDateTime createdAt;
     private LocalDateTime statusUpdatedAt;
     private String status;
     private String holdReason;
-    private String kitchenNotes; //kitchen note for the whole order
+    private String kitchenNotes;
     private List<OrderItemDetailsDTO> items;
 }

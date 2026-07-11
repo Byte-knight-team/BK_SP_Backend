@@ -5,11 +5,14 @@ import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuItemRe
 import com.ByteKnights.com.resturarent_system.dto.request.admin.DeleteMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.RejectMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateMenuItemRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.MenuItemIngredientRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuCategoryResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuItemActionResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuItemResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.MenuItemIngredientResponseDTO;
 import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.service.MenuCategoryService;
+import com.ByteKnights.com.resturarent_system.service.MenuItemIngredientService;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -37,10 +40,14 @@ public class MenuController {
 
     private final MenuService menuService;
     private final MenuCategoryService menuCategoryService;
+    private final MenuItemIngredientService menuItemIngredientService;
 
-    public MenuController(MenuService menuService, MenuCategoryService menuCategoryService) {
+    public MenuController(MenuService menuService,
+                          MenuCategoryService menuCategoryService,
+                          MenuItemIngredientService menuItemIngredientService) {
         this.menuService = menuService;
         this.menuCategoryService = menuCategoryService;
+        this.menuItemIngredientService = menuItemIngredientService;
     }
 
     @GetMapping("/pending-chef-items")
@@ -125,25 +132,27 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/approve")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('APPROVE_PENDING_ITEM')")
-    public ResponseEntity<MenuItemActionResponse> approveMenuItem(@PathVariable Long id, @Valid @RequestBody ApproveMenuItemRequest request) {
-        // Approve a pending menu item (admin only)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MenuItemActionResponse> approveMenuItem(
+            @PathVariable Long id,
+            @Valid @RequestBody ApproveMenuItemRequest request) {
         MenuItemActionResponse response = menuService.approveMenuItem(id, request);
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{id:\\d+}/reject")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REJECT_PENDING_ITEM')")
-    public ResponseEntity<MenuItemActionResponse> rejectMenuItem(@PathVariable Long id, @Valid @RequestBody RejectMenuItemRequest request) {
-        // Reject a pending menu item with a reason (admin only)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<MenuItemActionResponse> rejectMenuItem(
+            @PathVariable Long id,
+            @Valid @RequestBody RejectMenuItemRequest request) {
         MenuItemActionResponse response = menuService.rejectMenuItem(id, request);
         return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/{id:\\d+}/availability")
-    @PreAuthorize("hasAnyRole('ADMIN') or hasAuthority('TOGGLE_ITEM_AVAILABILITY')")
-    public ResponseEntity<MenuItemActionResponse> toggleMenuItemAvailability(@PathVariable Long id, @RequestBody Map<String, Boolean> payload) {
-        // Toggle the availability flag for a menu item. Expects JSON payload: { "isAvailable": true|false }
+    public ResponseEntity<MenuItemActionResponse> toggleMenuItemAvailability(
+            @PathVariable Long id,
+            @RequestBody Map<String, Boolean> payload) {
         Boolean isAvailable = payload != null ? payload.get("isAvailable") : null;
         if (isAvailable == null) {
             // Bad request if the required field is missing
@@ -155,26 +164,24 @@ public class MenuController {
                     .timestamp(LocalDateTime.now())
                     .build());
         }
-
         MenuItemActionResponse response = menuService.toggleMenuItemAvailability(id, isAvailable);
         return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('ADMIN') or hasAuthority('DELETE_ITEM')")
-    public ResponseEntity<MenuItemActionResponse> deleteMenuItem(@PathVariable Long id, @Valid @RequestBody DeleteMenuItemRequest request) {
-        // Delete a menu item (performs any audit/authorization checks in service)
+    public ResponseEntity<MenuItemActionResponse> deleteMenuItem(
+            @PathVariable Long id,
+            @Valid @RequestBody DeleteMenuItemRequest request) {
         MenuItemActionResponse response = menuService.deleteMenuItem(id, request);
         return ResponseEntity.ok(response);
     }
 
-    //CUSTOMER ENDPOINT (Only active items)
+    // CUSTOMER ENDPOINT (Only active items)
     @GetMapping("/customer")
     public ResponseEntity<ApiResponse<List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse>>> getMenu(
             @RequestParam(required = false) Long branchId) {
-
-        List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> menuItems = menuService.fetchCustomerMenu(branchId);
-
+        List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> menuItems =
+                menuService.fetchCustomerMenu(branchId);
         return ResponseEntity.ok(ApiResponse.success("Menu fetched successfully", menuItems));
     }
 
@@ -195,5 +202,23 @@ public class MenuController {
             @RequestParam(required = false) Long categoryId) {
         List<String> subCategories = menuService.getDistinctSubCategories(branchId, categoryId);
         return ResponseEntity.ok(subCategories);
+    }
+
+    // Get the ingredient list (recipe) for a menu item — CHEF and ADMIN
+    @GetMapping("/{id:\\d+}/ingredients")
+    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN')")
+    public ResponseEntity<List<MenuItemIngredientResponseDTO>> getIngredients(@PathVariable Long id) {
+        List<MenuItemIngredientResponseDTO> ingredients = menuItemIngredientService.getIngredients(id);
+        return ResponseEntity.ok(ingredients);
+    }
+
+    // Save (replace) the full ingredient list for a menu item — CHEF and ADMIN
+    @PostMapping("/{id:\\d+}/ingredients")
+    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN')")
+    public ResponseEntity<List<MenuItemIngredientResponseDTO>> saveIngredients(
+            @PathVariable Long id,
+            @Valid @RequestBody MenuItemIngredientRequestDTO request) {
+        List<MenuItemIngredientResponseDTO> saved = menuItemIngredientService.saveIngredients(id, request);
+        return ResponseEntity.ok(saved);
     }
 }

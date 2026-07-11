@@ -32,9 +32,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for BranchService.
- *
- * These tests are for the governance / branch management module.
- * They use Mockito mocks, so they do not connect to the real MySQL database.
+
  */
 @ExtendWith(MockitoExtension.class)
 class BranchServiceTest {

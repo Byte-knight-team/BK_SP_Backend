@@ -29,10 +29,6 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for AuthService.
- *
- * These tests cover staff login and password change logic.
- * Repositories, password encoder, JWT service, and audit logging are mocked.
- * Therefore, these tests do not connect to the real database.
  */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {

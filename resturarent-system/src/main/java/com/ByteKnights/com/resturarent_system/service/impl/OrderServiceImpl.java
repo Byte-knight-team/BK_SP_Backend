@@ -12,9 +12,12 @@ import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.exception.CheckoutException;
 import com.ByteKnights.com.resturarent_system.exception.ResourceNotFoundException;
 import com.ByteKnights.com.resturarent_system.repository.*;
+import java.util.HashMap;
+import java.util.Map;
 import com.ByteKnights.com.resturarent_system.service.CheckoutService;
 import com.ByteKnights.com.resturarent_system.service.OrderService;
 import com.ByteKnights.com.resturarent_system.service.QrSessionService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +45,10 @@ public class OrderServiceImpl implements OrderService {
         private final CouponRepository couponRepository;
         private final CouponUsageRepository couponUsageRepository;
         private final LoyaltyTransactionRepository loyaltyTransactionRepository;
+        private final MenuItemIngredientRepository menuItemIngredientRepository;
+        private final InventoryItemRepository inventoryItemRepository;
+        private final InventoryTransactionRepository inventoryTransactionRepository;
+        private final WebSocketNotificationService webSocketNotificationService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -49,7 +56,11 @@ public class OrderServiceImpl implements OrderService {
                         UserRepository userRepository, BranchRepository branchRepository,
                         RestaurantTableRepository tableRepository, MenuItemRepository menuItemRepository,
                         CouponRepository couponRepository, CouponUsageRepository couponUsageRepository,
-                        LoyaltyTransactionRepository loyaltyTransactionRepository) {
+                        LoyaltyTransactionRepository loyaltyTransactionRepository,
+                        MenuItemIngredientRepository menuItemIngredientRepository,
+                        InventoryItemRepository inventoryItemRepository,
+                        InventoryTransactionRepository inventoryTransactionRepository,
+                        WebSocketNotificationService webSocketNotificationService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -62,6 +73,10 @@ public class OrderServiceImpl implements OrderService {
                 this.couponRepository = couponRepository;
                 this.couponUsageRepository = couponUsageRepository;
                 this.loyaltyTransactionRepository = loyaltyTransactionRepository;
+                this.menuItemIngredientRepository = menuItemIngredientRepository;
+                this.inventoryItemRepository = inventoryItemRepository;
+                this.inventoryTransactionRepository = inventoryTransactionRepository;
+                this.webSocketNotificationService = webSocketNotificationService;
         }
 
         @Override
@@ -98,13 +113,54 @@ public class OrderServiceImpl implements OrderService {
                         qrSessionService.validateActiveSession(request.getQrSessionId());
                 }
 
+                // 2.5 Pre-Order Inventory Validation & Aggregation
+                Map<Long, BigDecimal> requiredIngredients = new HashMap<>();
+                Map<Long, InventoryItem> inventoryItemCache = new HashMap<>();
+                
+                for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
+                        MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId())
+                                        .orElseThrow(() -> new ResourceNotFoundException("Menu item not found"));
+                                        
+                        List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(dbItem.getId());
+                        
+                        for (MenuItemIngredient ingredient : ingredients) {
+                                InventoryItem invItem = ingredient.getInventoryItem();
+                                if (!invItem.getBranch().getId().equals(branch.getId())) {
+                                        continue; // Only check ingredients for this specific branch
+                                }
+                                
+                                BigDecimal totalNeededForThisItem = ingredient.getQuantityRequired()
+                                                .multiply(BigDecimal.valueOf(itemReq.getQuantity()));
+                                                
+                                requiredIngredients.merge(invItem.getId(), totalNeededForThisItem, BigDecimal::add);
+                                inventoryItemCache.putIfAbsent(invItem.getId(), invItem);
+                        }
+                }
+                
+                // Validate stock levels
+                for (Map.Entry<Long, BigDecimal> entry : requiredIngredients.entrySet()) {
+                        InventoryItem invItem = inventoryItemCache.get(entry.getKey());
+                        BigDecimal required = entry.getValue();
+                        
+                        if (invItem.getQuantity() == null || invItem.getQuantity().compareTo(required) < 0) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, 
+                                                "Insufficient stock to prepare this order.");
+                        }
+                }
+
                 // 3. Call the CheckoutService to calculate the exact totals!
                 CheckoutCalculateRequest calcRequest = new CheckoutCalculateRequest();
                 calcRequest.setOrderType(request.getOrderType());
                 calcRequest.setBranchId(request.getBranchId());
                 calcRequest.setCouponCode(request.getCouponCode());
                 calcRequest.setRedeemLoyaltyPoints(request.getRedeemLoyaltyPoints());
-                calcRequest.setItems(request.getItems());
+                calcRequest.setItems(request.getItems().stream()
+                                .map(item -> {
+                                        CheckoutCalculateRequest.CartItemRequest calcItem = new CheckoutCalculateRequest.CartItemRequest();
+                                        calcItem.setMenuItemId(item.getMenuItemId());
+                                        calcItem.setQuantity(item.getQuantity());
+                                        return calcItem;
+                                }).collect(Collectors.toList()));
 
                 CheckoutCalculateResponse trustedMath = checkoutService.calculateOrderTotals(userIdentifier,
                                 calcRequest);
@@ -122,6 +178,8 @@ public class OrderServiceImpl implements OrderService {
                 order.setContactPhone(request.getContactPhone());
                 order.setContactEmail(request.getContactEmail());
                 order.setDeliveryAddress(request.getDeliveryAddress());
+                order.setLatitude(request.getLatitude());
+                order.setLongitude(request.getLongitude());
                 order.setKitchenNotes(request.getKitchenNotes());
 
                 // Apply Math to Order
@@ -137,7 +195,7 @@ public class OrderServiceImpl implements OrderService {
                 }
 
                 // 5. Add Items to Order
-                for (CheckoutCalculateRequest.CartItemRequest itemReq : request.getItems()) {
+                for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
                         MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId()).orElseThrow();
                         OrderItem orderItem = new OrderItem();
                         orderItem.setMenuItem(dbItem);
@@ -145,6 +203,7 @@ public class OrderServiceImpl implements OrderService {
                         orderItem.setQuantity(itemReq.getQuantity());
                         orderItem.setUnitPrice(dbItem.getPrice());
                         orderItem.setSubtotal(dbItem.getPrice().multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+                        orderItem.setKitchenNotes(itemReq.getKitchenNote());
                         order.addItem(orderItem);
                 }
 
@@ -154,6 +213,29 @@ public class OrderServiceImpl implements OrderService {
 
                 // 6. SAVE ORDER
                 Order savedOrder = orderRepository.save(order);
+                
+                // 6.5 Deduct Inventory and Log Transactions
+                for (Map.Entry<Long, BigDecimal> entry : requiredIngredients.entrySet()) {
+                        InventoryItem invItem = inventoryItemCache.get(entry.getKey());
+                        BigDecimal required = entry.getValue();
+                        BigDecimal oldQuantity = invItem.getQuantity();
+                        BigDecimal newQuantity = oldQuantity.subtract(required);
+                        
+                        invItem.setQuantity(newQuantity);
+                        inventoryItemRepository.save(invItem);
+                        
+                        InventoryTransaction tx = InventoryTransaction.builder()
+                                        .inventoryItem(invItem)
+                                        .staff(null) // Automated system action
+                                        .transactionType(InventoryTransactionType.ORDER_DEDUCT)
+                                        .quantityChange(required.negate())
+                                        .previousQuantity(oldQuantity)
+                                        .newQuantity(newQuantity)
+                                        .unitPrice(invItem.getUnitPrice())
+                                        .notes("Automated deduction for order " + savedOrder.getOrderNumber())
+                                        .build();
+                        inventoryTransactionRepository.save(tx);
+                }
 
                 // 7. Process Coupon Usage
                 if (trustedMath.getAppliedCouponCode() != null) {
@@ -205,6 +287,8 @@ public class OrderServiceImpl implements OrderService {
                 paymentRepository.save(payment);
 
                 // 10. Map Items and Return Detailed Response
+                webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+
                 return OrderPlacementResponse.builder()
                                 .orderId(savedOrder.getId())
                                 .orderNumber(savedOrder.getOrderNumber())
@@ -228,6 +312,7 @@ public class OrderServiceImpl implements OrderService {
                                                 .isReviewed(order.getReviews().stream().anyMatch(
                                                                 r -> r.getOrderItem() != null && r.getOrderItem()
                                                                                 .getId().equals(item.getId())))
+                                                .kitchenNotes(item.getKitchenNotes())
                                                 .build())
                                 .collect(Collectors.toList());
 
@@ -450,8 +535,48 @@ public class OrderServiceImpl implements OrderService {
 
                 customerRepository.save(customer);
 
+                // Refund inventory
+                Map<Long, BigDecimal> refundIngredients = new HashMap<>();
+                for (OrderItem item : order.getItems()) {
+                        if (item.getMenuItem() != null) {
+                                List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(item.getMenuItem().getId());
+                                for (MenuItemIngredient ingredient : ingredients) {
+                                        InventoryItem invItem = ingredient.getInventoryItem();
+                                        if (invItem.getBranch().getId().equals(order.getBranch().getId())) {
+                                                BigDecimal amountToRefund = ingredient.getQuantityRequired()
+                                                                .multiply(BigDecimal.valueOf(item.getQuantity()));
+                                                refundIngredients.merge(invItem.getId(), amountToRefund, BigDecimal::add);
+                                        }
+                                }
+                        }
+                }
+
+                for (Map.Entry<Long, BigDecimal> entry : refundIngredients.entrySet()) {
+                        inventoryItemRepository.findById(entry.getKey()).ifPresent(invItem -> {
+                                BigDecimal refundAmount = entry.getValue();
+                                BigDecimal oldQuantity = invItem.getQuantity();
+                                BigDecimal newQuantity = oldQuantity.add(refundAmount);
+                                
+                                invItem.setQuantity(newQuantity);
+                                inventoryItemRepository.save(invItem);
+                                
+                                InventoryTransaction tx = InventoryTransaction.builder()
+                                                .inventoryItem(invItem)
+                                                .staff(null)
+                                                .transactionType(InventoryTransactionType.ORDER_REFUND)
+                                                .quantityChange(refundAmount)
+                                                .previousQuantity(oldQuantity)
+                                                .newQuantity(newQuantity)
+                                                .unitPrice(invItem.getUnitPrice())
+                                                .notes("Automated refund for cancelled order " + order.getOrderNumber())
+                                                .build();
+                                inventoryTransactionRepository.save(tx);
+                        });
+                }
+
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelReason(cancelReason);
                 orderRepository.save(order);
+                webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         }
 }
