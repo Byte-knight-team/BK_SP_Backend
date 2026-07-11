@@ -48,6 +48,8 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
                 branchId, OrderStatus.PLACED, OrderType.QR, start, end);
         long newPickup = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
                 branchId, OrderStatus.PLACED, OrderType.ONLINE_PICKUP, start, end);
+        long newDelivery = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
+                branchId, OrderStatus.PLACED, OrderType.ONLINE_DELIVERY, start, end);
 
         // Kitchen orders — QR excludes orders that already have a READY/SERVED item
         long kitchenQR = orderRepository.countKitchenQROrdersWithoutReadyItems(branchId, OrderStatus.PENDING, start, end)
@@ -56,6 +58,10 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
                 branchId, OrderStatus.PENDING, OrderType.ONLINE_PICKUP, start, end)
                 + orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
                 branchId, OrderStatus.PREPARING, OrderType.ONLINE_PICKUP, start, end);
+        long kitchenDelivery = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
+                branchId, OrderStatus.PENDING, OrderType.ONLINE_DELIVERY, start, end)
+                + orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
+                branchId, OrderStatus.PREPARING, OrderType.ONLINE_DELIVERY, start, end);
 
         // Ready orders
         // QR ready = COMPLETED QR + PENDING/PREPARING QR with any READY/SERVED item
@@ -64,6 +70,8 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
                 + orderRepository.countQROrdersWithAnyReadyItem(branchId, start, end);
         long readyPickup = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
                 branchId, OrderStatus.COMPLETED, OrderType.ONLINE_PICKUP, start, end);
+        long readyDelivery = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
+                branchId, OrderStatus.COMPLETED, OrderType.ONLINE_DELIVERY, start, end);
 
         // Served
         long servedQR = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
@@ -84,9 +92,9 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
                 branchId, OrderType.ONLINE_PICKUP, start, end).doubleValue();
 
         return new ReceptionistDashboardStatsDTO(
-                newQR, newPickup,
-                kitchenQR, kitchenPickup,
-                readyQR, readyPickup,
+                newQR, newPickup, newDelivery,
+                kitchenQR, kitchenPickup, kitchenDelivery,
+                readyQR, readyPickup, readyDelivery,
                 servedQR, servedPickup,
                 pendingPaymentQR, pendingPaymentPickup,
                 collectedTodayQR, collectedTodayPickup

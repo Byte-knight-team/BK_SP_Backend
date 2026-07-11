@@ -58,12 +58,19 @@ public class ReceptionistReservationController {
         return ResponseEntity.ok(new StandardResponse(200, "Upcoming reservations fetched", list));
     }
 
-    // All reservations for the branch (any status) — for the Reservations page
+    // All reservations for the branch (any status) — paged + filtered, for the Reservations page
     @GetMapping("/all")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
-    public ResponseEntity<StandardResponse> getAllReservations(Principal principal) {
-        List<ReservationResponseDTO> list = receptionistReservationService.getAllReservations(principal.getName());
-        return ResponseEntity.ok(new StandardResponse(200, "All reservations fetched", list));
+    public ResponseEntity<StandardResponse> getAllReservations(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) Integer tableNumber,
+            @RequestParam(required = false) String status,
+            Principal principal) {
+        var result = receptionistReservationService.getAllReservations(
+                principal.getName(), page, size, date, tableNumber, status);
+        return ResponseEntity.ok(new StandardResponse(200, "All reservations fetched", result));
     }
 
     // Seat the reserved party: occupy the table and mark the reservation completed

@@ -84,7 +84,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             List<Reservation> branchTodayReservations = reservationRepository.findByBranchAndDate(
                     branchId, startOfToday, endOfToday);
             List<TableReservationSummary> todayReservations = branchTodayReservations.stream()
-                    .filter(r -> r.getTable().getId().equals(table.getId()))
+                    .filter(r -> r.getTables().stream().anyMatch(t -> t.getId().equals(table.getId())))
                     .map(r -> TableReservationSummary.builder()
                             .reservationId(r.getId())
                             .customerName(r.getCustomerName())

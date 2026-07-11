@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.scheduler;
 
 import com.ByteKnights.com.resturarent_system.entity.Reservation;
 import com.ByteKnights.com.resturarent_system.entity.ReservationStatus;
+import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.ReservationRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
@@ -52,8 +53,13 @@ public class ReservationScheduler {
             if (r.getStatus() != ReservationStatus.PENDING) continue;
 
             LocalDateTime reservationTime = r.getReservationTime();
-            Long branchId = r.getTable().getBranch().getId();
-            Integer tableNumber = r.getTable().getTableNumber();
+            Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
+            if (branchId == null) continue;
+            // Representative table number for the reminder toast (lowest table number in the booking).
+            Integer tableNumber = r.getTables().stream()
+                    .map(RestaurantTable::getTableNumber)
+                    .filter(java.util.Objects::nonNull)
+                    .min(Integer::compareTo).orElse(null);
             String timeStr = reservationTime.format(TIME_FORMATTER);
             Long reservationId = r.getId();
 
@@ -86,14 +92,19 @@ public class ReservationScheduler {
                 sentNotifications.add(key15min);
                 log.info("15-min reminder sent for table {} at {}", tableNumber, timeStr);
 
-                // Lock the table only if currently AVAILABLE
-                var table = r.getTable();
-                if (table.getState() == TableStatus.AVAILABLE) {
-                    table.setState(TableStatus.RESERVED);
-                    table.setStatusUpdatedAt(LocalDateTime.now());
-                    tableRepository.save(table);
+                // Lock every AVAILABLE table of this booking.
+                boolean anyLocked = false;
+                for (RestaurantTable table : r.getTables()) {
+                    if (table.getState() == TableStatus.AVAILABLE) {
+                        table.setState(TableStatus.RESERVED);
+                        table.setStatusUpdatedAt(LocalDateTime.now());
+                        tableRepository.save(table);
+                        anyLocked = true;
+                    }
+                }
+                if (anyLocked) {
                     webSocketNotificationService.broadcastTableUpdate(branchId);
-                    log.info("Table {} locked as RESERVED", tableNumber);
+                    log.info("Locked tables of reservation {} as RESERVED", reservationId);
                 }
             }
         }

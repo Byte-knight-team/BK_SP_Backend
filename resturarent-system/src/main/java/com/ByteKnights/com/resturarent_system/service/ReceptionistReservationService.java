@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelRes
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CheckAvailabilityRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
 
 import java.util.List;
@@ -16,7 +17,8 @@ public interface ReceptionistReservationService {
 
     List<ReservationResponseDTO> getUpcomingReservations(String userEmail);
 
-    List<ReservationResponseDTO> getAllReservations(String userEmail);
+    PagedResponse<ReservationResponseDTO> getAllReservations(
+            String userEmail, int page, int size, String date, Integer tableNumber, String status);
 
     void seatReservation(Long reservationId, Integer guestCount, String userEmail);
 
