@@ -55,13 +55,42 @@ public class ReservationScheduler {
             LocalDateTime reservationTime = r.getReservationTime();
             Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
             if (branchId == null) continue;
+            Long reservationId = r.getId();
+
+            // No-show auto-cancel: a PENDING reservation whose window has fully passed was never seated,
+            // so cancel it and free its tables (each RESERVED table → AVAILABLE, unless another PENDING
+            // reservation still holds it within the 15-minute window → then it stays RESERVED for that one).
+            if (r.getEndTime() != null && r.getEndTime().isBefore(now)) {
+                r.setStatus(ReservationStatus.CANCELLED);
+                r.setCancelReason("Auto-cancelled — no-show (reservation time passed)");
+                reservationRepository.save(r);
+                boolean anyFreed = false;
+                for (RestaurantTable table : r.getTables()) {
+                    if (table.getState() == TableStatus.RESERVED) {
+                        boolean stillHeld = !reservationRepository
+                                .findOverlappingReservations(table.getId(), now, now.plusMinutes(15))
+                                .isEmpty();
+                        if (!stillHeld) {
+                            table.setState(TableStatus.AVAILABLE);
+                            table.setCurrentGuestCount(0);
+                            table.setStatusUpdatedAt(now);
+                            tableRepository.save(table);
+                            anyFreed = true;
+                        }
+                    }
+                }
+                if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
+                webSocketNotificationService.broadcastReservationUpdate(branchId);
+                log.info("Auto-cancelled no-show reservation {} (window ended)", reservationId);
+                continue;
+            }
+
             // Representative table number for the reminder toast (lowest table number in the booking).
             Integer tableNumber = r.getTables().stream()
                     .map(RestaurantTable::getTableNumber)
                     .filter(java.util.Objects::nonNull)
                     .min(Integer::compareTo).orElse(null);
             String timeStr = reservationTime.format(TIME_FORMATTER);
-            Long reservationId = r.getId();
 
             // 1-hour reminder — fire only once
             String key1hr = reservationId + "-1HR";
