@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -39,6 +40,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT COUNT(s) FROM Staff s JOIN s.user u WHERE s.branch.id = :branchId AND u.isActive = true")
     long countActiveUsersByBranchId(@Param("branchId") Long branchId);
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.isActive = true AND u.createdAt >= :createdAt")
+    long countActiveUsersCreatedAfter(@Param("createdAt") LocalDateTime createdAt);
+
+    @Query("SELECT COUNT(s) FROM Staff s JOIN s.user u WHERE s.branch.id = :branchId AND u.isActive = true AND u.createdAt >= :createdAt")
+    long countActiveUsersByBranchIdCreatedAfter(@Param("branchId") Long branchId, @Param("createdAt") LocalDateTime createdAt);
 
     @Query("""
             SELECT u

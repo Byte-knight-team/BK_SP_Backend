@@ -13,7 +13,6 @@ import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
-import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
@@ -42,7 +41,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
     private final RestaurantTableRepository tableRepository;
     private final BranchRepository branchRepository;
-    private final QrCodeRepository qrCodeRepository;
     private final StaffRepository staffRepository;
     private final AuditLogService auditLogService;
 
@@ -211,52 +209,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         );
 
         return mapToResponse(updated);
-    }
-
-    /**
-     * Deletes a table only when it is safe to remove.
-     */
-    @Override
-    @Transactional
-    public void deleteTable(Long id) {
-        RestaurantTable table = findTableOrThrow(id);
-        enforceAdminBranchAccess(table.getBranch().getId());
-
-        if (qrCodeRepository.existsByTableId(id)) {
-            throw new InvalidOperationException(
-                    "Cannot delete table: QR code history exists for this table. "
-                            + "Revoke and clean up QR records first.");
-        }
-
-        if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
-            throw new InvalidOperationException("Cannot delete table: active orders exist");
-        }
-
-        if (table.getState() == TableStatus.OCCUPIED) {
-            throw new InvalidOperationException("Cannot delete: The table is occupied");
-        }
-
-        if (table.getState() == TableStatus.RESERVED) {
-            throw new InvalidOperationException("Cannot delete: The table is reserved");
-        }
-
-        Map<String, Object> oldValues = buildTableAuditSnapshot(table);
-        Long branchId = getTableBranchId(table);
-
-        tableRepository.delete(table);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.TABLE,
-                AuditEventType.TABLE_DELETED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.WARN,
-                AuditTargetType.TABLE,
-                id,
-                branchId,
-                "Table deleted successfully",
-                oldValues,
-                null
-        );
     }
 
     // ─────────────────────────── Helper Methods ───────────────────────────

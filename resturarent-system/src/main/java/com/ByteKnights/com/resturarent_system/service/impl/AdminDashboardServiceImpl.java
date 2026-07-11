@@ -45,14 +45,11 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             OrderStatus.PREPARING,
             OrderStatus.READY,
             OrderStatus.OUT_FOR_DELIVERY,
-            OrderStatus.SERVED,
-            OrderStatus.ON_HOLD
-    );
+            OrderStatus.COMPLETED,
+            OrderStatus.ON_HOLD);
 
     private static final Set<PaymentStatus> REVENUE_PAYMENT_STATUSES = EnumSet.of(
-            PaymentStatus.PAID,
-            PaymentStatus.SUCCESS
-    );
+            PaymentStatus.PAID);
 
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
@@ -70,6 +67,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     @Transactional(readOnly = true)
     public AdminDashboardSummaryResponse getSummary() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
 
         long totalOrders;
         long activeOrderCount;
@@ -77,18 +75,18 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         BigDecimal totalRevenue;
 
         if (adminBranchId == null) {
-            totalOrders = orderRepository.count();
-            activeOrderCount = orderRepository.countByStatusIn(ACTIVE_ORDER_STATUSES);
-            activeUsers = userRepository.countActiveUsers();
-            totalRevenue = orderRepository.sumFinalAmountByPaymentStatusIn(REVENUE_PAYMENT_STATUSES);
+            totalOrders = orderRepository.countByCreatedAtAfter(startOfToday);
+            activeOrderCount = orderRepository.countByStatusInAndCreatedAtAfter(ACTIVE_ORDER_STATUSES, startOfToday);
+            activeUsers = userRepository.countActiveUsersCreatedAfter(startOfToday);
+            totalRevenue = orderRepository.sumFinalAmountByPaymentStatusInAndCreatedAtAfter(REVENUE_PAYMENT_STATUSES, startOfToday);
         } else {
-            totalOrders = orderRepository.countByBranchId(adminBranchId);
-            activeOrderCount = orderRepository.countByBranchIdAndStatusIn(adminBranchId, ACTIVE_ORDER_STATUSES);
-            activeUsers = userRepository.countActiveUsersByBranchId(adminBranchId);
-            totalRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(
+            totalOrders = orderRepository.countByBranchIdAndCreatedAtAfter(adminBranchId, startOfToday);
+            activeOrderCount = orderRepository.countByBranchIdAndStatusInAndCreatedAtAfter(adminBranchId, ACTIVE_ORDER_STATUSES, startOfToday);
+            activeUsers = userRepository.countActiveUsersByBranchIdCreatedAfter(adminBranchId, startOfToday);
+            totalRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusInAndCreatedAtAfter(
                     adminBranchId,
-                    REVENUE_PAYMENT_STATUSES
-            );
+                    REVENUE_PAYMENT_STATUSES,
+                    startOfToday);
         }
 
         return AdminDashboardSummaryResponse.builder()
@@ -107,7 +105,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
         long preparingCount = countOrdersForScope(adminBranchId, OrderStatus.PREPARING);
         long readyCount = countOrdersForScope(adminBranchId, OrderStatus.READY);
         long inDeliveryCount = countOrdersForScope(adminBranchId, OrderStatus.OUT_FOR_DELIVERY);
-        long completedCount = countOrdersForScope(adminBranchId, OrderStatus.COMPLETED);
+        long completedCount = countOrdersForScope(adminBranchId, OrderStatus.SERVED);
 
         return AdminDashboardOrderFlowResponse.builder()
                 .preparingCount(preparingCount)
@@ -249,11 +247,13 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     }
 
     private long countOrdersForScope(Long adminBranchId, OrderStatus status) {
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        // Null branch means global scope (SUPER_ADMIN or non-ADMIN context).
         if (adminBranchId == null) {
-            return orderRepository.countByStatus(status);
+            return orderRepository.countByStatusAndCreatedAtAfter(status, startOfToday);
         }
-
-        return orderRepository.countByBranchIdAndStatus(adminBranchId, status);
+        // ADMIN users are strictly constrained to their assigned branch.
+        return orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(adminBranchId, status, startOfToday);
     }
 
     private Long resolveCurrentAdminBranchIdOrNull() {
