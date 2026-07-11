@@ -78,19 +78,16 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                     + ", which can't cover a party of " + request.getGuestCount() + ".");
         }
 
-        // Re-check the 1-hour gap for every selected table (guards against a stale picker / races).
+        // Block ONLY on a real time overlap with a PENDING reservation. The 1-hour gap is a warning
+        // shown at check time — it never blocks; the receptionist decides.
         for (RestaurantTable t : tables) {
             List<Reservation> overlapping = reservationRepository.findOverlappingReservations(
                     t.getId(),
-                    request.getReservationTime().minusHours(GAP_HOURS),
-                    request.getEndTime().plusHours(GAP_HOURS));
+                    request.getReservationTime(),
+                    request.getEndTime());
             if (!overlapping.isEmpty()) {
-                Reservation clash = overlapping.get(0);
-                boolean directOverlap = clash.getReservationTime().isBefore(request.getEndTime())
-                        && clash.getEndTime().isAfter(request.getReservationTime());
-                throw new RuntimeException("Table " + t.getTableNumber() + (directOverlap
-                        ? " is already reserved for this time slot"
-                        : " needs at least a 1-hour gap between reservations"));
+                throw new RuntimeException("Table " + t.getTableNumber()
+                        + " already has a reservation overlapping this time slot");
             }
         }
 
@@ -167,7 +164,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         boolean bookingIsToday = start.toLocalDate().equals(today);
         List<TableAvailabilityDTO> result = new ArrayList<>();
         for (RestaurantTable t : tables) {
-            // Widen the window by the required gap so bookings too close to an existing reservation clash too.
+            // Compare the requested slot against this table's PENDING reservations. Widen by the gap so
+            // near-but-not-overlapping bookings are found too (they only warn, they never block).
             List<Reservation> nearby = reservationRepository.findOverlappingReservations(
                     t.getId(), start.minusHours(GAP_HOURS), end.plusHours(GAP_HOURS));
             TableAvailabilityDTO.TableAvailabilityDTOBuilder dto = TableAvailabilityDTO.builder()
@@ -175,52 +173,57 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                     .tableNumber(t.getTableNumber())
                     .capacity(t.getCapacity());
 
-            // Prefer a real time overlap; otherwise it's a gap-only clash (within an hour, no overlap).
-            Reservation directClash = nearby.stream()
+            // A real time overlap is the ONLY thing that blocks the table.
+            Reservation overlap = nearby.stream()
                     .filter(r -> r.getReservationTime().isBefore(end) && r.getEndTime().isAfter(start))
                     .findFirst().orElse(null);
 
-            if (directClash != null) {
-                dto.status("RESERVED")
-                        .conflictStart(directClash.getReservationTime())
-                        .conflictEnd(directClash.getEndTime())
+            if (overlap != null) {
+                // Time overlap → BLOCKED (removed from the picker).
+                dto.status("BLOCKED")
+                        .conflictStart(overlap.getReservationTime())
+                        .conflictEnd(overlap.getEndTime())
                         .gapConflict(false);
-            } else if (!nearby.isEmpty()) {
-                Reservation clash = nearby.get(0);
-                dto.status("RESERVED")
-                        .conflictStart(clash.getReservationTime())
-                        .conflictEnd(clash.getEndTime())
-                        .gapConflict(true);
-            } else if (t.getState() == TableStatus.OCCUPIED && bookingIsToday) {
-                // Pending = orders not yet fully served (an order is "served" once all its items are).
-                long pendingOrders = orderRepository.findByTableIdAndStatusNotIn(
-                                t.getId(), List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD))
-                        .stream()
-                        .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().toLocalDate().equals(today))
-                        .filter(o -> o.getStatus() != OrderStatus.SERVED && o.getStatus() != OrderStatus.COMPLETED)
-                        .count();
-                dto.status("OCCUPIED")
-                        .occupiedSince(t.getStatusUpdatedAt())
-                        .pendingOrderCount((int) pendingOrders);
-                // If this occupancy came from a reservation, include its window too.
-                if (t.getSeatedReservationId() != null) {
-                    reservationRepository.findById(t.getSeatedReservationId()).ifPresent(sr -> {
-                        dto.occupiedReservationStart(sr.getReservationTime());
-                        dto.occupiedReservationEnd(sr.getEndTime());
-                    });
-                }
             } else {
-                dto.status("FREE");
+                // No overlap → selectable. Occupied-now details are shown ONLY for a TODAY booking
+                // (for a future day whoever is seated now will be long gone, so occupancy is irrelevant).
+                if (bookingIsToday && t.getState() == TableStatus.OCCUPIED) {
+                    // Pending = orders not yet fully served (an order is "served" once all its items are).
+                    long pendingOrders = orderRepository.findByTableIdAndStatusNotIn(
+                                    t.getId(), List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD))
+                            .stream()
+                            .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().toLocalDate().equals(today))
+                            .filter(o -> o.getStatus() != OrderStatus.SERVED && o.getStatus() != OrderStatus.COMPLETED)
+                            .count();
+                    dto.status("OCCUPIED")
+                            .occupiedSince(t.getStatusUpdatedAt())
+                            .pendingOrderCount((int) pendingOrders);
+                    if (t.getSeatedReservationId() != null) {
+                        reservationRepository.findById(t.getSeatedReservationId()).ifPresent(sr -> {
+                            dto.occupiedReservationStart(sr.getReservationTime());
+                            dto.occupiedReservationEnd(sr.getEndTime());
+                        });
+                    }
+                } else {
+                    dto.status("FREE");
+                }
+                // Gap warning: a PENDING reservation within an hour (no overlap). Warn only — never blocks.
+                if (!nearby.isEmpty()) {
+                    Reservation gapClash = nearby.get(0);
+                    dto.gapConflict(true)
+                            .conflictStart(gapClash.getReservationTime())
+                            .conflictEnd(gapClash.getEndTime());
+                }
             }
             result.add(dto.build());
         }
 
-        // Selectable = anything not RESERVED (occupied-today tables stay pickable at the receptionist's discretion).
-        boolean possible = result.stream().anyMatch(d -> !"RESERVED".equals(d.getStatus()));
+        // Only a time overlap (BLOCKED) removes a table; everything else is selectable.
+        boolean possible = result.stream().anyMatch(d -> !"BLOCKED".equals(d.getStatus()));
 
         return CheckAvailabilityResponse.builder()
                 .possible(possible)
-                .reason(possible ? null : "All tables are reserved for this time slot (1-hour gap applied).")
+                .reason(possible ? null : "Every table has a time conflict for this slot.")
                 .tables(result)
                 .build();
     }
