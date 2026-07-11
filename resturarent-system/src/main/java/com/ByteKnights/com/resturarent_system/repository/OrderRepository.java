@@ -40,8 +40,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         long countByStatusInAndCreatedAtAfter(Collection<OrderStatus> statuses, LocalDateTime startOfToday);
 
-        long countByBranchIdAndStatusInAndCreatedAtAfter(Long branchId, Collection<OrderStatus> statuses, LocalDateTime startOfToday);
-
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.paymentStatus IN :paymentStatuses")
         BigDecimal sumFinalAmountByPaymentStatusIn(@Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
 
