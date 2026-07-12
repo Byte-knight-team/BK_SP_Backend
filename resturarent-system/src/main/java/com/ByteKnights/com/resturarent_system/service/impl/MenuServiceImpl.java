@@ -3,7 +3,6 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.ApproveMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuItemRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.admin.DeleteMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.RejectMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.MenuItemActionResponse;
@@ -180,6 +179,10 @@ public class MenuServiceImpl implements MenuService {
     @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_ITEM_CREATED, targetType = AuditTargetType.MENU_ITEM, description = "Menu item created successfully", captureResultAsNewValue = false)
     @Transactional
     public MenuItemResponse createMenuItem(CreateMenuItemRequest request) {
+        if (!isCurrentUserChef()) {
+            throw new InvalidOperationException("Only a CHEF is allowed to create menu items");
+        }
+
         Long branchId = resolveCurrentUserBranchId();
         Branch branch = findBranchOrThrow(branchId);
         MenuCategory category = findCategoryOrThrow(request.getCategoryId());
@@ -194,7 +197,6 @@ public class MenuServiceImpl implements MenuService {
         }
 
         Long creatorUserId = resolveCreatedByUserId();
-        boolean creatorIsAdmin = isCurrentUserAdmin();
 
         MenuItem menuItem = MenuItem.builder()
                 .branch(branch)
@@ -209,20 +211,6 @@ public class MenuServiceImpl implements MenuService {
                 .preparationTime(request.getPreparationTime())
                 .createdBy(creatorUserId)
                 .build();
-
-        if (creatorIsAdmin) {
-            menuItem.setStatus(MenuItemStatus.ACTIVE);
-            menuItem.setIsAvailable(true);
-            menuItem.setApprovedAt(LocalDateTime.now());
-            menuItem.setRejectedAt(null);
-            menuItem.setRejectionReason(null);
-        } else {
-            menuItem.setStatus(MenuItemStatus.PENDING);
-            menuItem.setIsAvailable(false);
-            menuItem.setApprovedAt(null);
-            menuItem.setRejectedAt(null);
-            menuItem.setRejectionReason(null);
-        }
 
         MenuItem saved = menuItemRepository.save(menuItem);
 
@@ -599,51 +587,7 @@ public class MenuServiceImpl implements MenuService {
                 "Availability updated");
     }
 
-    /**
-     * Permanently deletes a menu item from the system.
-     * 
-     * Precondition:
-     * - Item cannot be in ACTIVE status (only inactive items can be deleted)
-     * - This prevents accidental deletion of items currently available to customers
-     **/
-    
-    @Override
-    @Transactional
-    public MenuItemActionResponse deleteMenuItem(Long id, DeleteMenuItemRequest request) {
-        MenuItem menuItem = findMenuItemOrThrow(id);
-        enforceCurrentUserBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
-        if (menuItem.getStatus() == MenuItemStatus.ACTIVE) {
-            throw new InvalidOperationException("Cannot delete active item");
-        }
-
-        /*
-         * Capture old values before delete because the entity will be removed.
-         */
-        Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
-        Long branchId = getMenuItemBranchId(menuItem);
-
-        MenuItemActionResponse response = buildActionResponse(
-                "DELETED",
-                menuItem,
-                "Menu item deleted successfully");
-
-        menuItemRepository.delete(menuItem);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.MENU,
-                AuditEventType.MENU_ITEM_DELETED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.MENU_ITEM,
-                id,
-                branchId,
-                "Menu item deleted successfully",
-                oldValues,
-                null);
-
-        return response;
-    }
 
     // Helper method: Retrieves a menu item by ID or throws an exception if not found.
 
@@ -976,6 +920,29 @@ public class MenuServiceImpl implements MenuService {
         return authorities.stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority -> "ROLE_ADMIN".equals(authority));
+    }
+
+    /**
+     * Helper method: Checks if the authenticated user has CHEF role.
+     * 
+     * Searches the user's granted authorities for the ROLE_CHEF authority.
+     * */
+    private boolean isCurrentUserChef() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null) {
+            return false;
+        }
+
+        Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
+
+        if (authorities == null) {
+            return false;
+        }
+
+        return authorities.stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch(authority -> "ROLE_CHEF".equals(authority));
     }
 
     /**
