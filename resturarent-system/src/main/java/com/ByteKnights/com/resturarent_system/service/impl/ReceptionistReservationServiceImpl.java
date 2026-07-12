@@ -99,8 +99,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .reservationTime(request.getReservationTime())
                 .endTime(request.getEndTime())
                 .guestCount(request.getGuestCount())
-                .notes(request.getNotes())
-                .status(ReservationStatus.PENDING)
+                .customerNote(request.getNotes())
+                .status(ReservationStatus.PAID)
                 .build();
 
         Reservation saved = reservationRepository.save(reservation);
@@ -305,8 +305,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         if (r.getBranch() == null || !r.getBranch().getId().equals(branchId)) {
             throw new RuntimeException("Reservation does not belong to your branch");
         }
-        if (r.getStatus() != ReservationStatus.PENDING) {
-            throw new RuntimeException("This reservation is not active");
+        if (r.getStatus() != ReservationStatus.PAID) {
+            throw new RuntimeException("This reservation is not active or paid");
         }
 
         // Seat the whole party: occupy every table of the booking. The guest count is distributed
@@ -390,7 +390,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .reservationTime(r.getReservationTime())
                 .endTime(r.getEndTime())
                 .guestCount(r.getGuestCount())
-                .notes(r.getNotes())
+                .notes(r.getCustomerNote())
                 .status(r.getStatus().name())
                 .createdAt(r.getCreatedAt())
                 .build();

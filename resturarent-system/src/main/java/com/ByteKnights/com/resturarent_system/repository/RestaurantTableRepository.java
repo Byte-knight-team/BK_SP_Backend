@@ -22,6 +22,8 @@ public interface RestaurantTableRepository extends JpaRepository<RestaurantTable
      */
     List<RestaurantTable> findByBranchId(Long branchId);
 
+    List<RestaurantTable> findByBranchIdAndTableNumberIn(Long branchId, List<Integer> tableNumbers);
+
     /**
      * Checks whether a table number is already used inside a branch.
      */

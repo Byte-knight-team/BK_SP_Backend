@@ -20,6 +20,10 @@ public class BranchResponse {
     private String contactNumber;
     private String email;
     private String status;
+    private Double latitude;
+    private Double longitude;
+    private Integer reservationMinLeadHours;
+    private Integer reservationPaymentWindowMinutes;
     private LocalDateTime createdAt;
     private String message;
 }

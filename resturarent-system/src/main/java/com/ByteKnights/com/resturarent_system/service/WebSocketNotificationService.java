@@ -250,4 +250,29 @@ public class WebSocketNotificationService {
         messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
         log.info("Broadcasting reservation update to {}", destination);
     }
+
+    /**
+     * Broadcast a new reservation request notification to receptionist.
+     * Topic: /topic/branch/{branchId}/new-reservation
+     */
+    public void broadcastNewReservationRequest(Long branchId, Long reservationId) {
+        String destination = "/topic/branch/" + branchId + "/new-reservation";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "reservationId", String.valueOf(reservationId)
+        ));
+        log.info("Broadcasting new reservation request to {}", destination);
+    }
+
+    /**
+     * Broadcast reservation status updates to the customer.
+     * Topic: /topic/user/{userId}/reservations
+     */
+    public void broadcastReservationStatusToCustomer(Long userId, Long reservationId, String newStatus) {
+        String destination = "/topic/user/" + userId + "/reservations";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "reservationId", String.valueOf(reservationId),
+                "reservationStatus", newStatus
+        ));
+        log.info("Broadcasting global reservation update to {}: {}", destination, newStatus);
+    }
 }
