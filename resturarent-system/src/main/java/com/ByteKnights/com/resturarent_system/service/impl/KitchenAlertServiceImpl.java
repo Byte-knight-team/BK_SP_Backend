@@ -160,6 +160,9 @@ public class KitchenAlertServiceImpl implements KitchenAlertService {
                 oldValues,
                 buildKitchenAlertAuditSnapshot(savedAlert)
         );
+
+        // Notify the branch (receptionist) that the issue is cleared.
+        webSocketNotificationService.broadcastKitchenAlertResolved(staffBranchId, savedAlert.getMessage());
     }
 
     /*

@@ -28,30 +28,28 @@ public class MenuCategoryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','CHEF') or hasAuthority('VIEW_CATEGORIES')")
     public ResponseEntity<List<MenuCategoryResponse>> getAllCategories() {
         List<MenuCategoryResponse> categories = menuCategoryService.getAllCategories();
         return ResponseEntity.ok(categories);
     }
 
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') or hasAuthority('VIEW_CATEGORY_BY_ID')")
     public ResponseEntity<MenuCategoryResponse> getCategoryById(@PathVariable Long id) {
         MenuCategoryResponse category = menuCategoryService.getCategoryById(id);
         return ResponseEntity.ok(category);
     }
 
-
-
     @PostMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('CREATE_CATEGORY')")
     public ResponseEntity<MenuCategoryResponse> createCategory(@RequestBody CreateMenuCategoryRequest request) {
         MenuCategoryResponse created = menuCategoryService.createCategory(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @PutMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('UPDATE_CATEGORY')")
     public ResponseEntity<MenuCategoryResponse> updateCategory(
             @PathVariable Long id,
             @RequestBody UpdateMenuCategoryRequest request) {
@@ -60,7 +58,7 @@ public class MenuCategoryController {
     }
 
     @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('DELETE_CATEGORY')")
     public ResponseEntity<MenuCategoryResponse> deleteCategory(@PathVariable Long id) {
         MenuCategoryResponse deleted = menuCategoryService.deleteCategory(id);
         return ResponseEntity.ok(deleted);

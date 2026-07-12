@@ -43,12 +43,19 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         Long branchId = staff.getBranch().getId();
         LocalDateTime startOfToday = LocalDateTime.now().with(LocalTime.MIN);
 
-        Sort sort = (status == OrderStatus.COMPLETED)
-                ? Sort.by(Sort.Direction.DESC, "statusUpdatedAt")
-                : Sort.by(Sort.Direction.ASC, "statusUpdatedAt");
-
-        List<Order> orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(
-                branchId, status, startOfToday, sort);
+        List<Order> orders;
+        if (status == OrderStatus.COMPLETED) {
+            // Completed tab: show everything the kitchen finished today —
+            // orders done cooking (COMPLETED) and already handed over (SERVED),
+            // most recently finished first
+            orders = orderRepository.findByBranchIdAndStatusInAndStatusUpdatedAtAfter(
+                    branchId, List.of(OrderStatus.COMPLETED, OrderStatus.SERVED), startOfToday,
+                    Sort.by(Sort.Direction.DESC, "statusUpdatedAt"));
+        } else {
+            orders = orderRepository.findByBranchIdAndStatusAndStatusUpdatedAtAfter(
+                    branchId, status, startOfToday,
+                    Sort.by(Sort.Direction.ASC, "statusUpdatedAt"));
+        }
 
         List<OrderCardDetailsDTO> orderCardDetailsDTOS = new ArrayList<>();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("hh:mm a");
@@ -182,6 +189,10 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
         webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
         // Notify receptionist (cross-role tab switch to Hold)
         webSocketNotificationService.broadcastOrderStatusChanged(branchId, orderId, savedOrder.getOrderNumber(), "ON_HOLD");
+        // QR order held → remove it from the receptionist table monitor live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            webSocketNotificationService.broadcastTableUpdate(branchId);
+        }
 
         auditLogService.logCurrentUserAction(
                 AuditModule.KITCHEN,

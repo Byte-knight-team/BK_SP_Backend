@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.scheduler;
 
 import com.ByteKnights.com.resturarent_system.entity.Reservation;
 import com.ByteKnights.com.resturarent_system.entity.ReservationStatus;
+import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.ReservationRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
@@ -49,13 +50,47 @@ public class ReservationScheduler {
         List<Reservation> all = reservationRepository.findAll();
 
         for (Reservation r : all) {
-            if (r.getStatus() != ReservationStatus.CONFIRMED) continue;
+            if (r.getStatus() != ReservationStatus.PENDING) continue;
 
             LocalDateTime reservationTime = r.getReservationTime();
-            Long branchId = r.getTable().getBranch().getId();
-            Integer tableNumber = r.getTable().getTableNumber();
-            String timeStr = reservationTime.format(TIME_FORMATTER);
+            Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
+            if (branchId == null) continue;
             Long reservationId = r.getId();
+
+            // No-show auto-cancel: a PENDING reservation whose window has fully passed was never seated,
+            // so cancel it and free its tables (each RESERVED table → AVAILABLE, unless another PENDING
+            // reservation still holds it within the 15-minute window → then it stays RESERVED for that one).
+            if (r.getEndTime() != null && r.getEndTime().isBefore(now)) {
+                r.setStatus(ReservationStatus.CANCELLED);
+                r.setCancelReason("Auto-cancelled — no-show (reservation time passed)");
+                reservationRepository.save(r);
+                boolean anyFreed = false;
+                for (RestaurantTable table : r.getTables()) {
+                    if (table.getState() == TableStatus.RESERVED) {
+                        boolean stillHeld = !reservationRepository
+                                .findOverlappingReservations(table.getId(), now, now.plusMinutes(15))
+                                .isEmpty();
+                        if (!stillHeld) {
+                            table.setState(TableStatus.AVAILABLE);
+                            table.setCurrentGuestCount(0);
+                            table.setStatusUpdatedAt(now);
+                            tableRepository.save(table);
+                            anyFreed = true;
+                        }
+                    }
+                }
+                if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
+                webSocketNotificationService.broadcastReservationUpdate(branchId);
+                log.info("Auto-cancelled no-show reservation {} (window ended)", reservationId);
+                continue;
+            }
+
+            // Representative table number for the reminder toast (lowest table number in the booking).
+            Integer tableNumber = r.getTables().stream()
+                    .map(RestaurantTable::getTableNumber)
+                    .filter(java.util.Objects::nonNull)
+                    .min(Integer::compareTo).orElse(null);
+            String timeStr = reservationTime.format(TIME_FORMATTER);
 
             // 1-hour reminder — fire only once
             String key1hr = reservationId + "-1HR";
@@ -86,16 +121,46 @@ public class ReservationScheduler {
                 sentNotifications.add(key15min);
                 log.info("15-min reminder sent for table {} at {}", tableNumber, timeStr);
 
-                // Lock the table only if currently AVAILABLE
-                var table = r.getTable();
-                if (table.getState() == TableStatus.AVAILABLE) {
-                    table.setState(TableStatus.RESERVED);
-                    table.setStatusUpdatedAt(LocalDateTime.now());
-                    tableRepository.save(table);
+                // Lock every AVAILABLE table of this booking.
+                boolean anyLocked = false;
+                for (RestaurantTable table : r.getTables()) {
+                    if (table.getState() == TableStatus.AVAILABLE) {
+                        table.setState(TableStatus.RESERVED);
+                        table.setStatusUpdatedAt(LocalDateTime.now());
+                        tableRepository.save(table);
+                        anyLocked = true;
+                    }
+                }
+                if (anyLocked) {
                     webSocketNotificationService.broadcastTableUpdate(branchId);
-                    log.info("Table {} locked as RESERVED", tableNumber);
+                    log.info("Locked tables of reservation {} as RESERVED", reservationId);
                 }
             }
+
+            // #5 GUEST LATE — the slot has started but the guest still isn't seated (still PENDING;
+            // past-end no-shows were auto-cancelled above, so this window is still active). Fire once.
+            String keyLate = reservationId + "-LATE";
+            if (!sentNotifications.contains(keyLate) && reservationTime.isBefore(now)) {
+                webSocketNotificationService.broadcastReservationReminder(branchId, "GUEST_LATE", tableNumber, timeStr);
+                sentNotifications.add(keyLate);
+                log.info("Guest-late notice for table {} reservation {}", tableNumber, reservationId);
+            }
+        }
+
+        // #6 TIME'S UP — a table occupied for a reservation whose reserved window has ended. Notify once
+        // per booking (the reserved time is over — ask them to leave / clear the table).
+        for (RestaurantTable table : tableRepository.findAll()) {
+            if (table.getState() != TableStatus.OCCUPIED || table.getSeatedReservationId() == null) continue;
+            Reservation sr = reservationRepository.findById(table.getSeatedReservationId()).orElse(null);
+            if (sr == null || sr.getEndTime() == null || !sr.getEndTime().isBefore(now)) continue;
+            String keyUp = "TIMEUP-" + sr.getId();
+            if (sentNotifications.contains(keyUp)) continue;
+            Long upBranchId = table.getBranch() != null ? table.getBranch().getId() : null;
+            if (upBranchId == null) continue;
+            webSocketNotificationService.broadcastReservationReminder(
+                    upBranchId, "TIME_UP", table.getTableNumber(), sr.getEndTime().format(TIME_FORMATTER));
+            sentNotifications.add(keyUp);
+            log.info("Time's-up notice for table {} reservation {}", table.getTableNumber(), sr.getId());
         }
     }
 }

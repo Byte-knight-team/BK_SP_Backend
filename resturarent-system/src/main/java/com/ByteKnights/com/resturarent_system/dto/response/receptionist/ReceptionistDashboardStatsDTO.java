@@ -11,12 +11,15 @@ public class ReceptionistDashboardStatsDTO {
 
     private long newQR;
     private long newPickup;
+    private long newDelivery;
 
     private long kitchenQR;
     private long kitchenPickup;
+    private long kitchenDelivery;
 
     private long readyQR;
     private long readyPickup;
+    private long readyDelivery;
 
     private long servedQR;
     private long servedPickup;

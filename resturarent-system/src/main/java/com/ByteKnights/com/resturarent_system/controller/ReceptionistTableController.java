@@ -51,6 +51,22 @@ public class ReceptionistTableController {
         );
     }
 
+    // update only the guest count of an already-occupied table (does not reset the seated time)
+    @PutMapping("/{id}/guest-count")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> updateGuestCount(
+            @PathVariable Long id,
+            @Valid @RequestBody TableActionRequest request,
+            Principal principal) {
+
+        receptionistTableService.updateGuestCount(id, request.getGuestCount(), principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Table #" + id + " guest count updated", null),
+                HttpStatus.OK
+        );
+    }
+
     // clear a table when guests leave
     @PutMapping("/{id}/clear")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
