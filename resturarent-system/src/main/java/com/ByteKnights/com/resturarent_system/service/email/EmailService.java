@@ -9,4 +9,6 @@ public interface EmailService {
     void sendStaffInviteEmail(String toEmail, String username, String temporaryPassword);
     
     void sendCustomerPasswordResetEmail(String toEmail, String resetLink);
+
+    void sendSimpleEmail(String toEmail, String subject, String body);
 }

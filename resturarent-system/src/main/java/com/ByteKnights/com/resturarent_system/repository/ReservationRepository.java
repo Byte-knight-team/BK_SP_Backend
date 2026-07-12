@@ -19,7 +19,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     // All active (PENDING) reservations for a branch within a date range (soonest first).
     @Query("SELECT r FROM Reservation r WHERE r.branch.id = :branchId " +
-           "AND r.status = 'PENDING' " +
+           "AND r.status = 'PAID' " +
            "AND r.reservationTime >= :start AND r.reservationTime < :end " +
            "ORDER BY r.reservationTime ASC")
     List<Reservation> findByBranchAndDate(
@@ -30,7 +30,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     // Active (PENDING) reservations that include the given table and overlap the slot [startTime, endTime).
     // Joins the reservation_tables link so a booking spanning several tables is matched by any of them.
     @Query("SELECT r FROM Reservation r JOIN r.tables t WHERE t.id = :tableId " +
-           "AND r.status = 'PENDING' " +
+           "AND r.status IN ('CONFIRMED', 'PAID') " +
            "AND r.reservationTime < :endTime AND r.endTime > :startTime")
     List<Reservation> findOverlappingReservations(
             @Param("tableId") Long tableId,
@@ -63,4 +63,10 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             Pageable pageable);
 
     //------------------------receptionist query END---------------------
+
+    //------------------------customer query START---------------------
+    Page<Reservation> findByCustomerIdOrderByReservationTimeDesc(Long customerId, Pageable pageable);
+    
+    Page<Reservation> findByCustomerIdAndStatusInOrderByReservationTimeDesc(Long customerId, java.util.List<ReservationStatus> statuses, Pageable pageable);
+    //------------------------customer query END---------------------
 }
