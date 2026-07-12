@@ -52,6 +52,28 @@ public class WebSocketNotificationService {
     }
 
     /**
+     * Broadcast a new order notification to all receptionist clients in the branch.
+     *
+     * Topic: /topic/branch/{branchId}/new-order
+     * Subscribers: Receptionist dashboard (Notifier)
+     *
+     * @param branchId    The branch ID to scope the broadcast
+     * @param orderNumber The order number e.g. "ORD-CD5C6E"
+     * @param orderType   The order type e.g. "ONLINE_DELIVERY"
+     * @param orderId     The order ID
+     */
+    public void broadcastNewReceptionistOrder(Long branchId, String orderNumber, String orderType, Long orderId) {
+        String destination = "/topic/branch/" + branchId + "/new-order";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "orderNumber", orderNumber,
+                "orderType", orderType,
+                "orderId", String.valueOf(orderId)
+        );
+        log.info("Broadcasting new receptionist order to {}: {}", destination, orderNumber);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
+    /**
      * Broadcast a new order notification to all kitchen clients in the same branch.
      *
      * Topic: /topic/branch/{branchId}/kitchen-orders
