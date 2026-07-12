@@ -2,7 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.request.admin.ApproveMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateMenuItemRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.admin.DeleteMenuItemRequest;
+
 import com.ByteKnights.com.resturarent_system.dto.request.admin.RejectMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateMenuItemRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.MenuItemIngredientRequestDTO;
@@ -168,13 +168,6 @@ public class MenuController {
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("/{id:\\d+}")
-    public ResponseEntity<MenuItemActionResponse> deleteMenuItem(
-            @PathVariable Long id,
-            @Valid @RequestBody DeleteMenuItemRequest request) {
-        MenuItemActionResponse response = menuService.deleteMenuItem(id, request);
-        return ResponseEntity.ok(response);
-    }
 
     // CUSTOMER ENDPOINT (Only active items)
     @GetMapping("/customer")
