@@ -288,6 +288,12 @@ public class OrderServiceImpl implements OrderService {
 
                 // 10. Map Items and Return Detailed Response
                 webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+                webSocketNotificationService.broadcastNewReceptionistOrder(
+                        savedOrder.getBranch().getId(),
+                        savedOrder.getOrderNumber(),
+                        savedOrder.getOrderType().name(),
+                        savedOrder.getId()
+                );
 
                 return OrderPlacementResponse.builder()
                                 .orderId(savedOrder.getId())
