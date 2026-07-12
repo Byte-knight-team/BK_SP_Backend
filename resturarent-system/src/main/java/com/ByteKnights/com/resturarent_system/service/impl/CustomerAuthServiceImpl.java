@@ -228,7 +228,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         customer.setOtpExpiry(expiry);
         customerRepository.save(customer);
 
-        smsService.sendOtpSms(phone, otpCode);
+        // smsService.sendOtpSms(phone, otpCode);
+        System.out.println(otpCode);
     }
 
     @Override

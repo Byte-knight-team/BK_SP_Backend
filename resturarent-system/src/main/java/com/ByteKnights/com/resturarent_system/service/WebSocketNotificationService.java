@@ -39,6 +39,41 @@ public class WebSocketNotificationService {
     }
 
     /**
+     * Notify the branch that a kitchen alert/issue has been resolved (same /alerts topic).
+     * The receptionist clients toast it and refresh their active-alert count.
+     */
+    public void broadcastKitchenAlertResolved(Long branchId, String message) {
+        String destination = "/topic/branch/" + branchId + "/alerts";
+        log.info("Broadcasting kitchen alert RESOLVED to {}: {}", destination, message);
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "type", "RESOLVED",
+                "message", message
+        ));
+    }
+
+    /**
+     * Broadcast a new order notification to all receptionist clients in the branch.
+     *
+     * Topic: /topic/branch/{branchId}/new-order
+     * Subscribers: Receptionist dashboard (Notifier)
+     *
+     * @param branchId    The branch ID to scope the broadcast
+     * @param orderNumber The order number e.g. "ORD-CD5C6E"
+     * @param orderType   The order type e.g. "ONLINE_DELIVERY"
+     * @param orderId     The order ID
+     */
+    public void broadcastNewReceptionistOrder(Long branchId, String orderNumber, String orderType, Long orderId) {
+        String destination = "/topic/branch/" + branchId + "/new-order";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "orderNumber", orderNumber,
+                "orderType", orderType,
+                "orderId", String.valueOf(orderId)
+        );
+        log.info("Broadcasting new receptionist order to {}: {}", destination, orderNumber);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
+    /**
      * Broadcast a new order notification to all kitchen clients in the same branch.
      *
      * Topic: /topic/branch/{branchId}/kitchen-orders
@@ -202,5 +237,17 @@ public class WebSocketNotificationService {
             // Don't let global notification failure break the main flow
             log.warn("Failed to broadcast global order update for order {}: {}", orderId, e.getMessage());
         }
+    }
+
+    /**
+     * Notify receptionist clients that reservation data has changed (created or cancelled).
+     *
+     * Topic: /topic/branch/{branchId}/reservation-update
+     * Subscribers: Receptionist dashboard (UpcomingReservationsCard)
+     */
+    public void broadcastReservationUpdate(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/reservation-update";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
+        log.info("Broadcasting reservation update to {}", destination);
     }
 }

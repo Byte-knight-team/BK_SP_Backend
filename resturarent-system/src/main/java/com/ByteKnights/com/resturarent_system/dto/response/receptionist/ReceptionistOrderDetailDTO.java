@@ -37,6 +37,8 @@ public class ReceptionistOrderDetailDTO {
     private double discountAmount;
     private String appliedCouponCode;
     private double finalAmount;
+    private Double cashReceived;
+    private Double changeReturned;
 
     // Notes
     private String kitchenNotes;

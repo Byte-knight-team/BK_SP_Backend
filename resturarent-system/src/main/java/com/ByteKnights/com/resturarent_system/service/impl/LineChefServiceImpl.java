@@ -152,6 +152,10 @@ public class LineChefServiceImpl implements LineChefService {
         Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
         if (branchId != null) {
             webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), order.getOrderNumber(), item.getItemName(), "READY", order.getStatus().name(), order.getOrderType().name());
+            // QR order: refresh the receptionist table monitor so "Ready to serve" appears live
+            if (order.getOrderType() == OrderType.QR) {
+                webSocketNotificationService.broadcastTableUpdate(branchId);
+            }
         }
 
         // If this line chef has no more PREPARING items → set status back to AVAILABLE

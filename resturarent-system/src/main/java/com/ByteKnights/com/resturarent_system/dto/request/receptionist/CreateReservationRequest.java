@@ -3,12 +3,14 @@ package com.ByteKnights.com.resturarent_system.dto.request.receptionist;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 public class CreateReservationRequest {
 
-    @NotNull(message = "Table ID is required")
-    private Long tableId;
+    // One booking can span multiple tables under one customer.
+    @NotEmpty(message = "At least one table is required")
+    private List<Long> tableIds;
 
     @NotBlank(message = "Customer name is required")
     private String customerName;
@@ -22,6 +24,8 @@ public class CreateReservationRequest {
     @NotNull(message = "End time is required")
     private LocalDateTime endTime;
 
+    @NotNull(message = "Guest count is required")
+    @Min(value = 1, message = "Guest count must be at least 1")
     private Integer guestCount;
 
     private String notes;

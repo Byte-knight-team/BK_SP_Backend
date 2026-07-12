@@ -55,8 +55,8 @@ public class KitchenDashboardServiceImplTest {
                 when(orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(eq(1L), eq(OrderStatus.PREPARING),
                                 any()))
                                 .thenReturn(5L);
-                when(orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(eq(1L), eq(OrderStatus.COMPLETED),
-                                any()))
+                // Completed count now covers COMPLETED + SERVED via the status-in query
+                when(orderRepository.countByBranchIdAndStatusInAndCreatedAtAfter(eq(1L), any(), any()))
                                 .thenReturn(20L);
 
                 when(orderRepository.getAveragePreparationTimeTodayByBranch(eq(1L), any()))

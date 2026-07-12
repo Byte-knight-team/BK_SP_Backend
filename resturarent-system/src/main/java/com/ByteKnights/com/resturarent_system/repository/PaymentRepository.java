@@ -18,6 +18,9 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByOrder(Order order);
 
+    // Safe read: returns the latest payment for an order, never throws on stray duplicates
+    Optional<Payment> findFirstByOrderOrderByIdDesc(Order order);
+
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.branch.id = :branchId AND p.paymentMethod = :method AND p.paymentStatus = 'PAID'")
     BigDecimal sumAmountByBranchIdAndPaymentMethod(
             @Param("branchId") Long branchId,

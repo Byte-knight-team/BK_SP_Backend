@@ -40,8 +40,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         long countByStatusInAndCreatedAtAfter(Collection<OrderStatus> statuses, LocalDateTime startOfToday);
 
-        long countByBranchIdAndStatusInAndCreatedAtAfter(Long branchId, Collection<OrderStatus> statuses, LocalDateTime startOfToday);
-
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.paymentStatus IN :paymentStatuses")
         BigDecimal sumFinalAmountByPaymentStatusIn(@Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
 
@@ -156,7 +154,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         List<Order> findByBranchIdAndStatusAndStatusUpdatedAtAfter(Long branchId, OrderStatus status,
                         LocalDateTime startOfToday, Sort sort);
 
+        // Kitchen Completed tab: all orders finished today (COMPLETED + already SERVED)
+        List<Order> findByBranchIdAndStatusInAndStatusUpdatedAtAfter(Long branchId,
+                        Collection<OrderStatus> statuses, LocalDateTime startOfToday, Sort sort);
+
         long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus,
+                        LocalDateTime startOfToday);
+
+        // Kitchen dashboard: all orders finished today (COMPLETED + already SERVED)
+        long countByBranchIdAndStatusInAndCreatedAtAfter(Long branchId, Collection<OrderStatus> statuses,
                         LocalDateTime startOfToday);
 
         Optional<Order> findByIdAndBranchId(Long orderId, Long branchId);
