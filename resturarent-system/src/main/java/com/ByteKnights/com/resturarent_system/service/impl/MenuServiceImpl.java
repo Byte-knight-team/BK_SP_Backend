@@ -312,13 +312,19 @@ public class MenuServiceImpl implements MenuService {
      * Update Rules:
      * 1. Branch cannot be changed to a different branch the user doesn't have access to
      * 2. Item name must be unique within the new branch-category combination
-     * 3. Status updates automatically adjust availability if not explicitly provided
-     * 4. All validations (price range, preparation time) apply to new values
+     * 3. Only CHEF and ADMIN can update menu items.
+     * 4. If a CHEF updates a menu item, its status changes to PENDING. 
+     *    If an ADMIN updates a menu item, its status becomes ACTIVE.
+     * 5. All validations (price range, preparation time) apply to new values
      **/
 
     @Override
     @Transactional
     public MenuItemResponse updateMenuItem(Long id, UpdateMenuItemRequest request) {
+        if (!isCurrentUserAdmin() && !isCurrentUserChef()) {
+            throw new InvalidOperationException("Only CHEF and ADMIN are allowed to update menu items");
+        }
+
         MenuItem menuItem = findMenuItemOrThrow(id);
         enforceCurrentUserBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
 
@@ -369,16 +375,15 @@ public class MenuServiceImpl implements MenuService {
             menuItem.setIsAvailable(request.getIsAvailable());
         }
 
-        if (request.getStatus() != null && !request.getStatus().isBlank()) {
-            MenuItemStatus updatedStatus = parseStatus(request.getStatus(), menuItem.getStatus());
-            menuItem.setStatus(updatedStatus);
-
+        if (isCurrentUserChef()) {
+            menuItem.setStatus(MenuItemStatus.PENDING);
             if (request.getIsAvailable() == null) {
-                if (updatedStatus == MenuItemStatus.ACTIVE) {
-                    menuItem.setIsAvailable(true);
-                } else {
-                    menuItem.setIsAvailable(false);
-                }
+                menuItem.setIsAvailable(false);
+            }
+        } else if (isCurrentUserAdmin()) {
+            menuItem.setStatus(MenuItemStatus.ACTIVE);
+            if (request.getIsAvailable() == null) {
+                menuItem.setIsAvailable(true);
             }
         }
 

@@ -13,10 +13,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/categories")
@@ -57,10 +59,18 @@ public class MenuCategoryController {
         return ResponseEntity.ok(updated);
     }
 
-    @DeleteMapping("/{id:\\d+}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('DELETE_CATEGORY')")
-    public ResponseEntity<MenuCategoryResponse> deleteCategory(@PathVariable Long id) {
-        MenuCategoryResponse deleted = menuCategoryService.deleteCategory(id);
-        return ResponseEntity.ok(deleted);
+    @PatchMapping("/{id:\\d+}/status")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('UPDATE_CATEGORY')")
+    public ResponseEntity<MenuCategoryResponse> toggleCategoryStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, Boolean> payload) {
+        Boolean isActive = payload != null ? payload.get("isActive") : null;
+        if (isActive == null) {
+            return ResponseEntity.badRequest().body(MenuCategoryResponse.builder()
+                    .message("isActive is required")
+                    .build());
+        }
+        MenuCategoryResponse response = menuCategoryService.toggleCategoryStatus(id, isActive);
+        return ResponseEntity.ok(response);
     }
 }

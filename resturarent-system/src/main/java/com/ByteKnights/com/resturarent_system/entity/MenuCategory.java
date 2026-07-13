@@ -21,4 +21,8 @@ public class MenuCategory {
 
     @Column(length = 255)
     private String description;
+
+    @Column(length = 20)
+    @Builder.Default
+    private String status = "ACTIVE";
 }

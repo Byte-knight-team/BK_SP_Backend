@@ -117,40 +117,19 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
     @Override
     @Transactional
-    public MenuCategoryResponse deleteCategory(Long id) {
+    public MenuCategoryResponse toggleCategoryStatus(Long id, boolean isActive) {
         MenuCategory category = findCategoryOrThrow(id);
 
-        if (menuItemRepository.existsByCategoryIdAndIsAvailableTrue(id)) {
-            throw new InvalidOperationException("Cannot delete category with available menu items");
+        String newStatus = isActive ? "ACTIVE" : "INACTIVE";
+        
+        if (category.getStatus() != null && category.getStatus().equals(newStatus)) {
+            return mapToResponse(category, "Category status is already " + newStatus);
         }
 
-        if (menuItemRepository.existsByCategoryId(id)) {
-            throw new InvalidOperationException("Cannot delete category with existing menu items");
-        }
+        category.setStatus(newStatus);
+        MenuCategory updated = menuCategoryRepository.save(category);
 
-        /*
-         * Delete stays manual because after deleting the entity,
-         * oldValuesJson is useful to show what category was removed.
-         */
-        Map<String, Object> oldValues = buildMenuCategoryAuditSnapshot(category);
-
-        MenuCategoryResponse response = mapToResponse(category, "Category deleted successfully");
-
-        menuCategoryRepository.delete(category);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.MENU,
-                AuditEventType.MENU_CATEGORY_DELETED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.MENU_CATEGORY,
-                id,
-                null,
-                "Menu category deleted successfully",
-                oldValues,
-                null);
-
-        return response;
+        return mapToResponse(updated, "Category marked as " + newStatus);
     }
 
     private MenuCategory findCategoryOrThrow(Long id) {
@@ -196,6 +175,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
                 .id(category.getId())
                 .name(category.getName())
                 .description(category.getDescription())
+                .status(category.getStatus())
                 .message(message)
                 .build();
     }
@@ -213,6 +193,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         snapshot.put("categoryId", category.getId());
         snapshot.put("name", category.getName());
         snapshot.put("description", category.getDescription());
+        snapshot.put("status", category.getStatus());
 
         return snapshot;
     }
