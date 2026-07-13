@@ -177,8 +177,25 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         r.setCancelReason(reason);
         reservationRepository.save(r);
 
+        // Free tables
+        LocalDateTime now = LocalDateTime.now();
+        boolean anyFreed = false;
+        for (RestaurantTable table : r.getTables()) {
+            if (table.getState() == TableStatus.RESERVED || table.getState() == TableStatus.OCCUPIED) {
+                table.setState(TableStatus.AVAILABLE);
+                table.setCurrentGuestCount(0);
+                table.setStatusUpdatedAt(now);
+                if (r.getId().equals(table.getSeatedReservationId())) {
+                    table.setSeatedReservationId(null);
+                }
+                restaurantTableRepository.save(table);
+                anyFreed = true;
+            }
+        }
+
         Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
         if (branchId != null) {
+            if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
             webSocketNotificationService.broadcastReservationUpdate(branchId);
         }
     }
@@ -334,9 +351,20 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         BranchConfig config = branchConfigRepository.findByBranchId(r.getBranch().getId())
                 .orElseThrow(() -> new RuntimeException("Branch config not found"));
 
+        boolean anyLocked = false;
+        LocalDateTime now = LocalDateTime.now();
         if (tableNumbers != null && !tableNumbers.isEmpty()) {
             List<RestaurantTable> assignedTables = restaurantTableRepository
                     .findByBranchIdAndTableNumberIn(r.getBranch().getId(), tableNumbers);
+            
+            for (RestaurantTable t : assignedTables) {
+                if (t.getState() == TableStatus.AVAILABLE && !r.getReservationTime().isAfter(now.plusMinutes(15))) {
+                    t.setState(TableStatus.RESERVED);
+                    t.setStatusUpdatedAt(now);
+                    restaurantTableRepository.save(t);
+                    anyLocked = true;
+                }
+            }
             r.setTables(new java.util.HashSet<>(assignedTables));
         }
 
@@ -349,6 +377,11 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         reservationRepository.save(r);
 
         broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "CONFIRMED");
+        if (anyLocked) {
+            webSocketNotificationService.broadcastTableUpdate(r.getBranch().getId());
+        }
+        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
+
         try {
             int paymentWindow = config.getReservationPaymentWindowMinutes();
             String reservationLink = frontendUrl + "/reservations";
@@ -375,6 +408,8 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         reservationRepository.save(r);
 
         broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "REJECTED");
+        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
+
         try {
             emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Rejected",
                     "Unfortunately, your reservation request for " + r.getBranch().getName()
@@ -420,7 +455,28 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         r.setReceptionistNote(cancelReason);
         reservationRepository.save(r);
 
+        // Free tables
+        LocalDateTime now = LocalDateTime.now();
+        boolean anyFreed = false;
+        for (RestaurantTable table : r.getTables()) {
+            if (table.getState() == TableStatus.RESERVED || table.getState() == TableStatus.OCCUPIED) {
+                table.setState(TableStatus.AVAILABLE);
+                table.setCurrentGuestCount(0);
+                table.setStatusUpdatedAt(now);
+                if (r.getId().equals(table.getSeatedReservationId())) {
+                    table.setSeatedReservationId(null);
+                }
+                restaurantTableRepository.save(table);
+                anyFreed = true;
+            }
+        }
+
         broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "CANCELLED");
+        if (anyFreed) {
+            webSocketNotificationService.broadcastTableUpdate(r.getBranch().getId());
+        }
+        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
+
         try {
             emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
                     "Your reservation at " + r.getBranch().getName() + " has been cancelled. Reason: " + cancelReason);
@@ -491,10 +547,30 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             throw new RuntimeException("Reservation must be in PAID state to be completed (seated)");
         }
 
+        // Seat the whole party: occupy every table of the booking.
+        int remaining = r.getGuestCount() != null ? r.getGuestCount() : 0;
+        LocalDateTime now = LocalDateTime.now();
+        List<RestaurantTable> orderedTables = r.getTables().stream()
+                .sorted(java.util.Comparator.comparingInt(t -> t.getCapacity() != null ? t.getCapacity() : 0))
+                .toList();
+        for (RestaurantTable table : orderedTables) {
+            int cap = table.getCapacity() != null ? table.getCapacity() : 0;
+            int seat = Math.min(Math.max(remaining, 0), cap);
+            remaining -= seat;
+            table.setState(TableStatus.OCCUPIED);
+            table.setCurrentGuestCount(seat);
+            table.setSeatedReservationId(r.getId());
+            table.setStatusUpdatedAt(now);
+            restaurantTableRepository.save(table);
+        }
+
         r.setStatus(ReservationStatus.COMPLETED);
         reservationRepository.save(r);
 
         broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "COMPLETED");
+        webSocketNotificationService.broadcastTableUpdate(r.getBranch().getId());
+        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
+
         try {
             emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Thank you for dining with us!",
                     "We hope you enjoyed your time at " + r.getBranch().getName() + ".");
