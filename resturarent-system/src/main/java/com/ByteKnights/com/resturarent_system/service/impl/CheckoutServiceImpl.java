@@ -13,6 +13,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class CheckoutServiceImpl implements CheckoutService {
@@ -71,10 +74,20 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Cart cannot be empty");
         }
 
+        // Batch-load menu items to prevent N+1 queries
+        List<Long> requestedItemIds = request.getItems().stream()
+                .map(CheckoutCalculateRequest.CartItemRequest::getMenuItemId)
+                .collect(Collectors.toList());
+        List<MenuItem> dbMenuItems = menuItemRepository.findAllById(requestedItemIds);
+        Map<Long, MenuItem> menuItemMap = dbMenuItems.stream()
+                .collect(Collectors.toMap(MenuItem::getId, item -> item));
+
         for (CheckoutCalculateRequest.CartItemRequest item : request.getItems()) {
-            MenuItem dbItem = menuItemRepository.findById(item.getMenuItemId())
-                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND,
-                            "Menu item not found: " + item.getMenuItemId()));
+            MenuItem dbItem = menuItemMap.get(item.getMenuItemId());
+            if (dbItem == null) {
+                throw new CustomerAuthException(HttpStatus.NOT_FOUND,
+                        "Menu item not found: " + item.getMenuItemId());
+            }
 
             BigDecimal lineTotal = dbItem.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             subtotal = subtotal.add(lineTotal);

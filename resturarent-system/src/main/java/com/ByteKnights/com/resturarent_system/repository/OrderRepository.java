@@ -307,6 +307,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         // ───────────────────────── Customer Statistics Dashboard
         // ─────────────────────────
 
+        @Query("SELECT o.orderType, COUNT(o), COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
+                        "FROM Order o WHERE o.customer.id = :cid " +
+                        "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
+                        "com.ByteKnights.com.resturarent_system.entity.OrderStatus.REJECTED) GROUP BY o.orderType")
+        List<Object[]> findStatisticsFinancialsAndTypes(@Param("cid") Long customerId);
+
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
                         "FROM Order o WHERE o.customer.id = :cid " +
                         "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +

@@ -132,15 +132,30 @@ public class OrderServiceImpl implements OrderService {
                         }
                 }
 
+                // Batch-load menu items and ingredients to prevent N+1 queries
+                List<Long> requestedItemIds = request.getItems().stream()
+                        .map(PlaceOrderRequest.PlaceOrderItemRequest::getMenuItemId)
+                        .collect(Collectors.toList());
+                        
+                List<MenuItem> dbMenuItems = menuItemRepository.findAllById(requestedItemIds);
+                Map<Long, MenuItem> menuItemMap = dbMenuItems.stream()
+                        .collect(Collectors.toMap(MenuItem::getId, item -> item));
+                        
+                List<MenuItemIngredient> allIngredients = menuItemIngredientRepository.findByMenuItemIdIn(requestedItemIds);
+                Map<Long, List<MenuItemIngredient>> ingredientMap = allIngredients.stream()
+                        .collect(Collectors.groupingBy(ing -> ing.getMenuItem().getId()));
+
                 // 2.5 Pre-Order Inventory Validation & Aggregation
                 Map<Long, BigDecimal> requiredIngredients = new HashMap<>();
                 Map<Long, InventoryItem> inventoryItemCache = new HashMap<>();
                 
                 for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
-                        MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId())
-                                        .orElseThrow(() -> new ResourceNotFoundException("Menu item not found"));
+                        MenuItem dbItem = menuItemMap.get(itemReq.getMenuItemId());
+                        if (dbItem == null) {
+                            throw new ResourceNotFoundException("Menu item not found");
+                        }
                                         
-                        List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(dbItem.getId());
+                        List<MenuItemIngredient> ingredients = ingredientMap.getOrDefault(dbItem.getId(), List.of());
                         
                         for (MenuItemIngredient ingredient : ingredients) {
                                 InventoryItem invItem = ingredient.getInventoryItem();
@@ -215,7 +230,7 @@ public class OrderServiceImpl implements OrderService {
 
                 // 5. Add Items to Order
                 for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
-                        MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId()).orElseThrow();
+                        MenuItem dbItem = menuItemMap.get(itemReq.getMenuItemId());
                         OrderItem orderItem = new OrderItem();
                         orderItem.setMenuItem(dbItem);
                         orderItem.setItemName(dbItem.getName());
@@ -412,17 +427,20 @@ public class OrderServiceImpl implements OrderService {
         }
 
         @Override
+        @Transactional(readOnly = true)
         public List<OrderResponse> getCustomerOrders(String userIdentifier) {
                 return getCustomerOrders(userIdentifier, null, null);
         }
 
         @Override
+        @Transactional(readOnly = true)
         public List<OrderResponse> getCustomerOrders(String userIdentifier, String orderTypeFilter, Boolean isActive) {
                 return getCustomerOrdersPage(userIdentifier, orderTypeFilter, isActive, 0, Integer.MAX_VALUE)
                                 .getOrders();
         }
 
         @Override
+        @Transactional(readOnly = true)
         public CustomerOrdersPageResponse getCustomerOrdersPage(String userIdentifier, String orderTypeFilter,
                         Boolean isActive, int page, int size) {
                 Customer customer = customerRepository.findByUserPhone(userIdentifier)
@@ -472,6 +490,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         @Override
+        @Transactional(readOnly = true)
         public OrderResponse getCustomerOrderById(String userIdentifier, Long orderId) {
                 Customer customer = customerRepository.findByUserPhone(userIdentifier)
                                 .orElseGet(() -> customerRepository.findByUserEmail(userIdentifier)
@@ -562,23 +581,38 @@ public class OrderServiceImpl implements OrderService {
 
                 // Refund inventory
                 Map<Long, BigDecimal> refundIngredients = new HashMap<>();
-                for (OrderItem item : order.getItems()) {
-                        if (item.getMenuItem() != null) {
-                                List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(item.getMenuItem().getId());
-                                for (MenuItemIngredient ingredient : ingredients) {
-                                        InventoryItem invItem = ingredient.getInventoryItem();
-                                        if (invItem.getBranch().getId().equals(order.getBranch().getId())) {
-                                                BigDecimal amountToRefund = ingredient.getQuantityRequired()
-                                                                .multiply(BigDecimal.valueOf(item.getQuantity()));
-                                                refundIngredients.merge(invItem.getId(), amountToRefund, BigDecimal::add);
+                
+                // Batch load ingredients
+                List<Long> menuItemIds = order.getItems().stream()
+                        .filter(item -> item.getMenuItem() != null)
+                        .map(item -> item.getMenuItem().getId())
+                        .collect(Collectors.toList());
+                        
+                if (!menuItemIds.isEmpty()) {
+                        List<MenuItemIngredient> allIngredients = menuItemIngredientRepository.findByMenuItemIdIn(menuItemIds);
+                        Map<Long, List<MenuItemIngredient>> ingredientMap = allIngredients.stream()
+                                .collect(Collectors.groupingBy(ing -> ing.getMenuItem().getId()));
+                        
+                        for (OrderItem item : order.getItems()) {
+                                if (item.getMenuItem() != null) {
+                                        List<MenuItemIngredient> ingredients = ingredientMap.getOrDefault(item.getMenuItem().getId(), List.of());
+                                        for (MenuItemIngredient ingredient : ingredients) {
+                                                InventoryItem invItem = ingredient.getInventoryItem();
+                                                if (invItem.getBranch().getId().equals(order.getBranch().getId())) {
+                                                        BigDecimal amountToRefund = ingredient.getQuantityRequired()
+                                                                        .multiply(BigDecimal.valueOf(item.getQuantity()));
+                                                        refundIngredients.merge(invItem.getId(), amountToRefund, BigDecimal::add);
+                                                }
                                         }
                                 }
                         }
                 }
 
-                for (Map.Entry<Long, BigDecimal> entry : refundIngredients.entrySet()) {
-                        inventoryItemRepository.findById(entry.getKey()).ifPresent(invItem -> {
-                                BigDecimal refundAmount = entry.getValue();
+                // Batch load inventory items to refund
+                if (!refundIngredients.isEmpty()) {
+                        List<InventoryItem> invItems = inventoryItemRepository.findAllById(refundIngredients.keySet());
+                        for (InventoryItem invItem : invItems) {
+                                BigDecimal refundAmount = refundIngredients.get(invItem.getId());
                                 BigDecimal oldQuantity = invItem.getQuantity();
                                 BigDecimal newQuantity = oldQuantity.add(refundAmount);
                                 
@@ -596,7 +630,7 @@ public class OrderServiceImpl implements OrderService {
                                                 .notes("Automated refund for cancelled order " + order.getOrderNumber())
                                                 .build();
                                 inventoryTransactionRepository.save(tx);
-                        });
+                        }
                 }
 
                 order.setStatus(OrderStatus.CANCELLED);
