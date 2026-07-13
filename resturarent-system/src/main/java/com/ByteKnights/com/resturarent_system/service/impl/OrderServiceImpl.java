@@ -115,6 +115,12 @@ public class OrderServiceImpl implements OrderService {
                         }
                         qrSessionService.validateActiveSession(request.getQrSessionId());
 
+                        // Check if table is occupied
+                        if (table.getState() != TableStatus.OCCUPIED) {
+                                throw new CheckoutException(HttpStatus.FORBIDDEN, 
+                                        "Orders can only be placed when the table is marked as OCCUPIED. Please wait for a staff member to seat you.");
+                        }
+
                         if (table.getSeatedReservationId() != null) {
                                 Reservation activeReservation = reservationRepository.findById(table.getSeatedReservationId())
                                                 .orElseThrow(() -> new ResourceNotFoundException("Active reservation not found"));
