@@ -4,7 +4,6 @@ import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CheckAvailabilityRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.ConfirmReservationRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.RejectReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
@@ -31,22 +30,6 @@ import java.util.List;
 public class ReceptionistReservationController {
 
     private final ReceptionistReservationService receptionistReservationService;
-
-    // LEGACY — receptionist creates a reservation directly (old flow, being retired in the
-    // customer-initiated model). Kept until the new confirm/request flow fully replaces it.
-    @PostMapping
-    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
-    public ResponseEntity<StandardResponse> createReservation(
-            @Valid @RequestBody CreateReservationRequest request,
-            Principal principal) {
-
-        ReservationResponseDTO response = receptionistReservationService
-                .createReservation(request, principal.getName());
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(
-                new StandardResponse(201, "Reservation created successfully", response)
-        );
-    }
 
     // For a given time slot, return every branch table tagged FREE / OCCUPIED / BLOCKED
     // so the receptionist can pick tables (used before confirming a request).

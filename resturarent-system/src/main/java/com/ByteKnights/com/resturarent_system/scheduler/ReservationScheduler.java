@@ -60,7 +60,26 @@ public class ReservationScheduler {
                     && r.getPaymentDeadline().isBefore(now)) {
                 r.setStatus(ReservationStatus.EXPIRED);
                 reservationRepository.save(r);
+
+                // Payment window closed → free any tables this booking was holding, unless
+                // another CONFIRMED/PAID booking still holds them within the 15-minute window.
+                boolean anyFreed = false;
+                for (RestaurantTable table : r.getTables()) {
+                    if (table.getState() == TableStatus.RESERVED) {
+                        boolean stillHeld = !reservationRepository
+                                .findOverlappingReservations(table.getId(), now, now.plusMinutes(15))
+                                .isEmpty();
+                        if (!stillHeld) {
+                            table.setState(TableStatus.AVAILABLE);
+                            table.setCurrentGuestCount(0);
+                            table.setStatusUpdatedAt(now);
+                            tableRepository.save(table);
+                            anyFreed = true;
+                        }
+                    }
+                }
                 if (branchId != null) {
+                    if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
                     webSocketNotificationService.broadcastReservationUpdate(branchId);
                 }
                 if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
@@ -86,37 +105,9 @@ public class ReservationScheduler {
 
             LocalDateTime reservationTime = r.getReservationTime();
 
-            // No-show auto-cancel: a PAID reservation whose window has fully passed was
-            // never seated,
-            // so cancel it and free its tables (each RESERVED table → AVAILABLE, unless
-            // another CONFIRMED/PAID
-            // reservation still holds it within the 15-minute window → then it stays
-            // RESERVED for that one).
-            if (r.getEndTime() != null && r.getEndTime().isBefore(now)) {
-                r.setStatus(ReservationStatus.CANCELLED);
-                r.setCancelReason("Auto-cancelled — no-show (reservation time passed)");
-                reservationRepository.save(r);
-                boolean anyFreed = false;
-                for (RestaurantTable table : r.getTables()) {
-                    if (table.getState() == TableStatus.RESERVED) {
-                        boolean stillHeld = !reservationRepository
-                                .findOverlappingReservations(table.getId(), now, now.plusMinutes(15))
-                                .isEmpty();
-                        if (!stillHeld) {
-                            table.setState(TableStatus.AVAILABLE);
-                            table.setCurrentGuestCount(0);
-                            table.setStatusUpdatedAt(now);
-                            tableRepository.save(table);
-                            anyFreed = true;
-                        }
-                    }
-                }
-                if (anyFreed)
-                    webSocketNotificationService.broadcastTableUpdate(branchId);
-                webSocketNotificationService.broadcastReservationUpdate(branchId);
-                log.info("Auto-cancelled no-show reservation {} (window ended)", reservationId);
-                continue;
-            }
+            // NOTE: no-show is handled MANUALLY by the receptionist (they may choose to wait a
+            // while for late guests), so there is deliberately NO auto-cancel here — a PAID
+            // booking stays PAID until it is either seated or cancelled by staff.
 
             // Representative table number for the reminder toast (lowest table number in
             // the booking).

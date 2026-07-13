@@ -3,7 +3,6 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CheckAvailabilityRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.ConfirmReservationRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.RejectReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
@@ -56,91 +55,6 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     // Tunable business rules
     private static final int MIN_RESERVATION_LEAD_HOURS = 0; // 0 = future-only (booking just has to be later than now)
     private static final int GAP_HOURS = 1;                  // required gap between two reservations on the same table
-
-    @Override
-    @Transactional
-    public ReservationResponseDTO createReservation(CreateReservationRequest request, String userEmail) {
-        User user = userRepository.findByEmail(userEmail)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Staff staff = staffRepository.findByUser(user)
-                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
-
-        Branch branch = staff.getBranch();
-        Long branchId = branch.getId();
-
-        // Load and validate the selected tables — all must exist and belong to this branch.
-        List<RestaurantTable> tables = tableRepository.findAllById(request.getTableIds());
-        if (tables.size() != request.getTableIds().size()) {
-            throw new RuntimeException("One or more selected tables were not found");
-        }
-        for (RestaurantTable t : tables) {
-            if (t.getBranch() == null || !t.getBranch().getId().equals(branchId)) {
-                throw new RuntimeException("A selected table does not belong to your branch");
-            }
-        }
-
-        // Basic sanity
-        if (request.getReservationTime().isBefore(LocalDateTime.now().plusHours(MIN_RESERVATION_LEAD_HOURS))) {
-            throw new RuntimeException("Reservation time must be in the future.");
-        }
-        if (request.getEndTime() == null || !request.getEndTime().isAfter(request.getReservationTime())) {
-            throw new RuntimeException("End time must be after the start time.");
-        }
-
-        // Enforce capacity: the selected tables' seats must cover the party.
-        int totalSeats = tables.stream().mapToInt(t -> t.getCapacity() != null ? t.getCapacity() : 0).sum();
-        if (request.getGuestCount() > totalSeats) {
-            throw new RuntimeException("Selected tables seat " + totalSeats
-                    + ", which can't cover a party of " + request.getGuestCount() + ".");
-        }
-
-        // Block ONLY on a real time overlap with a PENDING reservation. The 1-hour gap is a warning
-        // shown at check time — it never blocks; the receptionist decides.
-        for (RestaurantTable t : tables) {
-            List<Reservation> overlapping = reservationRepository.findOverlappingReservations(
-                    t.getId(),
-                    request.getReservationTime(),
-                    request.getEndTime());
-            if (!overlapping.isEmpty()) {
-                throw new RuntimeException("Table " + t.getTableNumber()
-                        + " already has a reservation overlapping this time slot");
-            }
-        }
-
-        Reservation reservation = Reservation.builder()
-                .branch(branch)
-                .tables(new HashSet<>(tables))
-                .customerName(request.getCustomerName())
-                .customerPhone(request.getCustomerPhone())
-                .reservationTime(request.getReservationTime())
-                .endTime(request.getEndTime())
-                .guestCount(request.getGuestCount())
-                .customerNote(request.getNotes())
-                .status(ReservationStatus.PAID)
-                .build();
-
-        Reservation saved = reservationRepository.save(reservation);
-
-        // Immediate lock: any AVAILABLE selected table whose slot starts within 15 min → RESERVED now
-        // (the scheduler's 15-min window would otherwise miss a booking made <15 min ahead).
-        LocalDateTime now = LocalDateTime.now();
-        boolean anyLocked = false;
-        for (RestaurantTable t : tables) {
-            if (t.getState() == TableStatus.AVAILABLE
-                    && !saved.getReservationTime().isAfter(now.plusMinutes(15))) {
-                t.setState(TableStatus.RESERVED);
-                t.setStatusUpdatedAt(now);
-                tableRepository.save(t);
-                anyLocked = true;
-            }
-        }
-
-        webSocketNotificationService.broadcastReservationUpdate(branchId);
-        if (anyLocked) webSocketNotificationService.broadcastTableUpdate(branchId);
-
-        return toDTO(saved);
-    }
 
     @Override
     public CheckAvailabilityResponse checkAvailability(CheckAvailabilityRequest request, String userEmail) {

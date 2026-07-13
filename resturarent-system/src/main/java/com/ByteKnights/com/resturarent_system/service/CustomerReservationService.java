@@ -22,10 +22,4 @@ public interface CustomerReservationService {
     ReservationChargeBreakdown previewCharge(Long branchId, int guestCount, LocalDateTime start, LocalDateTime end);
 
     List<com.ByteKnights.com.resturarent_system.dto.BranchResponse> getActiveReservationBranches();
-
-    void testConfirmReservation(Long reservationId, List<Integer> tableNumbers, String receptionistNote);
-    void testRejectReservation(Long reservationId, String rejectReason);
-    void testCancelReservation(Long reservationId, String cancelReason);
-    com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse testCheckAvailability(Long reservationId);
-    void testCompleteReservation(Long reservationId);
 }
