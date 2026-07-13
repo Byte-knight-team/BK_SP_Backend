@@ -121,7 +121,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         MenuCategory category = findCategoryOrThrow(id);
 
         String newStatus = isActive ? "ACTIVE" : "INACTIVE";
-        
+
         if (category.getStatus() != null && category.getStatus().equals(newStatus)) {
             return mapToResponse(category, "Category status is already " + newStatus);
         }
@@ -176,6 +176,8 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
                 .name(category.getName())
                 .description(category.getDescription())
                 .status(category.getStatus())
+                .createdAt(category.getCreatedAt())
+                .updatedAt(category.getUpdatedAt())
                 .message(message)
                 .build();
     }
