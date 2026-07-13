@@ -53,13 +53,28 @@ public class Reservation {
     @Column(name = "guest_count")
     private Integer guestCount;
 
-    @Column(name = "notes", length = 500)
-    private String notes;
+    @Column(name = "customer_note", length = 500)
+    private String customerNote;
+
+    @Column(name = "receptionist_note", length = 500)
+    private String receptionistNote;
+
+    @Column(name = "total_charge", precision = 12, scale = 2)
+    private java.math.BigDecimal totalCharge;
+
+    @Column(name = "handling_fee", precision = 12, scale = 2)
+    private java.math.BigDecimal handlingFee;
+
+    @Column(name = "refund_amount", precision = 12, scale = 2)
+    private java.math.BigDecimal refundAmount;
+
+    @Column(name = "payment_deadline")
+    private LocalDateTime paymentDeadline;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private ReservationStatus status = ReservationStatus.PENDING;
+    private ReservationStatus status = ReservationStatus.REQUESTED;
 
     @Column(name = "cancel_reason", length = 255)
     private String cancelReason;

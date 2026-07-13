@@ -6,6 +6,7 @@ import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.ReservationRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
+import com.ByteKnights.com.resturarent_system.service.email.EmailService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,10 +28,12 @@ public class ReservationScheduler {
     private final ReservationRepository reservationRepository;
     private final RestaurantTableRepository tableRepository;
     private final WebSocketNotificationService webSocketNotificationService;
+    private final EmailService emailService;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("h:mm a");
 
-    // Tracks reservations that have already been notified to prevent duplicate toasts
+    // Tracks reservations that have already been notified to prevent duplicate
+    // toasts
     private final Set<String> sentNotifications = new HashSet<>();
 
     @Scheduled(fixedRate = 60000)
@@ -50,16 +53,45 @@ public class ReservationScheduler {
         List<Reservation> all = reservationRepository.findAll();
 
         for (Reservation r : all) {
-            if (r.getStatus() != ReservationStatus.PENDING) continue;
-
-            LocalDateTime reservationTime = r.getReservationTime();
             Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
-            if (branchId == null) continue;
             Long reservationId = r.getId();
 
-            // No-show auto-cancel: a PENDING reservation whose window has fully passed was never seated,
-            // so cancel it and free its tables (each RESERVED table → AVAILABLE, unless another PENDING
-            // reservation still holds it within the 15-minute window → then it stays RESERVED for that one).
+            if (r.getStatus() == ReservationStatus.CONFIRMED && r.getPaymentDeadline() != null
+                    && r.getPaymentDeadline().isBefore(now)) {
+                r.setStatus(ReservationStatus.EXPIRED);
+                reservationRepository.save(r);
+                if (branchId != null) {
+                    webSocketNotificationService.broadcastReservationUpdate(branchId);
+                }
+                if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+                    webSocketNotificationService.broadcastReservationStatusToCustomer(r.getCustomer().getUser().getId(),
+                            reservationId, "EXPIRED");
+                    try {
+                        emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Expired",
+                                "Your reservation at " + r.getBranch().getName()
+                                        + " has expired because the payment was not completed within the allowed time window.");
+                    } catch (Exception e) {
+                        log.error("Failed to send expiration email for reservation {}", reservationId, e);
+                    }
+                }
+                log.info("Auto-expired unpaid confirmed reservation {}", reservationId);
+                continue;
+            }
+
+            if (r.getStatus() != ReservationStatus.PAID)
+                continue;
+
+            if (branchId == null)
+                continue;
+
+            LocalDateTime reservationTime = r.getReservationTime();
+
+            // No-show auto-cancel: a PAID reservation whose window has fully passed was
+            // never seated,
+            // so cancel it and free its tables (each RESERVED table → AVAILABLE, unless
+            // another CONFIRMED/PAID
+            // reservation still holds it within the 15-minute window → then it stays
+            // RESERVED for that one).
             if (r.getEndTime() != null && r.getEndTime().isBefore(now)) {
                 r.setStatus(ReservationStatus.CANCELLED);
                 r.setCancelReason("Auto-cancelled — no-show (reservation time passed)");
@@ -79,13 +111,15 @@ public class ReservationScheduler {
                         }
                     }
                 }
-                if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
+                if (anyFreed)
+                    webSocketNotificationService.broadcastTableUpdate(branchId);
                 webSocketNotificationService.broadcastReservationUpdate(branchId);
                 log.info("Auto-cancelled no-show reservation {} (window ended)", reservationId);
                 continue;
             }
 
-            // Representative table number for the reminder toast (lowest table number in the booking).
+            // Representative table number for the reminder toast (lowest table number in
+            // the booking).
             Integer tableNumber = r.getTables().stream()
                     .map(RestaurantTable::getTableNumber)
                     .filter(java.util.Objects::nonNull)
@@ -97,7 +131,8 @@ public class ReservationScheduler {
             if (!sentNotifications.contains(key1hr)
                     && !reservationTime.isBefore(oneHourStart)
                     && !reservationTime.isAfter(oneHourEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_1HR", tableNumber, timeStr);
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_1HR", tableNumber,
+                        timeStr);
                 sentNotifications.add(key1hr);
                 log.info("1-hour reminder sent for table {} at {}", tableNumber, timeStr);
             }
@@ -107,7 +142,8 @@ public class ReservationScheduler {
             if (!sentNotifications.contains(key30min)
                     && !reservationTime.isBefore(thirtyMinStart)
                     && !reservationTime.isAfter(thirtyMinEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_30MIN", tableNumber, timeStr);
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_30MIN", tableNumber,
+                        timeStr);
                 sentNotifications.add(key30min);
                 log.info("30-min reminder sent for table {} at {}", tableNumber, timeStr);
             }
@@ -117,7 +153,8 @@ public class ReservationScheduler {
             if (!sentNotifications.contains(key15min)
                     && !reservationTime.isBefore(fifteenMinStart)
                     && !reservationTime.isAfter(fifteenMinEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_15MIN", tableNumber, timeStr);
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_15MIN", tableNumber,
+                        timeStr);
                 sentNotifications.add(key15min);
                 log.info("15-min reminder sent for table {} at {}", tableNumber, timeStr);
 
@@ -137,8 +174,10 @@ public class ReservationScheduler {
                 }
             }
 
-            // #5 GUEST LATE — the slot has started but the guest still isn't seated (still PENDING;
-            // past-end no-shows were auto-cancelled above, so this window is still active). Fire once.
+            // #5 GUEST LATE — the slot has started but the guest still isn't seated (still
+            // PAID;
+            // past-end no-shows were auto-cancelled above, so this window is still active).
+            // Fire once.
             String keyLate = reservationId + "-LATE";
             if (!sentNotifications.contains(keyLate) && reservationTime.isBefore(now)) {
                 webSocketNotificationService.broadcastReservationReminder(branchId, "GUEST_LATE", tableNumber, timeStr);
@@ -147,16 +186,22 @@ public class ReservationScheduler {
             }
         }
 
-        // #6 TIME'S UP — a table occupied for a reservation whose reserved window has ended. Notify once
-        // per booking (the reserved time is over — ask them to leave / clear the table).
+        // #6 TIME'S UP — a table occupied for a reservation whose reserved window has
+        // ended. Notify once
+        // per booking (the reserved time is over — ask them to leave / clear the
+        // table).
         for (RestaurantTable table : tableRepository.findAll()) {
-            if (table.getState() != TableStatus.OCCUPIED || table.getSeatedReservationId() == null) continue;
+            if (table.getState() != TableStatus.OCCUPIED || table.getSeatedReservationId() == null)
+                continue;
             Reservation sr = reservationRepository.findById(table.getSeatedReservationId()).orElse(null);
-            if (sr == null || sr.getEndTime() == null || !sr.getEndTime().isBefore(now)) continue;
+            if (sr == null || sr.getEndTime() == null || !sr.getEndTime().isBefore(now))
+                continue;
             String keyUp = "TIMEUP-" + sr.getId();
-            if (sentNotifications.contains(keyUp)) continue;
+            if (sentNotifications.contains(keyUp))
+                continue;
             Long upBranchId = table.getBranch() != null ? table.getBranch().getId() : null;
-            if (upBranchId == null) continue;
+            if (upBranchId == null)
+                continue;
             webSocketNotificationService.broadcastReservationReminder(
                     upBranchId, "TIME_UP", table.getTableNumber(), sr.getEndTime().format(TIME_FORMATTER));
             sentNotifications.add(keyUp);

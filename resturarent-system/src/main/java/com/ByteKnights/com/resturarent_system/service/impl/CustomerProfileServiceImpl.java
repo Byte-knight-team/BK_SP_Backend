@@ -18,6 +18,10 @@ import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.CustomerProfileService;
 import com.ByteKnights.com.resturarent_system.service.ProfileImageStorageService;
+import com.ByteKnights.com.resturarent_system.entity.EmailVerificationToken;
+import com.ByteKnights.com.resturarent_system.repository.EmailVerificationTokenRepository;
+import com.ByteKnights.com.resturarent_system.service.email.EmailService;
+import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.http.HttpStatus;
@@ -45,6 +49,11 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final LoyaltyTransactionRepository loyaltyTransactionRepository;
+    private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+    private final EmailService emailService;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     public CustomerProfileServiceImpl(UserRepository userRepository,
             CustomerRepository customerRepository,
@@ -52,7 +61,9 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
             ProfileImageStorageService profileImageStorageService,
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
-            LoyaltyTransactionRepository loyaltyTransactionRepository) {
+            LoyaltyTransactionRepository loyaltyTransactionRepository,
+            EmailVerificationTokenRepository emailVerificationTokenRepository,
+            EmailService emailService) {
         this.userRepository = userRepository;
         this.customerRepository = customerRepository;
         this.passwordEncoder = passwordEncoder;
@@ -60,6 +71,8 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.loyaltyTransactionRepository = loyaltyTransactionRepository;
+        this.emailVerificationTokenRepository = emailVerificationTokenRepository;
+        this.emailService = emailService;
     }
 
     @Override
@@ -87,6 +100,7 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
                 .loyaltyPoints(customer.getLoyaltyPoints())
                 .memberSince(formattedDate)
                 .profilePictureUrl(profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey()))
+                .emailVerified(customer.getEmailVerified() != null && customer.getEmailVerified())
                 .build();
     }
 
@@ -277,5 +291,50 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
                 .memberSince(user.getCreatedAt())
                 .totalItemsOrdered(totalItems != null ? totalItems : 0L)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void requestEmailVerification(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
+
+        Customer customer = customerRepository.findByUser(user)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Customer not found"));
+
+        if (customer.getEmailVerified() != null && customer.getEmailVerified()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Email is already verified");
+        }
+
+        // Delete any existing tokens for this customer
+        emailVerificationTokenRepository.deleteByCustomer(customer);
+
+        EmailVerificationToken token = EmailVerificationToken.builder()
+                .customer(customer)
+                .expiresAt(java.time.LocalDateTime.now().plusHours(24))
+                .build();
+
+        emailVerificationTokenRepository.save(token);
+
+        String verificationLink = frontendUrl + "/verify-email?token=" + token.getToken();
+        emailService.sendCustomerEmailVerification(user.getEmail(), verificationLink);
+    }
+
+    @Override
+    @Transactional
+    public void verifyEmail(String tokenStr) {
+        EmailVerificationToken token = emailVerificationTokenRepository.findByToken(tokenStr)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.BAD_REQUEST, "Invalid or expired verification token"));
+
+        if (token.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+            emailVerificationTokenRepository.delete(token);
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Verification token has expired");
+        }
+
+        Customer customer = token.getCustomer();
+        customer.setEmailVerified(true);
+        customerRepository.save(customer);
+
+        emailVerificationTokenRepository.delete(token);
     }
 }

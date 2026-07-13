@@ -11,7 +11,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import io.swagger.v3.oas.annotations.Operation;
 
 import java.security.Principal;
 import java.util.Map;
@@ -28,7 +31,7 @@ public class CustomerProfileController {
 
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(Principal principal) {
-        // The Principal object contains the email of the currently logged-in user 
+        // The Principal object contains the email of the currently logged-in user
         // (automatically injected by your Spring Security JWT filter)
         if (principal == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
@@ -36,7 +39,7 @@ public class CustomerProfileController {
 
         String userEmail = principal.getName();
         CustomerProfileResponse profile = customerProfileService.getCustomerProfile(userEmail);
-        
+
         return ResponseEntity.ok(Map.of("data", profile));
     }
 
@@ -45,14 +48,13 @@ public class CustomerProfileController {
         if (principal == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
         }
-        
+
         String currentEmail = principal.getName();
         CustomerProfileResponse updatedProfile = customerProfileService.updateCustomerProfile(currentEmail, request);
-        
+
         return ResponseEntity.ok(Map.of(
                 "message", "Profile updated successfully",
-                "data", updatedProfile
-        ));
+                "data", updatedProfile));
     }
 
     @PutMapping("/profile/password")
@@ -68,19 +70,22 @@ public class CustomerProfileController {
     }
 
     @PostMapping("/profile/picture/presign")
-    public ResponseEntity<?> createProfilePictureUploadUrl(Principal principal, @RequestBody com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePicturePresignRequest request) {
+    public ResponseEntity<?> createProfilePictureUploadUrl(Principal principal,
+            @RequestBody com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePicturePresignRequest request) {
         if (principal == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
         }
 
         String userEmail = principal.getName();
-        com.ByteKnights.com.resturarent_system.dto.response.customer.ProfilePicturePresignResponse response = customerProfileService.createProfilePictureUploadUrl(userEmail, request);
+        com.ByteKnights.com.resturarent_system.dto.response.customer.ProfilePicturePresignResponse response = customerProfileService
+                .createProfilePictureUploadUrl(userEmail, request);
 
         return ResponseEntity.ok(Map.of("data", response));
     }
 
     @PutMapping("/profile/picture")
-    public ResponseEntity<?> updateProfilePicture(Principal principal, @RequestBody com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePictureUpdateRequest request) {
+    public ResponseEntity<?> updateProfilePicture(Principal principal,
+            @RequestBody com.ByteKnights.com.resturarent_system.dto.request.customer.ProfilePictureUpdateRequest request) {
         if (principal == null) {
             return ResponseEntity.status(401).body(Map.of("message", "Unauthorized access"));
         }
@@ -112,5 +117,26 @@ public class CustomerProfileController {
         String userEmail = principal.getName();
         return ResponseEntity.ok(Map.of("data",
                 customerProfileService.getCustomerStatistics(userEmail)));
+    }
+
+    @Operation(summary = "Request email verification")
+    @PostMapping("/request-email-verification")
+    public ResponseEntity<Map<String, String>> requestEmailVerification(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of("error", "Unauthorized access"));
+        }
+
+        String userEmail = principal.getName();
+        customerProfileService.requestEmailVerification(userEmail);
+
+        return ResponseEntity.ok(Map.of("message", "Verification email sent successfully"));
+    }
+
+    @Operation(summary = "Verify email with token")
+    @PostMapping("/verify-email")
+    public ResponseEntity<Map<String, String>> verifyEmail(@RequestParam String token) {
+        customerProfileService.verifyEmail(token);
+        return ResponseEntity.ok(Map.of("message", "Email verified successfully"));
     }
 }
