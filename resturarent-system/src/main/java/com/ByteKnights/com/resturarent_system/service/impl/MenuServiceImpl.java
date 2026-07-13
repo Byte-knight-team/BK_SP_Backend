@@ -67,7 +67,7 @@ import java.util.stream.Collectors;
  * 
  * Access Control:
  * - ADMIN: Can approve/reject items, access their branch's menu
- * - CHEF: Can create/update items, view their branch's menu
+ * - CHEF: Can create items, view their branch's menu
  * - Admin users creating items bypass the PENDING approval workflow
  **/
 
@@ -192,6 +192,10 @@ public class MenuServiceImpl implements MenuService {
         Long branchId = resolveCurrentUserBranchId();
         Branch branch = findBranchOrThrow(branchId);
         MenuCategory category = findCategoryOrThrow(request.getCategoryId());
+
+        if ("INACTIVE".equalsIgnoreCase(category.getStatus())) {
+            throw new InvalidOperationException("Cannot create a menu item in an INACTIVE category");
+        }
         String validatedName = validateAndNormalizeRequiredName(request.getName());
 
         validatePriceRange(request.getPrice());
@@ -207,7 +211,7 @@ public class MenuServiceImpl implements MenuService {
         MenuItem menuItem = MenuItem.builder()
                 .branch(branch)
                 .category(category)
-                .subCategory(validateAndNormalizeOptionalSubCategory(request.getSubCategory()))
+                .subCategory(validateAndNormalizeRequiredSubCategory(request.getSubCategory()))
                 .name(validatedName)
                 .description(validateAndNormalizeOptionalDescription(request.getDescription()))
                 .price(request.getPrice())
@@ -319,17 +323,16 @@ public class MenuServiceImpl implements MenuService {
      * 1. Branch cannot be changed to a different branch the user doesn't have
      * access to
      * 2. Item name must be unique within the new branch-category combination
-     * 3. Only CHEF and ADMIN can update menu items.
-     * 4. If a CHEF updates a menu item, its status changes to PENDING.
-     * If an ADMIN updates a menu item, its status becomes ACTIVE.
+     * 3. Only ADMIN can update menu items.
+     * 4. If an ADMIN updates a menu item, its status becomes ACTIVE.
      * 5. All validations (price range, preparation time) apply to new values
      **/
 
     @Override
     @Transactional
     public MenuItemResponse updateMenuItem(Long id, UpdateMenuItemRequest request) {
-        if (!isCurrentUserAdmin() && !isCurrentUserChef()) {
-            throw new InvalidOperationException("Only CHEF and ADMIN are allowed to update menu items");
+        if (!isCurrentUserAdmin()) {
+            throw new InvalidOperationException("Only ADMIN is allowed to update menu items");
         }
 
         MenuItem menuItem = findMenuItemOrThrow(id);
@@ -345,8 +348,14 @@ public class MenuServiceImpl implements MenuService {
             menuItem.setBranch(findBranchOrThrow(request.getBranchId()));
         }
 
+        MenuCategory finalCategory = menuItem.getCategory();
         if (request.getCategoryId() != null) {
-            menuItem.setCategory(findCategoryOrThrow(request.getCategoryId()));
+            finalCategory = findCategoryOrThrow(request.getCategoryId());
+            menuItem.setCategory(finalCategory);
+        }
+
+        if ("INACTIVE".equalsIgnoreCase(finalCategory.getStatus())) {
+            throw new InvalidOperationException("Cannot update a menu item if its category is INACTIVE");
         }
 
         if (request.getSubCategory() != null) {
@@ -382,16 +391,9 @@ public class MenuServiceImpl implements MenuService {
             menuItem.setIsAvailable(request.getIsAvailable());
         }
 
-        if (isCurrentUserChef()) {
-            menuItem.setStatus(MenuItemStatus.PENDING);
-            if (request.getIsAvailable() == null) {
-                menuItem.setIsAvailable(false);
-            }
-        } else if (isCurrentUserAdmin()) {
-            menuItem.setStatus(MenuItemStatus.ACTIVE);
-            if (request.getIsAvailable() == null) {
-                menuItem.setIsAvailable(true);
-            }
+        menuItem.setStatus(MenuItemStatus.ACTIVE);
+        if (request.getIsAvailable() == null) {
+            menuItem.setIsAvailable(true);
         }
 
         if (request.getPreparationTime() != null) {
@@ -569,6 +571,10 @@ public class MenuServiceImpl implements MenuService {
 
         if (menuItem.getStatus() != MenuItemStatus.ACTIVE) {
             throw new InvalidOperationException("Cannot toggle availability if item is not ACTIVE");
+        }
+
+        if ("INACTIVE".equalsIgnoreCase(menuItem.getCategory().getStatus())) {
+            throw new InvalidOperationException("Cannot toggle availability of a menu item in an INACTIVE category");
         }
 
         /*
@@ -822,6 +828,23 @@ public class MenuServiceImpl implements MenuService {
         // Convert to title case: lowercase first, then capitalize first letter of each
         // word
         return toTitleCase(normalizedSubCategory);
+    }
+
+    /**
+     * Helper method: Validates and normalizes a required sub-category name.
+     * 
+     * Validation Rules:
+     * - Null values are NOT acceptable (required field)
+     * - Cannot be blank
+     * - Maximum 50 characters
+     * - Converted to title case (e.g., "spicy chicken" -> "Spicy Chicken")
+     **/
+
+    private String validateAndNormalizeRequiredSubCategory(String subCategory) {
+        if (subCategory == null || subCategory.trim().isEmpty()) {
+            throw new InvalidOperationException("Sub category is required");
+        }
+        return validateAndNormalizeOptionalSubCategory(subCategory);
     }
 
     /**
@@ -1117,6 +1140,7 @@ public class MenuServiceImpl implements MenuService {
                 .branchName(item.getBranch() != null ? item.getBranch().getName() : null)
                 .categoryId(item.getCategory() != null ? item.getCategory().getId() : null)
                 .categoryName(item.getCategory() != null ? item.getCategory().getName() : null)
+                .categoryStatus(item.getCategory() != null ? item.getCategory().getStatus() : null)
                 .subCategory(item.getSubCategory())
                 .name(item.getName())
                 .description(item.getDescription())
