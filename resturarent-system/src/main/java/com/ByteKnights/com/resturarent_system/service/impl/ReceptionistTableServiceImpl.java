@@ -161,8 +161,15 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
             throw new RuntimeException("Security Alert: Access Denied! This table does not belong to your branch.");
         }
 
-        // Allow seating on AVAILABLE or RESERVED tables (reserved guests arriving)
-        if (table.getState() != TableStatus.AVAILABLE && table.getState() != TableStatus.RESERVED) {
+        // Walk-in occupy is ONLY for a genuinely free table. A RESERVED table is held for a
+        // booking and must be seated via seatReservation (which keeps the seated_reservation_id
+        // link). If we let the walk-in path occupy it, it would null that link and orphan the
+        // paid reservation (no COMPLETED, no "time's up"). So block it here as a backstop.
+        if (table.getState() == TableStatus.RESERVED) {
+            throw new RuntimeException(
+                    "This table is reserved — use 'Seat reservation' to seat the booked guests.");
+        }
+        if (table.getState() != TableStatus.AVAILABLE) {
             throw new RuntimeException("Table is not available for seating");
         }
 
