@@ -21,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -46,6 +47,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     private final StaffRepository staffRepository;
     private final OrderRepository orderRepository;
     private final BranchConfigRepository branchConfigRepository;
+    private final ReservationPaymentRepository reservationPaymentRepository;
+    private final CustomerRepository customerRepository;
     private final WebSocketNotificationService webSocketNotificationService;
     private final EmailService emailService;
 
@@ -194,17 +197,64 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .orElseThrow(() -> new RuntimeException("Reservation not found"));
 
         Long branchId = reservation.getBranch() != null ? reservation.getBranch().getId() : null;
+        LocalDateTime now = LocalDateTime.now();
+
+        // Terminal states can't be cancelled: already finished (seated), or already ended.
+        ReservationStatus current = reservation.getStatus();
+        if (current == ReservationStatus.COMPLETED || current == ReservationStatus.CANCELLED
+                || current == ReservationStatus.REJECTED || current == ReservationStatus.EXPIRED) {
+            throw new RuntimeException("This reservation can no longer be cancelled");
+        }
+
+        // ── Refund decision (receptionist-initiated cancel) ──────────────────────────────
+        // Only a PAID booking has money. When the RESTAURANT cancels BEFORE the booking starts,
+        // the customer is fully refunded (including the handling fee). After it has started
+        // (e.g. a no-show the receptionist finally cancels) nothing is refunded. Not-yet-paid
+        // bookings (REQUESTED/CONFIRMED) never had money, so no refund either.
+        BigDecimal refundAmount = null;
+        if (current == ReservationStatus.PAID
+                && reservation.getReservationTime() != null
+                && now.isBefore(reservation.getReservationTime())) {
+            refundAmount = reservation.getTotalCharge();
+        }
+
+        if (refundAmount != null && refundAmount.signum() > 0) {
+            reservation.setRefundAmount(refundAmount);
+
+            // Record the refund as a negative payment against this reservation.
+            ReservationPayment refund = ReservationPayment.builder()
+                    .reservation(reservation)
+                    .paymentMethod(PaymentMethod.CARD)
+                    .paymentStatus(PaymentStatus.SUCCESS)
+                    .transactionReference("REFUND-" + System.currentTimeMillis())
+                    .amount(refundAmount.negate())
+                    .refundAmount(refundAmount)
+                    .refundedAt(now)
+                    .build();
+            reservationPaymentRepository.save(refund);
+
+            // Take the refunded amount back out of the customer's lifetime spend.
+            Customer c = reservation.getCustomer();
+            if (c != null && c.getTotalSpent() != null) {
+                c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
+                customerRepository.save(c);
+            }
+        }
 
         // One reservation = one booking, so this cancels the whole booking (all its tables) at once.
         reservation.setStatus(ReservationStatus.CANCELLED);
         reservation.setCancelReason(request.getReason());
         reservationRepository.save(reservation);
 
-        // Free each table this booking was holding — for a RESERVED table, unless another PENDING
-        // reservation still holds it within the 15-minute window (then keep it held for that one).
-        LocalDateTime now = LocalDateTime.now();
+        // Free each table this booking was holding. A RESERVED table is released unless another
+        // CONFIRMED/PAID reservation still holds it within the 15-minute window.
         boolean anyFreed = false;
         for (RestaurantTable table : reservation.getTables()) {
+            // Clear any lingering seated link to this booking (safety — a cancellable booking
+            // shouldn't be seated, but never leave a stale pointer).
+            if (reservation.getId().equals(table.getSeatedReservationId())) {
+                table.setSeatedReservationId(null);
+            }
             if (table.getState() == TableStatus.RESERVED) {
                 boolean stillHeld = !reservationRepository
                         .findOverlappingReservations(table.getId(), now, now.plusMinutes(15))
@@ -216,6 +266,22 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                     tableRepository.save(table);
                     anyFreed = true;
                 }
+            }
+        }
+
+        // Tell the customer (WS + email), and refresh the branch views.
+        if (reservation.getCustomer() != null && reservation.getCustomer().getUser() != null) {
+            webSocketNotificationService.broadcastReservationStatusToCustomer(
+                    reservation.getCustomer().getUser().getId(), reservation.getId(), "CANCELLED");
+            try {
+                String refundMsg = (refundAmount != null && refundAmount.signum() > 0)
+                        ? " A refund of Rs " + refundAmount + " has been processed."
+                        : "";
+                emailService.sendSimpleEmail(reservation.getCustomer().getUser().getEmail(),
+                        "Reservation Cancelled",
+                        "Your reservation at " + reservation.getBranch().getName()
+                                + " has been cancelled. Reason: " + request.getReason() + "." + refundMsg);
+            } catch (Exception ignored) {
             }
         }
 
