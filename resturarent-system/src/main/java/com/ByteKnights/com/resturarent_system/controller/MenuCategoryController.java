@@ -25,6 +25,7 @@ import java.util.Map;
 public class MenuCategoryController {
 
     private final MenuCategoryService menuCategoryService;
+
     public MenuCategoryController(MenuCategoryService menuCategoryService) {
         this.menuCategoryService = menuCategoryService;
     }
