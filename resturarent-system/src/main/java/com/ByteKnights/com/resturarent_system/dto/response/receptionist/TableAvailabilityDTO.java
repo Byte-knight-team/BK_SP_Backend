@@ -7,6 +7,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * One table's availability for a requested slot (part of CheckAvailabilityResponse).
+ * The receptionist uses these tags to decide which tables to assign when confirming.
+ */
 @Data
 @Builder
 @NoArgsConstructor
@@ -17,10 +21,10 @@ public class TableAvailabilityDTO {
     private Integer tableNumber;
     private Integer capacity;
 
-    // FREE | RESERVED | OCCUPIED
+    // FREE | OCCUPIED | BLOCKED  (only BLOCKED — a real time overlap — is un-selectable)
     private String status;
 
-    // populated only when status == RESERVED (the clashing reservation's window)
+    // populated when status == BLOCKED (the overlapping reservation's window), or on a gap warning
     private LocalDateTime conflictStart;
     private LocalDateTime conflictEnd;
 

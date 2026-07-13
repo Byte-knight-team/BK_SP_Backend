@@ -7,6 +7,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+/**
+ * A compact reservation summary shown on a table card/modal (who booked it and the
+ * reserved window) — used for "today's reservations" and the currently-seated reservation.
+ */
 @Data
 @Builder
 @NoArgsConstructor

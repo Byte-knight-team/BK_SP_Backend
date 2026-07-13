@@ -17,6 +17,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Table-floor operations for the receptionist's branch. Loads tables with their live state,
+ * active orders and today's reservations, and handles walk-in occupy / guest-count / clear.
+ * Every method resolves the caller's branch first and rejects tables from other branches.
+ */
 @Service
 @RequiredArgsConstructor
 public class ReceptionistTableServiceImpl implements ReceptionistTableService {

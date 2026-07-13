@@ -2,7 +2,9 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CheckAvailabilityRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.ConfirmReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.RejectReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
@@ -11,7 +13,9 @@ import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistReservationService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
+import com.ByteKnights.com.resturarent_system.service.email.EmailService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,6 +29,14 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 
+/**
+ * Reservation logic for the receptionist. Key operations:
+ *  - checkAvailability: tag every branch table FREE/OCCUPIED/BLOCKED for a slot (only a real
+ *    time overlap BLOCKS; a within-1-hour gap only warns).
+ *  - confirmReservation / rejectReservation: act on a customer's REQUESTED booking.
+ *  - seatReservation: occupy the booking's tables and mark it COMPLETED.
+ *  - cancelReservation: cancel + free tables (refund handled per the refund rules).
+ */
 @Service
 @RequiredArgsConstructor
 public class ReceptionistReservationServiceImpl implements ReceptionistReservationService {
@@ -34,7 +46,12 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final OrderRepository orderRepository;
+    private final BranchConfigRepository branchConfigRepository;
     private final WebSocketNotificationService webSocketNotificationService;
+    private final EmailService emailService;
+
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
 
     // Tunable business rules
     private static final int MIN_RESERVATION_LEAD_HOURS = 0; // 0 = future-only (booking just has to be later than now)
@@ -367,6 +384,114 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .totalElements(result.getTotalElements())
                 .totalPages(result.getTotalPages())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void confirmReservation(Long reservationId, ConfirmReservationRequest request, String userEmail) {
+        Long branchId = getBranchId(userEmail);
+
+        Reservation r = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new RuntimeException("Reservation not found"));
+
+        if (r.getBranch() == null || !r.getBranch().getId().equals(branchId)) {
+            throw new RuntimeException("Reservation does not belong to your branch");
+        }
+        if (r.getStatus() != ReservationStatus.REQUESTED) {
+            throw new RuntimeException("Only a requested reservation can be confirmed");
+        }
+
+        BranchConfig config = branchConfigRepository.findByBranchId(branchId)
+                .orElseThrow(() -> new RuntimeException("Branch config not found"));
+
+        // Load the assigned tables and validate they all belong to this branch.
+        List<RestaurantTable> assignedTables = tableRepository
+                .findByBranchIdAndTableNumberIn(branchId, request.getTableNumbers());
+        if (assignedTables.size() != request.getTableNumbers().size()) {
+            throw new RuntimeException("One or more selected tables were not found in your branch");
+        }
+
+        // A real time overlap (with a DIFFERENT reservation) on any assigned table blocks confirmation.
+        for (RestaurantTable t : assignedTables) {
+            boolean clash = reservationRepository
+                    .findOverlappingReservations(t.getId(), r.getReservationTime(), r.getEndTime())
+                    .stream().anyMatch(o -> !o.getId().equals(r.getId()));
+            if (clash) {
+                throw new RuntimeException("Table " + t.getTableNumber()
+                        + " already has a reservation overlapping this slot");
+            }
+        }
+
+        // Assign the tables to this booking (writes the reservation_tables rows).
+        r.setTables(new HashSet<>(assignedTables));
+
+        // Lock any AVAILABLE assigned table whose slot starts within 15 min → RESERVED now.
+        LocalDateTime now = LocalDateTime.now();
+        boolean anyLocked = false;
+        for (RestaurantTable t : assignedTables) {
+            if (t.getState() == TableStatus.AVAILABLE && !r.getReservationTime().isAfter(now.plusMinutes(15))) {
+                t.setState(TableStatus.RESERVED);
+                t.setStatusUpdatedAt(now);
+                tableRepository.save(t);
+                anyLocked = true;
+            }
+        }
+
+        if (request.getNote() != null && !request.getNote().isBlank()) {
+            r.setReceptionistNote(request.getNote());
+        }
+
+        r.setStatus(ReservationStatus.CONFIRMED);
+        r.setPaymentDeadline(now.plusMinutes(config.getReservationPaymentWindowMinutes()));
+        reservationRepository.save(r);
+
+        // Notify the customer (WS + email with the pay link) and refresh branch views.
+        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+            webSocketNotificationService.broadcastReservationStatusToCustomer(
+                    r.getCustomer().getUser().getId(), r.getId(), "CONFIRMED");
+            try {
+                int window = config.getReservationPaymentWindowMinutes();
+                emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Confirmed",
+                        "Your reservation at " + r.getBranch().getName() + " is confirmed. "
+                                + "Please complete payment within " + window + " minutes to secure it: "
+                                + frontendUrl + "/reservations");
+            } catch (Exception ignored) {
+            }
+        }
+        if (anyLocked) webSocketNotificationService.broadcastTableUpdate(branchId);
+        webSocketNotificationService.broadcastReservationUpdate(branchId);
+    }
+
+    @Override
+    @Transactional
+    public void rejectReservation(Long reservationId, RejectReservationRequest request, String userEmail) {
+        Long branchId = getBranchId(userEmail);
+
+        Reservation r = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new RuntimeException("Reservation not found"));
+
+        if (r.getBranch() == null || !r.getBranch().getId().equals(branchId)) {
+            throw new RuntimeException("Reservation does not belong to your branch");
+        }
+        if (r.getStatus() != ReservationStatus.REQUESTED) {
+            throw new RuntimeException("Only a requested reservation can be rejected");
+        }
+
+        r.setStatus(ReservationStatus.REJECTED);
+        r.setReceptionistNote(request.getReason());
+        reservationRepository.save(r);
+
+        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+            webSocketNotificationService.broadcastReservationStatusToCustomer(
+                    r.getCustomer().getUser().getId(), r.getId(), "REJECTED");
+            try {
+                emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Rejected",
+                        "Unfortunately your reservation request for " + r.getBranch().getName()
+                                + " could not be accommodated. Reason: " + request.getReason());
+            } catch (Exception ignored) {
+            }
+        }
+        webSocketNotificationService.broadcastReservationUpdate(branchId);
     }
 
     private Long getBranchId(String userEmail) {

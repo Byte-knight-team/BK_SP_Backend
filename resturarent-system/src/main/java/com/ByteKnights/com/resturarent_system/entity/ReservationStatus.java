@@ -6,6 +6,6 @@ public enum ReservationStatus {
     REJECTED,    // Receptionist rejected the request
     PAID,        // Customer paid within deadline — reservation is locked in
     EXPIRED,     // Customer did not pay within the deadline
-    CANCELLED,   // Cancelled by customer or receptionist (before reservation starts)
+    CANCELLED,   // Cancelled by customer or receptionist
     COMPLETED    // Party arrived and was seated
 }

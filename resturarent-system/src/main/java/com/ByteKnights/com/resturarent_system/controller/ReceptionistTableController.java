@@ -14,6 +14,11 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
 
+/**
+ * REST endpoints for the receptionist's table floor (Table Management page):
+ * list tables, occupy (walk-in), update guest count, and clear.
+ * All routes are under /api/v1/receptionist/tables.
+ */
 @RestController
 @RequestMapping("/api/v1/receptionist/tables")
 @CrossOrigin

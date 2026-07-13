@@ -5,6 +5,11 @@ import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * LEGACY — the old flow where the RECEPTIONIST created a reservation directly and
+ * typed the customer's details. In the new customer-initiated model this is being
+ * retired (customers request online). Kept only until the new flow fully replaces it.
+ */
 @Data
 public class CreateReservationRequest {
 

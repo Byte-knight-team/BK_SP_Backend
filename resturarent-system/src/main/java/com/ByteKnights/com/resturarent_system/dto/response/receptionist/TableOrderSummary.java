@@ -5,6 +5,10 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * A compact summary of one order sitting on a table — lets the receptionist see, per
+ * table, what's still cooking/ready and how much is due before the table can be cleared.
+ */
 @Data
 @Builder
 @NoArgsConstructor
