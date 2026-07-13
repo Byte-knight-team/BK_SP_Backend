@@ -53,6 +53,22 @@ public class ReceptionistReservationController {
         return ResponseEntity.ok(new StandardResponse(200, "Upcoming reservations fetched", list));
     }
 
+    // Table Management "Requested" queue — REQUESTED bookings, first-come-first-serve.
+    @GetMapping("/requested")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
+    public ResponseEntity<StandardResponse> getRequestedReservations(Principal principal) {
+        List<ReservationResponseDTO> list = receptionistReservationService.getRequestedReservations(principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "Requested reservations fetched", list));
+    }
+
+    // Table Management "Upcoming" queue — CONFIRMED + PAID bookings, soonest first.
+    @GetMapping("/upcoming")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
+    public ResponseEntity<StandardResponse> getUpcomingQueue(Principal principal) {
+        List<ReservationResponseDTO> list = receptionistReservationService.getUpcomingQueue(principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "Upcoming reservations fetched", list));
+    }
+
     // All reservations for the branch (any status) — paged + filtered, for the Reservations page
     @GetMapping("/all")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")

@@ -26,6 +26,12 @@ public interface ReceptionistReservationService {
 
     List<ReservationResponseDTO> getUpcomingReservations(String userEmail);
 
+    // Table Management: the "Requested" queue (REQUESTED, first-come-first-serve).
+    List<ReservationResponseDTO> getRequestedReservations(String userEmail);
+
+    // Table Management: the "Upcoming" queue (CONFIRMED + PAID, soonest first).
+    List<ReservationResponseDTO> getUpcomingQueue(String userEmail);
+
     PagedResponse<ReservationResponseDTO> getAllReservations(
             String userEmail, int page, int size, String date, Integer tableNumber, String status);
 

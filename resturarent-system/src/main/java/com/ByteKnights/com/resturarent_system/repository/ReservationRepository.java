@@ -62,6 +62,12 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("dayEnd") LocalDateTime dayEnd,
             Pageable pageable);
 
+    // Requested queue for the Table Management page — oldest request first (first-come-first-serve).
+    List<Reservation> findByBranchIdAndStatusOrderByCreatedAtAsc(Long branchId, ReservationStatus status);
+
+    // Upcoming queue for the Table Management page — confirmed + paid bookings, soonest first.
+    List<Reservation> findByBranchIdAndStatusInOrderByReservationTimeAsc(Long branchId, List<ReservationStatus> statuses);
+
     //------------------------receptionist query END---------------------
 
     //------------------------customer query START---------------------

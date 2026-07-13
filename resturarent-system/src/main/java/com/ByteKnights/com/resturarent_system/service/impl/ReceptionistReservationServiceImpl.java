@@ -474,6 +474,23 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         webSocketNotificationService.broadcastReservationUpdate(branchId);
     }
 
+    @Override
+    public List<ReservationResponseDTO> getRequestedReservations(String userEmail) {
+        Long branchId = getBranchId(userEmail);
+        return reservationRepository
+                .findByBranchIdAndStatusOrderByCreatedAtAsc(branchId, ReservationStatus.REQUESTED)
+                .stream().map(this::toDTO).toList();
+    }
+
+    @Override
+    public List<ReservationResponseDTO> getUpcomingQueue(String userEmail) {
+        Long branchId = getBranchId(userEmail);
+        return reservationRepository
+                .findByBranchIdAndStatusInOrderByReservationTimeAsc(branchId,
+                        List.of(ReservationStatus.CONFIRMED, ReservationStatus.PAID))
+                .stream().map(this::toDTO).toList();
+    }
+
     private Long getBranchId(String userEmail) {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
