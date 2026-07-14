@@ -16,5 +16,5 @@ public interface MenuCategoryService {
 
     MenuCategoryResponse updateCategory(Long id, UpdateMenuCategoryRequest request);
 
-    MenuCategoryResponse deleteCategory(Long id);
+    MenuCategoryResponse toggleCategoryStatus(Long id, boolean isActive);
 }
