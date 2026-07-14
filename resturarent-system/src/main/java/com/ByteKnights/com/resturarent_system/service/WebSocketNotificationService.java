@@ -188,6 +188,20 @@ public class WebSocketNotificationService {
         messagingTemplate.convertAndSend(destination, payload);
     }
 
+    /**
+     * Notify a chef that their menu update request has been approved.
+     *
+     * Topic: /topic/chef/{chefUserId}/menu-update-approval
+     */
+    public void broadcastMenuUpdateApprovalToChef(Long chefUserId, String message) {
+        String destination = "/topic/chef/" + chefUserId + "/menu-update-approval";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "message", message
+        );
+        log.info("Broadcasting menu update approval to chef {}: {}", chefUserId, message);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
     public void broadcastTableUpdate(Long branchId) {
         String destination = "/topic/branch/" + branchId + "/table-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));

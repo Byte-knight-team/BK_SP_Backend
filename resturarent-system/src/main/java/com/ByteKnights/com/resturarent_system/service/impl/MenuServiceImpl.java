@@ -391,9 +391,17 @@ public class MenuServiceImpl implements MenuService {
             menuItem.setIsAvailable(request.getIsAvailable());
         }
 
-        menuItem.setStatus(MenuItemStatus.ACTIVE);
-        if (request.getIsAvailable() == null) {
-            menuItem.setIsAvailable(true);
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            try {
+                menuItem.setStatus(MenuItemStatus.valueOf(request.getStatus().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                menuItem.setStatus(MenuItemStatus.ACTIVE);
+            }
+        } else {
+            menuItem.setStatus(MenuItemStatus.ACTIVE);
+            if (request.getIsAvailable() == null) {
+                menuItem.setIsAvailable(true);
+            }
         }
 
         if (request.getPreparationTime() != null) {
