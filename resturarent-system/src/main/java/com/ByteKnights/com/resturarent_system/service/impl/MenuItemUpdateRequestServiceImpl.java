@@ -8,10 +8,13 @@ import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemUpdateRequestRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.MenuItemUpdateRequestService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,6 +25,7 @@ public class MenuItemUpdateRequestServiceImpl implements MenuItemUpdateRequestSe
     private final MenuItemUpdateRequestRepository repository;
     private final StaffRepository staffRepository;
     private final MenuItemRepository menuItemRepository;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     @Override
     @Transactional
@@ -69,6 +73,16 @@ public class MenuItemUpdateRequestServiceImpl implements MenuItemUpdateRequestSe
         request.setAdminNote(decisionDto.getAdminNote());
         
         repository.save(request);
+
+        if (decisionDto.getStatus() == MenuItemUpdateRequestStatus.APPROVED && request.getChef() != null && request.getChef().getUser() != null) {
+            String adminName = decisionDto.getAdminName() != null ? decisionDto.getAdminName() : "Admin";
+            String dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            String message = String.format("Menu item updated request approved - %s by %s on %s", 
+                    request.getMenuItem().getName(), adminName, dateStr);
+            
+            webSocketNotificationService.broadcastMenuUpdateApprovalToChef(
+                    request.getChef().getUser().getId(), message);
+        }
     }
     
     private MenuItemUpdateRequestResponseDto mapToDto(MenuItemUpdateRequest request) {
