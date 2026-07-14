@@ -32,6 +32,10 @@ public class MenuItemUpdateRequestServiceImpl implements MenuItemUpdateRequestSe
         MenuItem menuItem = menuItemRepository.findById(requestDto.getMenuItemId())
                 .orElseThrow(() -> new RuntimeException("Menu item not found with ID: " + requestDto.getMenuItemId()));
                 
+        if (!chef.getBranch().getId().equals(menuItem.getBranch().getId())) {
+            throw new RuntimeException("Chef can only create requests for menu items in their own branch.");
+        }
+                
         MenuItemUpdateRequest request = MenuItemUpdateRequest.builder()
                 .chef(chef)
                 .menuItem(menuItem)
