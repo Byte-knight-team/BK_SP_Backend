@@ -68,6 +68,25 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Branch configuration is missing for Branch ID: " + request.getBranchId()));
 
+        double orderDistanceKm = 0.0;
+        if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
+            if (request.getLatitude() == null || request.getLongitude() == null) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
+            }
+            if (branch.getLatitude() == null || branch.getLongitude() == null) {
+                throw new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch location is not configured properly.");
+            }
+            orderDistanceKm = com.ByteKnights.com.resturarent_system.util.DistanceUtil.calculateDistance(
+                    branch.getLatitude(), branch.getLongitude(),
+                    request.getLatitude(), request.getLongitude()
+            );
+            if (orderDistanceKm > branchConfig.getMaxDeliveryRadiusKm()) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, 
+                        String.format("Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.", 
+                                branchConfig.getMaxDeliveryRadiusKm(), orderDistanceKm));
+            }
+        }
+
         // 2. Calculate Base Subtotal
         BigDecimal subtotal = BigDecimal.ZERO;
         if (request.getItems() == null || request.getItems().isEmpty()) {
@@ -165,7 +184,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 5. Delivery Fee
         BigDecimal deliveryFee = BigDecimal.ZERO;
         if ("ONLINE_DELIVERY".equalsIgnoreCase(request.getOrderType())) {
-            deliveryFee = branchConfig.getDeliveryFee();
+            BigDecimal baseFee = branchConfig.getDeliveryFee();
+            BigDecimal perKmFee = branchConfig.getDeliveryFeePerKm();
+            
+            // Delivery Fee = Base + (Distance * PerKmRate), rounded to whole number
+            BigDecimal distanceCost = perKmFee.multiply(BigDecimal.valueOf(orderDistanceKm));
+            deliveryFee = baseFee.add(distanceCost).setScale(0, java.math.RoundingMode.HALF_UP);
         }
 
         // 6. Tax & Service Charge (Calculated on discounted subtotal)
@@ -180,8 +204,9 @@ public class CheckoutServiceImpl implements CheckoutService {
                     .multiply(sysConfig.getServiceChargePercentage().divide(BigDecimal.valueOf(100)));
         }
 
-        // 7. Final Total
-        BigDecimal finalTotal = discountedSubtotal.add(deliveryFee).add(taxAmount).add(serviceCharge);
+        // 7. Final Total, rounded to 2 decimal places for clean UI
+        BigDecimal finalTotal = discountedSubtotal.add(deliveryFee).add(taxAmount).add(serviceCharge)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
 
         // 8. Calculate Earned Points
         Integer pointsEarned = 0;
