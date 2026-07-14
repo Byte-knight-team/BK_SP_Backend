@@ -12,6 +12,9 @@ public class EmailTemplateService {
     @Value("${app.frontend.staff-login-url}")
     private String staffLoginUrl;
 
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
     /*
      * Builds the email body for newly created staff members.
      */
@@ -52,6 +55,26 @@ public class EmailTemplateService {
                "Please click the link below to set a new password. This link is valid for 15 minutes.\n\n" +
                resetLink + "\n\n" +
                "If you did not request a password reset, please ignore this email.\n\n" +
+               "Regards,\n" +
+               "CraveHouse Team";
+    }
+
+    /*
+     * Subject line for customer email verification.
+     */
+    public String getCustomerEmailVerificationSubject() {
+        return "CraveHouse - Verify Your Email Address";
+    }
+
+    /*
+     * Builds the email body for customer email verification.
+     */
+    public String buildCustomerEmailVerificationBody(String verificationLink) {
+        return "Hello,\n\n" +
+               "Please verify your email address for your CraveHouse Customer account.\n\n" +
+               "Click the link below to verify your email. This link is valid for 24 hours.\n\n" +
+               verificationLink + "\n\n" +
+               "If you did not request this verification, please ignore this email.\n\n" +
                "Regards,\n" +
                "CraveHouse Team";
     }

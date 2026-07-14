@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -14,13 +15,15 @@ import java.time.LocalDateTime;
 public class ReservationResponseDTO {
 
     private Long id;
-    private Long tableId;
-    private Integer tableNumber;
+    // A booking can cover multiple tables under one customer.
+    private List<Long> tableIds;
+    private List<Integer> tableNumbers;
     private String customerName;
     private String customerPhone;
     private LocalDateTime reservationTime;
     private LocalDateTime endTime;
     private Integer guestCount;
+    private String notes;
     private String status;
     private LocalDateTime createdAt;
 }

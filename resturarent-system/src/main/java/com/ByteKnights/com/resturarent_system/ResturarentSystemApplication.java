@@ -6,10 +6,18 @@ import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServic
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 import org.springframework.scheduling.annotation.EnableScheduling;
+import jakarta.annotation.PostConstruct;
+import java.util.TimeZone;
+
 @SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
 @ConfigurationPropertiesScan
 @EnableScheduling
 public class ResturarentSystemApplication {
+
+    @PostConstruct
+    public void init() {
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Colombo"));
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(ResturarentSystemApplication.class, args);

@@ -26,11 +26,19 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         long countByBranchIdAndStatus(Long branchId, OrderStatus status);
 
+        long countByStatusAndCreatedAtAfter(OrderStatus status, LocalDateTime startOfToday);
+
         long countByStatusIn(Collection<OrderStatus> statuses);
 
         long countByBranchId(Long branchId);
 
         long countByBranchIdAndStatusIn(Long branchId, Collection<OrderStatus> statuses);
+
+        long countByCreatedAtAfter(LocalDateTime startOfToday);
+
+        long countByBranchIdAndCreatedAtAfter(Long branchId, LocalDateTime startOfToday);
+
+        long countByStatusInAndCreatedAtAfter(Collection<OrderStatus> statuses, LocalDateTime startOfToday);
 
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.paymentStatus IN :paymentStatuses")
         BigDecimal sumFinalAmountByPaymentStatusIn(@Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
@@ -39,6 +47,17 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         BigDecimal sumFinalAmountByBranchIdAndPaymentStatusIn(
                         @Param("branchId") Long branchId,
                         @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
+
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.paymentStatus IN :paymentStatuses AND o.createdAt >= :startOfToday")
+        BigDecimal sumFinalAmountByPaymentStatusInAndCreatedAtAfter(
+                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses, 
+                        @Param("startOfToday") LocalDateTime startOfToday);
+
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus IN :paymentStatuses AND o.createdAt >= :startOfToday")
+        BigDecimal sumFinalAmountByBranchIdAndPaymentStatusInAndCreatedAtAfter(
+                        @Param("branchId") Long branchId,
+                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
+                        @Param("startOfToday") LocalDateTime startOfToday);
 
         List<Order> findByPaymentStatusInAndCreatedAtBetween(
                         Collection<PaymentStatus> paymentStatuses,
@@ -135,7 +154,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         List<Order> findByBranchIdAndStatusAndStatusUpdatedAtAfter(Long branchId, OrderStatus status,
                         LocalDateTime startOfToday, Sort sort);
 
+        // Kitchen Completed tab: all orders finished today (COMPLETED + already SERVED)
+        List<Order> findByBranchIdAndStatusInAndStatusUpdatedAtAfter(Long branchId,
+                        Collection<OrderStatus> statuses, LocalDateTime startOfToday, Sort sort);
+
         long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus,
+                        LocalDateTime startOfToday);
+
+        // Kitchen dashboard: all orders finished today (COMPLETED + already SERVED)
+        long countByBranchIdAndStatusInAndCreatedAtAfter(Long branchId, Collection<OrderStatus> statuses,
                         LocalDateTime startOfToday);
 
         Optional<Order> findByIdAndBranchId(Long orderId, Long branchId);

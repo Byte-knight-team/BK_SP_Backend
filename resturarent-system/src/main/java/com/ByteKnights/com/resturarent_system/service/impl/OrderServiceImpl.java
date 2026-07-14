@@ -49,6 +49,7 @@ public class OrderServiceImpl implements OrderService {
         private final InventoryItemRepository inventoryItemRepository;
         private final InventoryTransactionRepository inventoryTransactionRepository;
         private final WebSocketNotificationService webSocketNotificationService;
+        private final ReservationRepository reservationRepository;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -60,7 +61,8 @@ public class OrderServiceImpl implements OrderService {
                         MenuItemIngredientRepository menuItemIngredientRepository,
                         InventoryItemRepository inventoryItemRepository,
                         InventoryTransactionRepository inventoryTransactionRepository,
-                        WebSocketNotificationService webSocketNotificationService) {
+                        WebSocketNotificationService webSocketNotificationService,
+                        ReservationRepository reservationRepository) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -77,6 +79,7 @@ public class OrderServiceImpl implements OrderService {
                 this.inventoryItemRepository = inventoryItemRepository;
                 this.inventoryTransactionRepository = inventoryTransactionRepository;
                 this.webSocketNotificationService = webSocketNotificationService;
+                this.reservationRepository = reservationRepository;
         }
 
         @Override
@@ -111,6 +114,22 @@ public class OrderServiceImpl implements OrderService {
                                                 "QR session ID is required for table orders.");
                         }
                         qrSessionService.validateActiveSession(request.getQrSessionId());
+
+                        // Check if table is occupied
+                        if (table.getState() != TableStatus.OCCUPIED) {
+                                throw new CheckoutException(HttpStatus.FORBIDDEN, 
+                                        "Orders can only be placed when the table is marked as OCCUPIED. Please wait for a staff member to seat you.");
+                        }
+
+                        if (table.getSeatedReservationId() != null) {
+                                Reservation activeReservation = reservationRepository.findById(table.getSeatedReservationId())
+                                                .orElseThrow(() -> new ResourceNotFoundException("Active reservation not found"));
+                                                
+                                if (!activeReservation.getCustomer().getId().equals(customer.getId())) {
+                                        throw new CheckoutException(HttpStatus.FORBIDDEN, 
+                                                "This table is currently reserved by another customer. Only the reservation holder can place orders.");
+                                }
+                        }
                 }
 
                 // 2.5 Pre-Order Inventory Validation & Aggregation
@@ -288,6 +307,12 @@ public class OrderServiceImpl implements OrderService {
 
                 // 10. Map Items and Return Detailed Response
                 webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+                webSocketNotificationService.broadcastNewReceptionistOrder(
+                        savedOrder.getBranch().getId(),
+                        savedOrder.getOrderNumber(),
+                        savedOrder.getOrderType().name(),
+                        savedOrder.getId()
+                );
 
                 return OrderPlacementResponse.builder()
                                 .orderId(savedOrder.getId())

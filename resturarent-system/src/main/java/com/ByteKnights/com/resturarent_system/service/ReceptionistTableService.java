@@ -8,6 +8,8 @@ public interface ReceptionistTableService {
 
     void occupyTable(Long tableId, Integer guestCount, String userEmail);
 
+    void updateGuestCount(Long tableId, Integer guestCount, String userEmail);
+
     void clearTable(Long tableId, String userEmail);
 
 }
