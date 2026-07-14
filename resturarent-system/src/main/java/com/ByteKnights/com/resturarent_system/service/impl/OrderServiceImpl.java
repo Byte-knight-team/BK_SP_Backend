@@ -50,6 +50,7 @@ public class OrderServiceImpl implements OrderService {
         private final InventoryTransactionRepository inventoryTransactionRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final ReservationRepository reservationRepository;
+        private final com.ByteKnights.com.resturarent_system.repository.BranchConfigRepository branchConfigRepository;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -62,7 +63,8 @@ public class OrderServiceImpl implements OrderService {
                         InventoryItemRepository inventoryItemRepository,
                         InventoryTransactionRepository inventoryTransactionRepository,
                         WebSocketNotificationService webSocketNotificationService,
-                        ReservationRepository reservationRepository) {
+                        ReservationRepository reservationRepository,
+                        com.ByteKnights.com.resturarent_system.repository.BranchConfigRepository branchConfigRepository) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -80,6 +82,7 @@ public class OrderServiceImpl implements OrderService {
                 this.inventoryTransactionRepository = inventoryTransactionRepository;
                 this.webSocketNotificationService = webSocketNotificationService;
                 this.reservationRepository = reservationRepository;
+                this.branchConfigRepository = branchConfigRepository;
         }
 
         @Override
@@ -99,6 +102,27 @@ public class OrderServiceImpl implements OrderService {
                                 
                 if (branch.getStatus() != BranchStatus.ACTIVE) {
                         throw new CheckoutException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
+                }
+
+                com.ByteKnights.com.resturarent_system.entity.BranchConfig branchConfig = branchConfigRepository.findByBranchId(request.getBranchId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Branch configuration not found"));
+
+                if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
+                        if (request.getLatitude() == null || request.getLongitude() == null) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
+                        }
+                        if (branch.getLatitude() == null || branch.getLongitude() == null) {
+                                throw new CheckoutException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch location is not configured properly.");
+                        }
+                        double distance = com.ByteKnights.com.resturarent_system.util.DistanceUtil.calculateDistance(
+                                branch.getLatitude(), branch.getLongitude(),
+                                request.getLatitude(), request.getLongitude()
+                        );
+                        if (distance > branchConfig.getMaxDeliveryRadiusKm()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, 
+                                        String.format("Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.", 
+                                                branchConfig.getMaxDeliveryRadiusKm(), distance));
+                        }
                 }
 
                 RestaurantTable table = null;
@@ -194,6 +218,8 @@ public class OrderServiceImpl implements OrderService {
                 calcRequest.setBranchId(request.getBranchId());
                 calcRequest.setCouponCode(request.getCouponCode());
                 calcRequest.setRedeemLoyaltyPoints(request.getRedeemLoyaltyPoints());
+                calcRequest.setLatitude(request.getLatitude());
+                calcRequest.setLongitude(request.getLongitude());
                 calcRequest.setItems(request.getItems().stream()
                                 .map(item -> {
                                         CheckoutCalculateRequest.CartItemRequest calcItem = new CheckoutCalculateRequest.CartItemRequest();

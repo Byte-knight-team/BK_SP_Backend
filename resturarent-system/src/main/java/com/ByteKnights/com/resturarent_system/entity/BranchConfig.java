@@ -31,8 +31,14 @@ public class BranchConfig {
     @Column(name = "delivery_fee", precision = 10, scale = 2, nullable = false)
     private BigDecimal deliveryFee = BigDecimal.ZERO;
 
+    @Column(name = "delivery_fee_per_km", precision = 10, scale = 2, nullable = false)
+    private BigDecimal deliveryFeePerKm = new BigDecimal("10.00");
+
     @Column(name = "delivery_enabled", nullable = false)
     private boolean deliveryEnabled = true;
+
+    @Column(name = "max_delivery_radius_km", nullable = false)
+    private Double maxDeliveryRadiusKm = 30.0;
 
     @Column(name = "pickup_enabled", nullable = false)
     private boolean pickupEnabled = true;
