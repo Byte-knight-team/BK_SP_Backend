@@ -18,4 +18,7 @@ public interface CustomerProfileService {
     void removeProfilePicture(String email);
 
     CustomerStatisticsResponse getCustomerStatistics(String email);
+
+    void requestEmailVerification(String email);
+    void verifyEmail(String token);
 }

@@ -81,7 +81,7 @@ public class QrSessionServiceImpl implements QrSessionService {
         qrSession = qrSessionRepository.save(qrSession);
 
     Instant expiry = Instant.now().plusMillis(sessionExpirationMs);
-    String sessionToken = generateSessionToken(qrSession.getId(), branchId, tableId, qrId, expiry);
+    String sessionToken = generateSessionToken(qrSession.getId(), branchId, tableId, table.getTableNumber(), qrId, expiry);
 
         return QrSessionStartResponseData.builder()
                 .sessionToken(sessionToken)
@@ -140,13 +140,14 @@ public class QrSessionServiceImpl implements QrSessionService {
         return claimValue.longValue();
     }
 
-    private String generateSessionToken(Long sessionId, Long branchId, Long tableId, Long qrId, Instant expiry) {
+    private String generateSessionToken(Long sessionId, Long branchId, Long tableId, Integer tableNumber, Long qrId, Instant expiry) {
         Instant now = Instant.now();
 
         Map<String, Object> claims = Map.of(
                 "session_id", sessionId,
                 "branch_id", branchId,
                 "table_id", tableId,
+                "table_number", tableNumber,
                 "qr_id", qrId,
                 "status", QrSessionStatus.ACTIVE.name()
         );
