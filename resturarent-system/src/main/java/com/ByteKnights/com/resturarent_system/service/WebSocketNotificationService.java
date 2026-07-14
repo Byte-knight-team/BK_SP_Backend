@@ -264,6 +264,22 @@ public class WebSocketNotificationService {
     }
 
     /**
+     * Notify the branch's receptionists that a CUSTOMER acted on a reservation (e.g. paid / cancelled),
+     * so they get a toast on any page. Distinct from the generic reservation-update (which also fires
+     * on the receptionist's own actions), so only customer-driven activity is toasted here.
+     * Topic: /topic/branch/{branchId}/reservation-activity
+     */
+    public void broadcastReservationActivityToBranch(Long branchId, Long reservationId, String action, String customerName) {
+        String destination = "/topic/branch/" + branchId + "/reservation-activity";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "reservationId", String.valueOf(reservationId),
+                "action", action == null ? "" : action,
+                "customerName", customerName == null ? "" : customerName
+        ));
+        log.info("Broadcasting reservation activity [{}] to {}", action, destination);
+    }
+
+    /**
      * Broadcast reservation status updates to the customer.
      * Topic: /topic/user/{userId}/reservations
      */

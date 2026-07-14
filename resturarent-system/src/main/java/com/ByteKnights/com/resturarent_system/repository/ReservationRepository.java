@@ -17,9 +17,11 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     //------------------------receptionist query START---------------------
 
-    // All active (PENDING) reservations for a branch within a date range (soonest first).
+    // All confirmed bookings for a branch within a date range (soonest first). A CONFIRMED (awaiting
+    // payment) reservation is a real booking that holds the table too — so the table cards show it
+    // as upcoming; if it isn't paid in time it auto-EXPIRES and drops off.
     @Query("SELECT r FROM Reservation r WHERE r.branch.id = :branchId " +
-           "AND r.status = 'PAID' " +
+           "AND r.status IN ('CONFIRMED', 'PAID') " +
            "AND r.reservationTime >= :start AND r.reservationTime < :end " +
            "ORDER BY r.reservationTime ASC")
     List<Reservation> findByBranchAndDate(

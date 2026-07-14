@@ -87,6 +87,8 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         Reservation saved = reservationRepository.save(reservation);
 
         webSocketNotificationService.broadcastNewReservationRequest(branch.getId(), saved.getId());
+        // Also emit the generic reservation update so the receptionist's queue tables refresh in real time.
+        webSocketNotificationService.broadcastReservationUpdate(branch.getId());
 
         try {
             emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
@@ -197,6 +199,8 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         if (branchId != null) {
             if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
             webSocketNotificationService.broadcastReservationUpdate(branchId);
+            // Notify the branch's receptionists that the CUSTOMER cancelled (global toast).
+            webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "CANCELLED", r.getCustomerName());
         }
     }
 
@@ -233,6 +237,8 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
         if (branchId != null) {
             webSocketNotificationService.broadcastReservationUpdate(branchId);
+            // Notify the branch's receptionists that the CUSTOMER paid (global toast).
+            webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "PAID", r.getCustomerName());
         }
 
         try {
