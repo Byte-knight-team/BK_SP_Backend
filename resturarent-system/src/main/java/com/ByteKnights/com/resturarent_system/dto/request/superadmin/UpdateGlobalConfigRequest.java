@@ -13,6 +13,12 @@ import java.math.BigDecimal;
 @Setter
 public class UpdateGlobalConfigRequest {
 
+    /*
+     * The single branch used as the configured delivery branch.
+     */
+    @NotNull
+    private Long deliveryBranchId;
+
     @NotNull
     private Boolean taxEnabled;
 

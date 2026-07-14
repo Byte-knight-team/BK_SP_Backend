@@ -11,15 +11,25 @@ import java.time.LocalDateTime;
 public class GlobalConfigResponse {
 
     private Long id;
+
+    /*
+     * Configured delivery branch summary.
+     */
+    private Long deliveryBranchId;
+    private String deliveryBranchName;
+
     private boolean taxEnabled;
     private BigDecimal taxPercentage;
+
     private boolean serviceChargeEnabled;
     private BigDecimal serviceChargePercentage;
+
     private boolean loyaltyEnabled;
     private BigDecimal pointsPerAmount;
     private BigDecimal amountPerPoint;
     private Integer minPointsToRedeem;
     private BigDecimal valuePerPoint;
+
     private Integer orderCancelWindowMinutes;
     private LocalDateTime updatedAt;
 }

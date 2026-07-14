@@ -11,12 +11,35 @@ import java.time.LocalDateTime;
 public class BranchConfigResponse {
 
     private Long id;
+
     private Long branchId;
     private String branchName;
+
+    /*
+     * Delivery configuration
+     */
+
     private BigDecimal deliveryFee;
+    private BigDecimal deliveryFeePerKm;
+    private Double maxDeliveryRadiusKm;
+
     private boolean deliveryEnabled;
     private boolean pickupEnabled;
     private boolean dineInEnabled;
     private boolean branchActiveForOrders;
+
+    /*
+     * Reservation configuration
+     */
+
+    private BigDecimal reservationFeePerHour;
+    private BigDecimal reservationHandlingFee;
+
+    private Integer reservationPaymentWindowMinutes;
+    private Integer reservationMinLeadHours;
+    private Integer reservationMaxGuestCount;
+
+    private boolean reservationsEnabled;
+
     private LocalDateTime updatedAt;
 }
