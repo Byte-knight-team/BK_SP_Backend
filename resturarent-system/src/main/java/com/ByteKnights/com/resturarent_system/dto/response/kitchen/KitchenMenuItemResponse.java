@@ -50,6 +50,10 @@ public class KitchenMenuItemResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // When the admin approved this item (PENDING → ACTIVE) — used by the
+    // frontend to sort "recently approved first" and to show a "NEW" badge.
+    private LocalDateTime approvedAt;
+
     // Only populated when status = REJECTED, so the chef can see why.
     private String rejectionReason;
 }

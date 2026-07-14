@@ -99,7 +99,9 @@ public class KitchenMenuServiceImpl implements KitchenMenuService {
                 .description(request.getDescription() != null ? request.getDescription().trim() : null)
                 .price(request.getPrice())
                 .imageUrl(request.getImageUrl())
-                .isAvailable(false)
+                // Unset until the chef explicitly confirms it can be cooked — admin
+                // approval no longer grants this automatically either (see MenuServiceImpl).
+                .isAvailable(null)
                 // Every chef-created item starts PENDING — only an admin can activate it.
                 .status(MenuItemStatus.PENDING)
                 .preparationTime(request.getPreparationTime())
@@ -187,11 +189,13 @@ public class KitchenMenuServiceImpl implements KitchenMenuService {
         Staff chef = resolveStaff(userEmail);
         MenuItem item = findOwnedItem(request.getMenuItemId(), chef);
 
-        // Edit requests only make sense for a live item. A PENDING item hasn't
-        // even had its first review yet (just edit it directly by re-submitting),
-        // and a REJECTED item needs a fresh submission, not an edit request.
-        if (item.getStatus() != MenuItemStatus.ACTIVE) {
-            throw new InvalidOperationException("Only an ACTIVE item can have an edit request raised against it");
+        // Edit requests make sense once an item has been through its first
+        // review — ACTIVE or INACTIVE (the branch admin can deactivate an item
+        // without rejecting it; a request can ask for it to be reactivated).
+        // A PENDING item hasn't had its first review yet (just edit it directly
+        // by re-submitting), and a REJECTED item needs a fresh submission.
+        if (item.getStatus() != MenuItemStatus.ACTIVE && item.getStatus() != MenuItemStatus.INACTIVE) {
+            throw new InvalidOperationException("Only an ACTIVE or INACTIVE item can have an edit request raised against it");
         }
 
         // A disabled CATEGORY is the Super Admin's decision, not the branch
@@ -297,6 +301,7 @@ public class KitchenMenuServiceImpl implements KitchenMenuService {
                 .preparationTime(item.getPreparationTime())
                 .createdAt(item.getCreatedAt())
                 .updatedAt(item.getUpdatedAt())
+                .approvedAt(item.getApprovedAt())
                 .rejectionReason(item.getRejectionReason())
                 .build();
     }
