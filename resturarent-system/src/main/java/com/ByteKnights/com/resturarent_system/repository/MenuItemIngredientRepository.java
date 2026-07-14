@@ -12,6 +12,9 @@ public interface MenuItemIngredientRepository extends JpaRepository<MenuItemIngr
     // Get all ingredients for a specific menu item
     List<MenuItemIngredient> findByMenuItemId(Long menuItemId);
 
+    // Get all ingredients for multiple menu items (bulk fetch to prevent N+1)
+    List<MenuItemIngredient> findByMenuItemIdIn(List<Long> menuItemIds);
+
     // Delete all ingredients for a specific menu item
     // Used when saving a new ingredient list (replace all approach)
     void deleteByMenuItemId(Long menuItemId);

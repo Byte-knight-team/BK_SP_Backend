@@ -80,6 +80,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long> {
         WHERE m.branch.id = :branchId 
           AND m.status = :status 
           AND m.isAvailable = true
+          AND m.category.status = 'ACTIVE'
         GROUP BY m.id
     """)
     List<Object[]> findMenuItemsWithReviewStats(
