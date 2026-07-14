@@ -20,6 +20,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -269,26 +271,31 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             }
         }
 
-        // Tell the customer (WS + email), and refresh the branch views.
-        if (reservation.getCustomer() != null && reservation.getCustomer().getUser() != null) {
-            webSocketNotificationService.broadcastReservationStatusToCustomer(
-                    reservation.getCustomer().getUser().getId(), reservation.getId(), "CANCELLED");
-            try {
-                String refundMsg = (refundAmount != null && refundAmount.signum() > 0)
-                        ? " A refund of Rs " + refundAmount + " has been processed."
-                        : "";
-                emailService.sendSimpleEmail(reservation.getCustomer().getUser().getEmail(),
-                        "Reservation Cancelled",
-                        "Your reservation at " + reservation.getBranch().getName()
-                                + " has been cancelled. Reason: " + request.getReason() + "." + refundMsg);
-            } catch (Exception ignored) {
+        // Tell the customer (WS + email), and refresh the branch views — deferred until commit so
+        // the pushed update is never ahead of what a follow-up read can actually see.
+        boolean finalAnyFreed = anyFreed;
+        BigDecimal finalRefundAmount = refundAmount;
+        runAfterCommit(() -> {
+            if (reservation.getCustomer() != null && reservation.getCustomer().getUser() != null) {
+                webSocketNotificationService.broadcastReservationStatusToCustomer(
+                        reservation.getCustomer().getUser().getId(), reservation.getId(), "CANCELLED");
+                try {
+                    String refundMsg = (finalRefundAmount != null && finalRefundAmount.signum() > 0)
+                            ? " A refund of Rs " + finalRefundAmount + " has been processed."
+                            : "";
+                    emailService.sendSimpleEmail(reservation.getCustomer().getUser().getEmail(),
+                            "Reservation Cancelled",
+                            "Your reservation at " + reservation.getBranch().getName()
+                                    + " has been cancelled. Reason: " + request.getReason() + "." + refundMsg);
+                } catch (Exception ignored) {
+                }
             }
-        }
 
-        if (branchId != null) {
-            if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
-            webSocketNotificationService.broadcastReservationUpdate(branchId);
-        }
+            if (branchId != null) {
+                if (finalAnyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
+                webSocketNotificationService.broadcastReservationUpdate(branchId);
+            }
+        });
     }
 
     @Override
@@ -328,8 +335,19 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         r.setStatus(ReservationStatus.COMPLETED);
         reservationRepository.save(r);
 
-        webSocketNotificationService.broadcastTableUpdate(branchId);
-        webSocketNotificationService.broadcastReservationUpdate(branchId);
+        runAfterCommit(() -> {
+            webSocketNotificationService.broadcastTableUpdate(branchId);
+            webSocketNotificationService.broadcastReservationUpdate(branchId);
+
+            if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+                try {
+                    emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Thank You for Dining With Us",
+                            "Thank you for dining at " + r.getBranch().getName() + " today. "
+                                    + "We hope to see you again soon!");
+                } catch (Exception ignored) {
+                }
+            }
+        });
     }
 
     @Override
@@ -425,21 +443,25 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         r.setPaymentDeadline(now.plusMinutes(config.getReservationPaymentWindowMinutes()));
         reservationRepository.save(r);
 
-        // Notify the customer (WS + email with the pay link) and refresh branch views.
-        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
-            webSocketNotificationService.broadcastReservationStatusToCustomer(
-                    r.getCustomer().getUser().getId(), r.getId(), "CONFIRMED");
-            try {
-                int window = config.getReservationPaymentWindowMinutes();
-                emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Confirmed",
-                        "Your reservation at " + r.getBranch().getName() + " is confirmed. "
-                                + "Please complete payment within " + window + " minutes to secure it: "
-                                + frontendUrl + "/reservations");
-            } catch (Exception ignored) {
+        // Notify the customer (WS + email with the pay link) and refresh branch views — deferred
+        // until commit so the push never arrives before the CONFIRMED row is readable.
+        boolean finalAnyLocked = anyLocked;
+        runAfterCommit(() -> {
+            if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+                webSocketNotificationService.broadcastReservationStatusToCustomer(
+                        r.getCustomer().getUser().getId(), r.getId(), "CONFIRMED");
+                try {
+                    int window = config.getReservationPaymentWindowMinutes();
+                    emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Confirmed",
+                            "Your reservation at " + r.getBranch().getName() + " is confirmed. "
+                                    + "Please complete payment within " + window + " minutes to secure it: "
+                                    + frontendUrl + "/reservations");
+                } catch (Exception ignored) {
+                }
             }
-        }
-        if (anyLocked) webSocketNotificationService.broadcastTableUpdate(branchId);
-        webSocketNotificationService.broadcastReservationUpdate(branchId);
+            if (finalAnyLocked) webSocketNotificationService.broadcastTableUpdate(branchId);
+            webSocketNotificationService.broadcastReservationUpdate(branchId);
+        });
     }
 
     @Override
@@ -461,17 +483,19 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         r.setReceptionistNote(request.getReason());
         reservationRepository.save(r);
 
-        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
-            webSocketNotificationService.broadcastReservationStatusToCustomer(
-                    r.getCustomer().getUser().getId(), r.getId(), "REJECTED");
-            try {
-                emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Rejected",
-                        "Unfortunately your reservation request for " + r.getBranch().getName()
-                                + " could not be accommodated. Reason: " + request.getReason());
-            } catch (Exception ignored) {
+        runAfterCommit(() -> {
+            if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+                webSocketNotificationService.broadcastReservationStatusToCustomer(
+                        r.getCustomer().getUser().getId(), r.getId(), "REJECTED");
+                try {
+                    emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Rejected",
+                            "Unfortunately your reservation request for " + r.getBranch().getName()
+                                    + " could not be accommodated. Reason: " + request.getReason());
+                } catch (Exception ignored) {
+                }
             }
-        }
-        webSocketNotificationService.broadcastReservationUpdate(branchId);
+            webSocketNotificationService.broadcastReservationUpdate(branchId);
+        });
     }
 
     @Override
@@ -491,6 +515,22 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .stream().map(this::toDTO).toList();
     }
 
+    // Defers a WS broadcast / email until the enclosing transaction actually commits, so the
+    // client never receives a "reservation changed" push before the row is visible to a follow-up
+    // read (avoids a stale re-fetch race). Runs immediately if there's no active transaction.
+    private void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
+        }
+    }
+
     private Long getBranchId(String userEmail) {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -503,7 +543,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         List<RestaurantTable> ts = r.getTables().stream()
                 .sorted(Comparator.comparingInt(t -> t.getTableNumber() != null ? t.getTableNumber() : 0))
                 .toList();
-        return ReservationResponseDTO.builder()
+
+        ReservationResponseDTO.ReservationResponseDTOBuilder dto = ReservationResponseDTO.builder()
                 .id(r.getId())
                 .tableIds(ts.stream().map(RestaurantTable::getId).toList())
                 .tableNumbers(ts.stream().map(RestaurantTable::getTableNumber).toList())
@@ -515,6 +556,33 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .notes(r.getCustomerNote())
                 .status(r.getStatus().name())
                 .createdAt(r.getCreatedAt())
-                .build();
+                .totalCharge(r.getTotalCharge());
+
+        // Payment/refund rows only ever exist once money has moved — skip the extra query for
+        // REQUESTED/CONFIRMED/REJECTED/EXPIRED bookings that never reached a payment.
+        if (r.getStatus() == ReservationStatus.PAID || r.getStatus() == ReservationStatus.COMPLETED
+                || r.getStatus() == ReservationStatus.CANCELLED) {
+            List<ReservationPayment> payments = reservationPaymentRepository.findByReservationIdOrderByIdAsc(r.getId());
+
+            // A positive amount row = the original payment.
+            payments.stream()
+                    .filter(p -> p.getAmount() != null && p.getAmount().signum() > 0)
+                    .findFirst()
+                    .ifPresent(p -> dto.amountPaid(p.getAmount())
+                            .paidAt(p.getPaidAt())
+                            .paymentMethod(p.getPaymentMethod() != null ? p.getPaymentMethod().name() : null)
+                            .transactionReference(p.getTransactionReference()));
+
+            // A negative amount row = a refund. Some callers record the refund time in paidAt
+            // instead of refundedAt, so fall back between the two.
+            payments.stream()
+                    .filter(p -> p.getAmount() != null && p.getAmount().signum() < 0)
+                    .findFirst()
+                    .ifPresent(p -> dto.refundAmount(p.getRefundAmount() != null ? p.getRefundAmount() : p.getAmount().negate())
+                            .refundedAt(p.getRefundedAt() != null ? p.getRefundedAt() : p.getPaidAt())
+                            .refundTransactionReference(p.getTransactionReference()));
+        }
+
+        return dto.build();
     }
 }

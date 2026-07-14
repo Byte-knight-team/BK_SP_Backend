@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -31,4 +32,17 @@ public class ReservationResponseDTO {
     // One of the ReservationStatus values: REQUESTED / CONFIRMED / REJECTED / PAID / EXPIRED / CANCELLED / COMPLETED
     private String status;
     private LocalDateTime createdAt;
+
+    // What the customer owes in total for this booking (time charge + handling fee).
+    private BigDecimal totalCharge;
+
+    // Populated from the reservation_payments ledger — null until money has actually moved.
+    private BigDecimal amountPaid;
+    private LocalDateTime paidAt;
+    private String paymentMethod;
+    private String transactionReference;
+
+    private BigDecimal refundAmount;
+    private LocalDateTime refundedAt;
+    private String refundTransactionReference;
 }
