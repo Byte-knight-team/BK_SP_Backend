@@ -6,8 +6,16 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * A table reservation. In the customer-initiated model its status flows:
+ * REQUESTED → CONFIRMED (tables assigned, pay clock started) → PAID → COMPLETED,
+ * with REJECTED / EXPIRED / CANCELLED branches. One booking can span several tables
+ * (the reservation_tables join) under a single customer.
+ */
 @Entity
-@Table(name = "reservations")
+@Table(name = "reservations", indexes = {
+    @Index(name = "idx_reservations_customer_id", columnList = "customer_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -59,15 +67,19 @@ public class Reservation {
     @Column(name = "receptionist_note", length = 500)
     private String receptionistNote;
 
+    // Total amount the customer must pay = timeCharge (feePerHour × hours × guests) + handlingFee.
     @Column(name = "total_charge", precision = 12, scale = 2)
     private java.math.BigDecimal totalCharge;
 
+    // Non-refundable booking fee (kept even when the customer cancels their own paid booking).
     @Column(name = "handling_fee", precision = 12, scale = 2)
     private java.math.BigDecimal handlingFee;
 
+    // How much was refunded when cancelled (null = no refund; set per the refund rules).
     @Column(name = "refund_amount", precision = 12, scale = 2)
     private java.math.BigDecimal refundAmount;
 
+    // While CONFIRMED, the customer must pay before this instant or it auto-EXPIRES.
     @Column(name = "payment_deadline")
     private LocalDateTime paymentDeadline;
 

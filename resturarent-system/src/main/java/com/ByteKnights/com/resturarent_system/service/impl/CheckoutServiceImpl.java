@@ -13,6 +13,9 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class CheckoutServiceImpl implements CheckoutService {
@@ -65,16 +68,52 @@ public class CheckoutServiceImpl implements CheckoutService {
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Branch configuration is missing for Branch ID: " + request.getBranchId()));
 
+        double orderDistanceKm = 0.0;
+        if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
+            if (request.getLatitude() == null || request.getLongitude() == null) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
+            }
+            if (branch.getLatitude() == null || branch.getLongitude() == null) {
+                throw new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch location is not configured properly.");
+            }
+            orderDistanceKm = com.ByteKnights.com.resturarent_system.util.DistanceUtil.calculateDistance(
+                    branch.getLatitude(), branch.getLongitude(),
+                    request.getLatitude(), request.getLongitude()
+            );
+            if (orderDistanceKm > branchConfig.getMaxDeliveryRadiusKm()) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, 
+                        String.format("Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.", 
+                                branchConfig.getMaxDeliveryRadiusKm(), orderDistanceKm));
+            }
+        }
+
         // 2. Calculate Base Subtotal
         BigDecimal subtotal = BigDecimal.ZERO;
         if (request.getItems() == null || request.getItems().isEmpty()) {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Cart cannot be empty");
         }
 
+        // Batch-load menu items to prevent N+1 queries
+        List<Long> requestedItemIds = request.getItems().stream()
+                .map(CheckoutCalculateRequest.CartItemRequest::getMenuItemId)
+                .collect(Collectors.toList());
+        List<MenuItem> dbMenuItems = menuItemRepository.findAllById(requestedItemIds);
+        Map<Long, MenuItem> menuItemMap = dbMenuItems.stream()
+                .collect(Collectors.toMap(MenuItem::getId, item -> item));
+
         for (CheckoutCalculateRequest.CartItemRequest item : request.getItems()) {
-            MenuItem dbItem = menuItemRepository.findById(item.getMenuItemId())
-                    .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND,
-                            "Menu item not found: " + item.getMenuItemId()));
+            MenuItem dbItem = menuItemMap.get(item.getMenuItemId());
+            if (dbItem == null) {
+                throw new CustomerAuthException(HttpStatus.NOT_FOUND,
+                        "Menu item not found: " + item.getMenuItemId());
+            }
+
+            if (Boolean.FALSE.equals(dbItem.getIsAvailable()) || dbItem.getStatus() != MenuItemStatus.ACTIVE) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, dbItem.getName() + " is currently unavailable or inactive.");
+            }
+            if (!"ACTIVE".equals(dbItem.getCategory().getStatus())) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, dbItem.getName() + " belongs to an inactive category.");
+            }
 
             BigDecimal lineTotal = dbItem.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             subtotal = subtotal.add(lineTotal);
@@ -145,7 +184,12 @@ public class CheckoutServiceImpl implements CheckoutService {
         // 5. Delivery Fee
         BigDecimal deliveryFee = BigDecimal.ZERO;
         if ("ONLINE_DELIVERY".equalsIgnoreCase(request.getOrderType())) {
-            deliveryFee = branchConfig.getDeliveryFee();
+            BigDecimal baseFee = branchConfig.getDeliveryFee();
+            BigDecimal perKmFee = branchConfig.getDeliveryFeePerKm();
+            
+            // Delivery Fee = Base + (Distance * PerKmRate), rounded to whole number
+            BigDecimal distanceCost = perKmFee.multiply(BigDecimal.valueOf(orderDistanceKm));
+            deliveryFee = baseFee.add(distanceCost).setScale(0, java.math.RoundingMode.HALF_UP);
         }
 
         // 6. Tax & Service Charge (Calculated on discounted subtotal)
@@ -160,8 +204,9 @@ public class CheckoutServiceImpl implements CheckoutService {
                     .multiply(sysConfig.getServiceChargePercentage().divide(BigDecimal.valueOf(100)));
         }
 
-        // 7. Final Total
-        BigDecimal finalTotal = discountedSubtotal.add(deliveryFee).add(taxAmount).add(serviceCharge);
+        // 7. Final Total, rounded to 2 decimal places for clean UI
+        BigDecimal finalTotal = discountedSubtotal.add(deliveryFee).add(taxAmount).add(serviceCharge)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
 
         // 8. Calculate Earned Points
         Integer pointsEarned = 0;

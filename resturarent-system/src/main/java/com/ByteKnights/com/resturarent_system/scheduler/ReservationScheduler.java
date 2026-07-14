@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -60,42 +62,9 @@ public class ReservationScheduler {
                     && r.getPaymentDeadline().isBefore(now)) {
                 r.setStatus(ReservationStatus.EXPIRED);
                 reservationRepository.save(r);
-                if (branchId != null) {
-                    webSocketNotificationService.broadcastReservationUpdate(branchId);
-                }
-                if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
-                    webSocketNotificationService.broadcastReservationStatusToCustomer(r.getCustomer().getUser().getId(),
-                            reservationId, "EXPIRED");
-                    try {
-                        emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Expired",
-                                "Your reservation at " + r.getBranch().getName()
-                                        + " has expired because the payment was not completed within the allowed time window.");
-                    } catch (Exception e) {
-                        log.error("Failed to send expiration email for reservation {}", reservationId, e);
-                    }
-                }
-                log.info("Auto-expired unpaid confirmed reservation {}", reservationId);
-                continue;
-            }
 
-            if (r.getStatus() != ReservationStatus.PAID)
-                continue;
-
-            if (branchId == null)
-                continue;
-
-            LocalDateTime reservationTime = r.getReservationTime();
-
-            // No-show auto-cancel: a PAID reservation whose window has fully passed was
-            // never seated,
-            // so cancel it and free its tables (each RESERVED table → AVAILABLE, unless
-            // another CONFIRMED/PAID
-            // reservation still holds it within the 15-minute window → then it stays
-            // RESERVED for that one).
-            if (r.getEndTime() != null && r.getEndTime().isBefore(now)) {
-                r.setStatus(ReservationStatus.CANCELLED);
-                r.setCancelReason("Auto-cancelled — no-show (reservation time passed)");
-                reservationRepository.save(r);
+                // Payment window closed → free any tables this booking was holding, unless
+                // another CONFIRMED/PAID booking still holds them within the 15-minute window.
                 boolean anyFreed = false;
                 for (RestaurantTable table : r.getTables()) {
                     if (table.getState() == TableStatus.RESERVED) {
@@ -111,12 +80,50 @@ public class ReservationScheduler {
                         }
                     }
                 }
-                if (anyFreed)
-                    webSocketNotificationService.broadcastTableUpdate(branchId);
-                webSocketNotificationService.broadcastReservationUpdate(branchId);
-                log.info("Auto-cancelled no-show reservation {} (window ended)", reservationId);
+                final Long finalBranchId = branchId;
+                final boolean finalAnyFreed = anyFreed;
+                final Long finalReservationId = reservationId;
+                final Long userId = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getId() : null;
+                final String userEmail = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getEmail() : null;
+                final String branchName = (r.getBranch() != null) ? r.getBranch().getName() : "our restaurant";
+
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        if (finalBranchId != null) {
+                            if (finalAnyFreed) webSocketNotificationService.broadcastTableUpdate(finalBranchId);
+                            webSocketNotificationService.broadcastReservationUpdate(finalBranchId);
+                        }
+                        if (userId != null) {
+                            webSocketNotificationService.broadcastReservationStatusToCustomer(userId,
+                                    finalReservationId, "EXPIRED");
+                            if (userEmail != null) {
+                                try {
+                                    emailService.sendSimpleEmail(userEmail, "Reservation Expired",
+                                            "Your reservation at " + branchName
+                                                    + " has expired because the payment was not completed within the allowed time window.");
+                                } catch (Exception e) {
+                                    log.error("Failed to send expiration email for reservation {}", finalReservationId, e);
+                                }
+                            }
+                        }
+                    }
+                });
+                log.info("Auto-expired unpaid confirmed reservation {}", reservationId);
                 continue;
             }
+
+            if (r.getStatus() != ReservationStatus.PAID)
+                continue;
+
+            if (branchId == null)
+                continue;
+
+            LocalDateTime reservationTime = r.getReservationTime();
+
+            // NOTE: no-show is handled MANUALLY by the receptionist (they may choose to wait a
+            // while for late guests), so there is deliberately NO auto-cancel here — a PAID
+            // booking stays PAID until it is either seated or cancelled by staff.
 
             // Representative table number for the reminder toast (lowest table number in
             // the booking).

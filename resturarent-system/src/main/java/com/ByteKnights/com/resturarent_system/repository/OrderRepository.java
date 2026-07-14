@@ -307,6 +307,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         // ───────────────────────── Customer Statistics Dashboard
         // ─────────────────────────
 
+        @Query("SELECT o.orderType, COUNT(o), COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
+                        "FROM Order o WHERE o.customer.id = :cid " +
+                        "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
+                        "com.ByteKnights.com.resturarent_system.entity.OrderStatus.REJECTED) GROUP BY o.orderType")
+        List<Object[]> findStatisticsFinancialsAndTypes(@Param("cid") Long customerId);
+
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
                         "FROM Order o WHERE o.customer.id = :cid " +
                         "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
@@ -366,6 +372,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         long countByBranchIdAndPaymentStatusAndOrderTypeAndCreatedAtBetween(
                 Long branchId, PaymentStatus paymentStatus, OrderType orderType,
                 LocalDateTime start, LocalDateTime end);
+
+        // Same as above but excludes orders in a status where money is never collected
+        // (CANCELLED/REJECTED/ON_HOLD) — those shouldn't inflate the "pending payment" KPI.
+        long countByBranchIdAndPaymentStatusAndOrderTypeAndStatusNotInAndCreatedAtBetween(
+                Long branchId, PaymentStatus paymentStatus, OrderType orderType,
+                List<OrderStatus> excludedStatuses, LocalDateTime start, LocalDateTime end);
 
         // QR orders in PENDING/PREPARING that have NO READY or SERVED items — for kitchen QR count
         @Query("SELECT COUNT(DISTINCT o) FROM Order o " +

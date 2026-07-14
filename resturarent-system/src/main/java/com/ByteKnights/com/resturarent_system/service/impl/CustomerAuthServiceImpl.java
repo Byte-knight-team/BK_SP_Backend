@@ -140,7 +140,10 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             customerRepository.save(customer);
         }
 
-        Role customerRole = findCustomerRole();
+        Role customerRole = savedUser.getRole();
+        if (customerRole == null) {
+            customerRole = findCustomerRole();
+        }
 
         String normalizedRole = normalizeRole(customerRole.getName());
         String token = customerJwtService.generateToken(savedUser.getId(), savedUser.getEmail(), normalizedRole);
@@ -359,11 +362,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         String normalizedRole = normalizeRole(user.getRole().getName());
 
-        if (!"CUSTOMER".equalsIgnoreCase(normalizedRole)) {
-            return false;
-        }
-
-        return customerRepository.findByUser(user).isPresent();
+        return "CUSTOMER".equalsIgnoreCase(normalizedRole);
     }
 
     private boolean isBlank(String value) {
