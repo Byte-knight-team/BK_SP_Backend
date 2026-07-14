@@ -154,6 +154,9 @@ public class OrderServiceImpl implements OrderService {
                         if (dbItem == null) {
                             throw new ResourceNotFoundException("Menu item not found");
                         }
+                        if (Boolean.FALSE.equals(dbItem.getIsAvailable()) || dbItem.getStatus() != MenuItemStatus.ACTIVE) {
+                            throw new CheckoutException(HttpStatus.BAD_REQUEST, dbItem.getName() + " is currently unavailable or inactive.");
+                        }
                                         
                         List<MenuItemIngredient> ingredients = ingredientMap.getOrDefault(dbItem.getId(), List.of());
                         
