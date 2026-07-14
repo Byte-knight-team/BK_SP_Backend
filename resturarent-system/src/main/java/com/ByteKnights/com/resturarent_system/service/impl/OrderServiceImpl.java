@@ -157,6 +157,9 @@ public class OrderServiceImpl implements OrderService {
                         if (Boolean.FALSE.equals(dbItem.getIsAvailable()) || dbItem.getStatus() != MenuItemStatus.ACTIVE) {
                             throw new CheckoutException(HttpStatus.BAD_REQUEST, dbItem.getName() + " is currently unavailable or inactive.");
                         }
+                        if (!"ACTIVE".equals(dbItem.getCategory().getStatus())) {
+                            throw new CheckoutException(HttpStatus.BAD_REQUEST, dbItem.getName() + " belongs to an inactive category.");
+                        }
                                         
                         List<MenuItemIngredient> ingredients = ingredientMap.getOrDefault(dbItem.getId(), List.of());
                         

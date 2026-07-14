@@ -89,6 +89,13 @@ public class CheckoutServiceImpl implements CheckoutService {
                         "Menu item not found: " + item.getMenuItemId());
             }
 
+            if (Boolean.FALSE.equals(dbItem.getIsAvailable()) || dbItem.getStatus() != MenuItemStatus.ACTIVE) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, dbItem.getName() + " is currently unavailable or inactive.");
+            }
+            if (!"ACTIVE".equals(dbItem.getCategory().getStatus())) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, dbItem.getName() + " belongs to an inactive category.");
+            }
+
             BigDecimal lineTotal = dbItem.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             subtotal = subtotal.add(lineTotal);
         }
