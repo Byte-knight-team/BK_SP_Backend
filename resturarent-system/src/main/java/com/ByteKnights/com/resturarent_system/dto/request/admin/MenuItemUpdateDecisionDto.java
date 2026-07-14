@@ -13,4 +13,5 @@ import lombok.NoArgsConstructor;
 public class MenuItemUpdateDecisionDto {
     private MenuItemUpdateRequestStatus status;
     private String adminNote;
+    private String adminName;
 }
