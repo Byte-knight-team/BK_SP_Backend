@@ -367,6 +367,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 Long branchId, PaymentStatus paymentStatus, OrderType orderType,
                 LocalDateTime start, LocalDateTime end);
 
+        // Same as above but excludes orders in a status where money is never collected
+        // (CANCELLED/REJECTED/ON_HOLD) — those shouldn't inflate the "pending payment" KPI.
+        long countByBranchIdAndPaymentStatusAndOrderTypeAndStatusNotInAndCreatedAtBetween(
+                Long branchId, PaymentStatus paymentStatus, OrderType orderType,
+                List<OrderStatus> excludedStatuses, LocalDateTime start, LocalDateTime end);
+
         // QR orders in PENDING/PREPARING that have NO READY or SERVED items — for kitchen QR count
         @Query("SELECT COUNT(DISTINCT o) FROM Order o " +
                "WHERE o.branch.id = :branchId " +
