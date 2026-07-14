@@ -3,7 +3,8 @@ package com.ByteKnights.com.resturarent_system.controller;
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CancelReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CheckAvailabilityRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.receptionist.CreateReservationRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.ConfirmReservationRequest;
+import com.ByteKnights.com.resturarent_system.dto.request.receptionist.RejectReservationRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.ReservationResponseDTO;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistReservationService;
@@ -17,6 +18,11 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
 
+/**
+ * REST endpoints for the receptionist to manage reservations in their branch:
+ * check availability, confirm/reject customer requests, seat arrived parties, and cancel.
+ * All routes are under /api/v1/receptionist/reservations and require table permissions.
+ */
 @RestController
 @RequestMapping("/api/v1/receptionist/reservations")
 @CrossOrigin
@@ -25,20 +31,8 @@ public class ReceptionistReservationController {
 
     private final ReceptionistReservationService receptionistReservationService;
 
-    @PostMapping
-    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
-    public ResponseEntity<StandardResponse> createReservation(
-            @Valid @RequestBody CreateReservationRequest request,
-            Principal principal) {
-
-        ReservationResponseDTO response = receptionistReservationService
-                .createReservation(request, principal.getName());
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(
-                new StandardResponse(201, "Reservation created successfully", response)
-        );
-    }
-
+    // For a given time slot, return every branch table tagged FREE / OCCUPIED / BLOCKED
+    // so the receptionist can pick tables (used before confirming a request).
     @PostMapping("/check-availability")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
     public ResponseEntity<StandardResponse> checkAvailability(
@@ -51,10 +45,27 @@ public class ReceptionistReservationController {
         return ResponseEntity.ok(new StandardResponse(200, "Availability checked", response));
     }
 
+    // Upcoming reservations for the branch (the dashboard's "Upcoming Reservations" card).
     @GetMapping
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
     public ResponseEntity<StandardResponse> getUpcomingReservations(Principal principal) {
         List<ReservationResponseDTO> list = receptionistReservationService.getUpcomingReservations(principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "Upcoming reservations fetched", list));
+    }
+
+    // Table Management "Requested" queue — REQUESTED bookings, first-come-first-serve.
+    @GetMapping("/requested")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
+    public ResponseEntity<StandardResponse> getRequestedReservations(Principal principal) {
+        List<ReservationResponseDTO> list = receptionistReservationService.getRequestedReservations(principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "Requested reservations fetched", list));
+    }
+
+    // Table Management "Upcoming" queue — CONFIRMED + PAID bookings, soonest first.
+    @GetMapping("/upcoming")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
+    public ResponseEntity<StandardResponse> getUpcomingQueue(Principal principal) {
+        List<ReservationResponseDTO> list = receptionistReservationService.getUpcomingQueue(principal.getName());
         return ResponseEntity.ok(new StandardResponse(200, "Upcoming reservations fetched", list));
     }
 
@@ -73,6 +84,30 @@ public class ReceptionistReservationController {
         return ResponseEntity.ok(new StandardResponse(200, "All reservations fetched", result));
     }
 
+    // Approve a customer's REQUESTED reservation: assign tables → CONFIRMED (starts the pay clock)
+    @PostMapping("/{reservationId}/confirm")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> confirmReservation(
+            @PathVariable Long reservationId,
+            @Valid @RequestBody ConfirmReservationRequest request,
+            Principal principal) {
+
+        receptionistReservationService.confirmReservation(reservationId, request, principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "Reservation confirmed", null));
+    }
+
+    // Reject a customer's REQUESTED reservation with a reason
+    @PostMapping("/{reservationId}/reject")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> rejectReservation(
+            @PathVariable Long reservationId,
+            @Valid @RequestBody RejectReservationRequest request,
+            Principal principal) {
+
+        receptionistReservationService.rejectReservation(reservationId, request, principal.getName());
+        return ResponseEntity.ok(new StandardResponse(200, "Reservation rejected", null));
+    }
+
     // Seat the reserved party: occupy the table and mark the reservation completed
     @PostMapping("/{reservationId}/seat")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
@@ -86,6 +121,8 @@ public class ReceptionistReservationController {
         return ResponseEntity.ok(new StandardResponse(200, "Reservation seated", null));
     }
 
+    // The live reservation on a given table (CONFIRMED/PAID + current window) — lets the
+    // table card show who's booked and offer a Seat action. Returns null if none.
     @GetMapping("/table/{tableId}")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
     public ResponseEntity<StandardResponse> getTableNextReservation(
@@ -95,6 +132,8 @@ public class ReceptionistReservationController {
         return ResponseEntity.ok(new StandardResponse(200, "Table reservation fetched", dto));
     }
 
+    // Cancel a reservation with a reason — cancels the whole booking, frees its tables
+    // (and refunds per the refund rules for a paid booking).
     @PatchMapping("/{reservationId}/cancel")
     @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_VIEW')")
     public ResponseEntity<StandardResponse> cancelReservation(

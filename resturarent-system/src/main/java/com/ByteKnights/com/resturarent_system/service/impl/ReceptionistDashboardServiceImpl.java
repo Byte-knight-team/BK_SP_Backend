@@ -79,11 +79,14 @@ public class ReceptionistDashboardServiceImpl implements ReceptionistDashboardSe
         long servedPickup = orderRepository.countByBranchIdAndStatusAndOrderTypeAndCreatedAtBetween(
                 branchId, OrderStatus.SERVED, OrderType.ONLINE_PICKUP, start, end);
 
-        // Pending payment
-        long pendingPaymentQR = orderRepository.countByBranchIdAndPaymentStatusAndOrderTypeAndCreatedAtBetween(
-                branchId, PaymentStatus.PENDING, OrderType.QR, start, end);
-        long pendingPaymentPickup = orderRepository.countByBranchIdAndPaymentStatusAndOrderTypeAndCreatedAtBetween(
-                branchId, PaymentStatus.PENDING, OrderType.ONLINE_PICKUP, start, end);
+        // Pending payment — only orders that are still actually going to be collected. An order
+        // that's CANCELLED/REJECTED/ON_HOLD never has money coming, even if paymentStatus is
+        // still PENDING, so those don't count here.
+        List<OrderStatus> neverCollected = List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD);
+        long pendingPaymentQR = orderRepository.countByBranchIdAndPaymentStatusAndOrderTypeAndStatusNotInAndCreatedAtBetween(
+                branchId, PaymentStatus.PENDING, OrderType.QR, neverCollected, start, end);
+        long pendingPaymentPickup = orderRepository.countByBranchIdAndPaymentStatusAndOrderTypeAndStatusNotInAndCreatedAtBetween(
+                branchId, PaymentStatus.PENDING, OrderType.ONLINE_PICKUP, neverCollected, start, end);
 
         // Cash collected today
         double collectedTodayQR = paymentRepository.sumCashCollectedByOrderType(

@@ -87,6 +87,8 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         Reservation saved = reservationRepository.save(reservation);
 
         webSocketNotificationService.broadcastNewReservationRequest(branch.getId(), saved.getId());
+        // Also emit the generic reservation update so the receptionist's queue tables refresh in real time.
+        webSocketNotificationService.broadcastReservationUpdate(branch.getId());
 
         try {
             emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
@@ -197,6 +199,8 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         if (branchId != null) {
             if (anyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
             webSocketNotificationService.broadcastReservationUpdate(branchId);
+            // Notify the branch's receptionists that the CUSTOMER cancelled (global toast).
+            webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "CANCELLED", r.getCustomerName());
         }
     }
 
@@ -233,6 +237,8 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
         if (branchId != null) {
             webSocketNotificationService.broadcastReservationUpdate(branchId);
+            // Notify the branch's receptionists that the CUSTOMER paid (global toast).
+            webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "PAID", r.getCustomerName());
         }
 
         try {
@@ -338,258 +344,4 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
                 .toList();
     }
 
-    @Override
-    @Transactional
-    public void testConfirmReservation(Long reservationId, List<Integer> tableNumbers, String receptionistNote) {
-        Reservation r = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new RuntimeException("Reservation not found"));
-
-        if (r.getStatus() != ReservationStatus.REQUESTED) {
-            throw new RuntimeException("Reservation is not in REQUESTED state");
-        }
-
-        BranchConfig config = branchConfigRepository.findByBranchId(r.getBranch().getId())
-                .orElseThrow(() -> new RuntimeException("Branch config not found"));
-
-        boolean anyLocked = false;
-        LocalDateTime now = LocalDateTime.now();
-        if (tableNumbers != null && !tableNumbers.isEmpty()) {
-            List<RestaurantTable> assignedTables = restaurantTableRepository
-                    .findByBranchIdAndTableNumberIn(r.getBranch().getId(), tableNumbers);
-            
-            for (RestaurantTable t : assignedTables) {
-                if (t.getState() == TableStatus.AVAILABLE && !r.getReservationTime().isAfter(now.plusMinutes(15))) {
-                    t.setState(TableStatus.RESERVED);
-                    t.setStatusUpdatedAt(now);
-                    restaurantTableRepository.save(t);
-                    anyLocked = true;
-                }
-            }
-            r.setTables(new java.util.HashSet<>(assignedTables));
-        }
-
-        if (receptionistNote != null && !receptionistNote.isBlank()) {
-            r.setReceptionistNote(receptionistNote);
-        }
-
-        r.setStatus(ReservationStatus.CONFIRMED);
-        r.setPaymentDeadline(LocalDateTime.now().plusMinutes(config.getReservationPaymentWindowMinutes()));
-        reservationRepository.save(r);
-
-        broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "CONFIRMED");
-        if (anyLocked) {
-            webSocketNotificationService.broadcastTableUpdate(r.getBranch().getId());
-        }
-        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
-
-        try {
-            int paymentWindow = config.getReservationPaymentWindowMinutes();
-            String reservationLink = frontendUrl + "/reservations";
-            emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Confirmed",
-                    "Your reservation at " + r.getBranch().getName() + " is confirmed. " +
-                            "Please complete the payment within " + paymentWindow + " minutes to secure it. " +
-                            "You can complete the payment here: " + reservationLink);
-        } catch (Exception e) {
-        }
-    }
-
-    @Override
-    @Transactional
-    public void testRejectReservation(Long reservationId, String rejectReason) {
-        Reservation r = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new RuntimeException("Reservation not found"));
-
-        if (r.getStatus() != ReservationStatus.REQUESTED) {
-            throw new RuntimeException("Reservation is not in REQUESTED state");
-        }
-
-        r.setStatus(ReservationStatus.REJECTED);
-        r.setReceptionistNote(rejectReason);
-        reservationRepository.save(r);
-
-        broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "REJECTED");
-        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
-
-        try {
-            emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Rejected",
-                    "Unfortunately, your reservation request for " + r.getBranch().getName()
-                            + " could not be accommodated. Reason: " + rejectReason);
-        } catch (Exception e) {
-        }
-    }
-
-    @Override
-    @Transactional
-    public void testCancelReservation(Long reservationId, String cancelReason) {
-        Reservation r = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new RuntimeException("Reservation not found"));
-
-        if (r.getStatus() == ReservationStatus.CANCELLED || r.getStatus() == ReservationStatus.EXPIRED
-                || r.getStatus() == ReservationStatus.COMPLETED || r.getStatus() == ReservationStatus.REJECTED) {
-            throw new RuntimeException("Reservation cannot be cancelled in its current state");
-        }
-
-        if (r.getStatus() == ReservationStatus.PAID) {
-            // Process refund
-            BigDecimal refundAmount = r.getTotalCharge().subtract(r.getHandlingFee());
-            r.setRefundAmount(refundAmount);
-
-            // Dummy refund record
-            ReservationPayment refund = ReservationPayment.builder()
-                    .reservation(r)
-                    .paymentMethod(PaymentMethod.CARD)
-                    .paymentStatus(PaymentStatus.SUCCESS)
-                    .transactionReference("REFUND-TEST-" + System.currentTimeMillis())
-                    .amount(refundAmount.negate())
-                    .paidAt(LocalDateTime.now())
-                    .build();
-            reservationPaymentRepository.save(refund);
-
-            // Deduct from total spent
-            Customer c = r.getCustomer();
-            c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
-            customerRepository.save(c);
-        }
-
-        r.setStatus(ReservationStatus.CANCELLED);
-        r.setReceptionistNote(cancelReason);
-        reservationRepository.save(r);
-
-        // Free tables
-        LocalDateTime now = LocalDateTime.now();
-        boolean anyFreed = false;
-        for (RestaurantTable table : r.getTables()) {
-            if (table.getState() == TableStatus.RESERVED || table.getState() == TableStatus.OCCUPIED) {
-                table.setState(TableStatus.AVAILABLE);
-                table.setCurrentGuestCount(0);
-                table.setStatusUpdatedAt(now);
-                if (r.getId().equals(table.getSeatedReservationId())) {
-                    table.setSeatedReservationId(null);
-                }
-                restaurantTableRepository.save(table);
-                anyFreed = true;
-            }
-        }
-
-        broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "CANCELLED");
-        if (anyFreed) {
-            webSocketNotificationService.broadcastTableUpdate(r.getBranch().getId());
-        }
-        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
-
-        try {
-            emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
-                    "Your reservation at " + r.getBranch().getName() + " has been cancelled. Reason: " + cancelReason);
-        } catch (Exception e) {
-        }
-    }
-
-    @Override
-    public com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse testCheckAvailability(
-            Long reservationId) {
-        Reservation r = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new RuntimeException("Reservation not found"));
-
-        LocalDateTime start = r.getReservationTime();
-        LocalDateTime end = r.getEndTime();
-        Long branchId = r.getBranch().getId();
-
-        List<RestaurantTable> tables = restaurantTableRepository.findByBranchId(branchId);
-        List<com.ByteKnights.com.resturarent_system.dto.response.receptionist.TableAvailabilityDTO> result = new java.util.ArrayList<>();
-
-        for (RestaurantTable t : tables) {
-            List<Reservation> nearby = reservationRepository.findOverlappingReservations(
-                    t.getId(), start.minusHours(2), end.plusHours(2));
-
-            com.ByteKnights.com.resturarent_system.dto.response.receptionist.TableAvailabilityDTO.TableAvailabilityDTOBuilder dto = com.ByteKnights.com.resturarent_system.dto.response.receptionist.TableAvailabilityDTO
-                    .builder()
-                    .tableId(t.getId())
-                    .tableNumber(t.getTableNumber())
-                    .capacity(t.getCapacity());
-
-            Reservation overlap = nearby.stream()
-                    .filter(res -> res.getReservationTime().isBefore(end) && res.getEndTime().isAfter(start))
-                    .findFirst().orElse(null);
-
-            if (overlap != null) {
-                dto.status("BLOCKED")
-                        .conflictStart(overlap.getReservationTime())
-                        .conflictEnd(overlap.getEndTime())
-                        .gapConflict(false);
-            } else {
-                dto.status(t.getState() == TableStatus.OCCUPIED ? "OCCUPIED" : "FREE");
-                if (!nearby.isEmpty()) {
-                    Reservation gapClash = nearby.get(0);
-                    dto.gapConflict(true)
-                            .conflictStart(gapClash.getReservationTime())
-                            .conflictEnd(gapClash.getEndTime());
-                }
-            }
-            result.add(dto.build());
-        }
-
-        boolean possible = result.stream().anyMatch(d -> !"BLOCKED".equals(d.getStatus()));
-
-        return com.ByteKnights.com.resturarent_system.dto.response.receptionist.CheckAvailabilityResponse.builder()
-                .possible(possible)
-                .reason(possible ? null : "Every table has a time conflict for this slot.")
-                .tables(result)
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public void testCompleteReservation(Long reservationId) {
-        Reservation r = reservationRepository.findById(reservationId)
-                .orElseThrow(() -> new RuntimeException("Reservation not found"));
-
-        if (r.getStatus() != ReservationStatus.PAID) {
-            throw new RuntimeException("Reservation must be in PAID state to be completed (seated)");
-        }
-
-        // Seat the whole party: occupy every table of the booking.
-        int remaining = r.getGuestCount() != null ? r.getGuestCount() : 0;
-        LocalDateTime now = LocalDateTime.now();
-        List<RestaurantTable> orderedTables = r.getTables().stream()
-                .sorted(java.util.Comparator.comparingInt(t -> t.getCapacity() != null ? t.getCapacity() : 0))
-                .toList();
-        for (RestaurantTable table : orderedTables) {
-            int cap = table.getCapacity() != null ? table.getCapacity() : 0;
-            int seat = Math.min(Math.max(remaining, 0), cap);
-            remaining -= seat;
-            table.setState(TableStatus.OCCUPIED);
-            table.setCurrentGuestCount(seat);
-            table.setSeatedReservationId(r.getId());
-            table.setStatusUpdatedAt(now);
-            restaurantTableRepository.save(table);
-        }
-
-        r.setStatus(ReservationStatus.COMPLETED);
-        reservationRepository.save(r);
-
-        broadcastAfterCommit(r.getCustomer().getUser().getId(), r.getId(), "COMPLETED");
-        webSocketNotificationService.broadcastTableUpdate(r.getBranch().getId());
-        webSocketNotificationService.broadcastReservationUpdate(r.getBranch().getId());
-
-        try {
-            emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Thank you for dining with us!",
-                    "We hope you enjoyed your time at " + r.getBranch().getName() + ".");
-        } catch (Exception e) {
-        }
-    }
-
-    private void broadcastAfterCommit(Long customerUserId, Long reservationId, String status) {
-        if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-                new org.springframework.transaction.support.TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        webSocketNotificationService.broadcastReservationStatusToCustomer(customerUserId, reservationId, status);
-                    }
-                }
-            );
-        } else {
-            webSocketNotificationService.broadcastReservationStatusToCustomer(customerUserId, reservationId, status);
-        }
-    }
 }

@@ -8,6 +8,10 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Result of an availability check for a time slot: whether a booking is possible and
+ * the per-table breakdown (each table tagged FREE / OCCUPIED / BLOCKED).
+ */
 @Data
 @Builder
 @NoArgsConstructor

@@ -467,9 +467,11 @@ public class MenuServiceImpl implements MenuService {
          */
         Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
 
-        // Approved items become ACTIVE and immediately available to customers.
+        // Approved items become ACTIVE, but availability ("can the kitchen cook
+        // this right now") is deliberately left untouched here — that's the
+        // chef's own call via the kitchen-side toggle, not something approval
+        // grants automatically.
         menuItem.setStatus(MenuItemStatus.ACTIVE);
-        menuItem.setIsAvailable(true);
         menuItem.setApprovedAt(LocalDateTime.now());
         menuItem.setRejectedAt(null);
         menuItem.setRejectionReason(null);
@@ -590,7 +592,12 @@ public class MenuServiceImpl implements MenuService {
          */
         Map<String, Object> oldValues = buildMenuItemAuditSnapshot(menuItem);
 
-        menuItem.setIsAvailable(isAvailable);
+        // Availability can only ever be turned ON by the kitchen's own toggle
+        // (the chef confirming they can actually cook it right now) — this
+        // admin-side action can take it away but never grants it, regardless
+        // of which direction was requested. Re-activating an item here always
+        // leaves it unavailable until the chef flips it on themselves.
+        menuItem.setIsAvailable(false);
 
         MenuItem saved = menuItemRepository.save(menuItem);
 
@@ -602,14 +609,12 @@ public class MenuServiceImpl implements MenuService {
                 AuditTargetType.MENU_ITEM,
                 saved.getId(),
                 getMenuItemBranchId(saved),
-                isAvailable
-                        ? "Menu item marked as available"
-                        : "Menu item marked as unavailable",
+                "Menu item marked as unavailable",
                 oldValues,
                 buildMenuItemAuditSnapshot(saved));
 
         return buildActionResponse(
-                isAvailable ? "AVAILABLE" : "UNAVAILABLE",
+                "UNAVAILABLE",
                 saved,
                 "Availability updated");
     }
