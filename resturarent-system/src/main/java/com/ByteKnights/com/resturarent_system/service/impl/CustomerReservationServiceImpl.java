@@ -92,13 +92,15 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         // Also emit the generic reservation update so the receptionist's queue tables refresh in real time.
         webSocketNotificationService.broadcastReservationUpdate(branch.getId());
 
-        try {
-            emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
-                    "We have received your reservation request for " + branch.getName() + " on "
-                            + saved.getReservationTime() + ". We will review it shortly.");
-        } catch (Exception e) {
-            // Ignore email errors if SMTP is down
-        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
+                        "We have received your reservation request for " + branch.getName() + " on "
+                                + saved.getReservationTime() + ". We will review it shortly.");
+            } catch (Exception e) {
+                // Ignore email errors if SMTP is down
+            }
+        });
 
         return toDTO(saved);
     }
