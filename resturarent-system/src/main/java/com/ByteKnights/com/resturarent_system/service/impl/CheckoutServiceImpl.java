@@ -7,6 +7,10 @@ import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.exception.CustomerAuthException;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.CheckoutService;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+import com.ByteKnights.com.resturarent_system.dto.cache.SystemConfigCacheDto;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -21,23 +25,20 @@ import java.util.stream.Collectors;
 public class CheckoutServiceImpl implements CheckoutService {
 
     private final MenuItemRepository menuItemRepository;
-    private final BranchConfigRepository branchConfigRepository;
-    private final SystemConfigRepository systemConfigRepository;
+    private final SystemConfigService systemConfigService;
     private final CouponRepository couponRepository;
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
     private final BranchRepository branchRepository;
 
     public CheckoutServiceImpl(MenuItemRepository menuItemRepository,
-            BranchConfigRepository branchConfigRepository,
-            SystemConfigRepository systemConfigRepository,
+            SystemConfigService systemConfigService,
             CouponRepository couponRepository,
             CustomerRepository customerRepository,
             UserRepository userRepository,
             BranchRepository branchRepository) {
         this.menuItemRepository = menuItemRepository;
-        this.branchConfigRepository = branchConfigRepository;
-        this.systemConfigRepository = systemConfigRepository;
+        this.systemConfigService = systemConfigService;
         this.couponRepository = couponRepository;
         this.customerRepository = customerRepository;
         this.userRepository = userRepository;
@@ -48,25 +49,23 @@ public class CheckoutServiceImpl implements CheckoutService {
     public CheckoutCalculateResponse calculateOrderTotals(String userIdentifier, CheckoutCalculateRequest request) {
         return buildReceiptMath(userIdentifier, request);
     }
+
     // THE CORE MATH ENGINE (THE HELPER)
     private CheckoutCalculateResponse buildReceiptMath(String userIdentifier, CheckoutCalculateRequest request) {
 
         // 1. Fetch Configs (500 Internal Server Error if these are missing, as the
         // system is broken)
-        SystemConfig sysConfig = systemConfigRepository.findFirstByOrderByIdAsc()
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "System configuration is missing"));
+        SystemConfigCacheDto sysConfig = systemConfigService.getCachedGlobalConfig();
 
         Branch branch = branchRepository.findById(request.getBranchId())
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Branch not found"));
-        
+
         if (branch.getStatus() != BranchStatus.ACTIVE) {
-            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                    "This branch is currently closed and not accepting orders.");
         }
 
-        BranchConfig branchConfig = branchConfigRepository.findByBranchId(request.getBranchId())
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Branch configuration is missing for Branch ID: " + request.getBranchId()));
+        BranchConfigCacheDto branchConfig = systemConfigService.getCachedBranchConfig(request.getBranchId());
 
         double orderDistanceKm = 0.0;
         if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
@@ -74,15 +73,16 @@ public class CheckoutServiceImpl implements CheckoutService {
                 throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
             }
             if (branch.getLatitude() == null || branch.getLongitude() == null) {
-                throw new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch location is not configured properly.");
+                throw new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Branch location is not configured properly.");
             }
             orderDistanceKm = com.ByteKnights.com.resturarent_system.util.DistanceUtil.calculateDistance(
                     branch.getLatitude(), branch.getLongitude(),
-                    request.getLatitude(), request.getLongitude()
-            );
+                    request.getLatitude(), request.getLongitude());
             if (orderDistanceKm > branchConfig.getMaxDeliveryRadiusKm()) {
-                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, 
-                        String.format("Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.", 
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                        String.format(
+                                "Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.",
                                 branchConfig.getMaxDeliveryRadiusKm(), orderDistanceKm));
             }
         }
@@ -109,10 +109,12 @@ public class CheckoutServiceImpl implements CheckoutService {
             }
 
             if (Boolean.FALSE.equals(dbItem.getIsAvailable()) || dbItem.getStatus() != MenuItemStatus.ACTIVE) {
-                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, dbItem.getName() + " is currently unavailable or inactive.");
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                        dbItem.getName() + " is currently unavailable or inactive.");
             }
             if (!"ACTIVE".equals(dbItem.getCategory().getStatus())) {
-                throw new CustomerAuthException(HttpStatus.BAD_REQUEST, dbItem.getName() + " belongs to an inactive category.");
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                        dbItem.getName() + " belongs to an inactive category.");
             }
 
             BigDecimal lineTotal = dbItem.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
@@ -186,7 +188,7 @@ public class CheckoutServiceImpl implements CheckoutService {
         if ("ONLINE_DELIVERY".equalsIgnoreCase(request.getOrderType())) {
             BigDecimal baseFee = branchConfig.getDeliveryFee();
             BigDecimal perKmFee = branchConfig.getDeliveryFeePerKm();
-            
+
             // Delivery Fee = Base + (Distance * PerKmRate), rounded to whole number
             BigDecimal distanceCost = perKmFee.multiply(BigDecimal.valueOf(orderDistanceKm));
             deliveryFee = baseFee.add(distanceCost).setScale(0, java.math.RoundingMode.HALF_UP);
@@ -261,7 +263,7 @@ public class CheckoutServiceImpl implements CheckoutService {
     }
 
     // --- Private Validators ---
-    //validate coupon
+    // validate coupon
     private Coupon validateAndGetCoupon(String code, BigDecimal subtotal) {
         Coupon coupon = couponRepository.findByCode(code)
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Invalid coupon code"));

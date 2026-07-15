@@ -18,6 +18,9 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +29,7 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     private final ReservationRepository reservationRepository;
     private final ReservationPaymentRepository reservationPaymentRepository;
     private final BranchRepository branchRepository;
-    private final BranchConfigRepository branchConfigRepository;
+    private final SystemConfigService systemConfigService;
     private final RestaurantTableRepository restaurantTableRepository;
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
@@ -46,8 +49,7 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
 
         Branch branch = branchRepository.findById(request.getBranchId())
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
-        BranchConfig config = branchConfigRepository.findByBranchId(branch.getId())
-                .orElseThrow(() -> new RuntimeException("Branch config not found"));
+        BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branch.getId());
 
         if (!config.isBranchActiveForOrders() || !config.isDineInEnabled() || !config.isReservationsEnabled()) {
             throw new RuntimeException("Reservations are currently unavailable for this branch");
@@ -253,13 +255,12 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     @Override
     public ReservationChargeBreakdown previewCharge(Long branchId, int guestCount, LocalDateTime start,
             LocalDateTime end) {
-        BranchConfig config = branchConfigRepository.findByBranchId(branchId)
-                .orElseThrow(() -> new RuntimeException("Branch config not found"));
+        BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branchId);
         return calculateCharge(guestCount, start, end, config);
     }
 
     private ReservationChargeBreakdown calculateCharge(int guestCount, LocalDateTime start, LocalDateTime end,
-            BranchConfig config) {
+            BranchConfigCacheDto config) {
         long minutes = Duration.between(start, end).toMinutes();
         long hours = (long) Math.ceil(minutes / 60.0);
 
@@ -321,12 +322,12 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     public List<com.ByteKnights.com.resturarent_system.dto.BranchResponse> getActiveReservationBranches() {
         return branchRepository.findByStatus(BranchStatus.ACTIVE).stream()
                 .filter(branch -> {
-                    BranchConfig config = branchConfigRepository.findByBranchId(branch.getId()).orElse(null);
+                    BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branch.getId());
                     return config != null && config.isBranchActiveForOrders() && config.isDineInEnabled()
                             && config.isReservationsEnabled();
                 })
                 .map(branch -> {
-                    BranchConfig config = branchConfigRepository.findByBranchId(branch.getId()).orElse(null);
+                    BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branch.getId());
                     return com.ByteKnights.com.resturarent_system.dto.BranchResponse.builder()
                         .id(branch.getId())
                         .name(branch.getName())

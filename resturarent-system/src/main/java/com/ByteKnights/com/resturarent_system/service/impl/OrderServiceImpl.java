@@ -29,6 +29,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.*;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -50,7 +53,7 @@ public class OrderServiceImpl implements OrderService {
         private final InventoryTransactionRepository inventoryTransactionRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final ReservationRepository reservationRepository;
-        private final com.ByteKnights.com.resturarent_system.repository.BranchConfigRepository branchConfigRepository;
+        private final SystemConfigService systemConfigService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -64,7 +67,7 @@ public class OrderServiceImpl implements OrderService {
                         InventoryTransactionRepository inventoryTransactionRepository,
                         WebSocketNotificationService webSocketNotificationService,
                         ReservationRepository reservationRepository,
-                        com.ByteKnights.com.resturarent_system.repository.BranchConfigRepository branchConfigRepository) {
+                        SystemConfigService systemConfigService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -82,7 +85,7 @@ public class OrderServiceImpl implements OrderService {
                 this.inventoryTransactionRepository = inventoryTransactionRepository;
                 this.webSocketNotificationService = webSocketNotificationService;
                 this.reservationRepository = reservationRepository;
-                this.branchConfigRepository = branchConfigRepository;
+                this.systemConfigService = systemConfigService;
         }
 
         @Override
@@ -104,8 +107,7 @@ public class OrderServiceImpl implements OrderService {
                         throw new CheckoutException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
                 }
 
-                com.ByteKnights.com.resturarent_system.entity.BranchConfig branchConfig = branchConfigRepository.findByBranchId(request.getBranchId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Branch configuration not found"));
+                BranchConfigCacheDto branchConfig = systemConfigService.getCachedBranchConfig(request.getBranchId());
 
                 if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
                         if (request.getLatitude() == null || request.getLongitude() == null) {

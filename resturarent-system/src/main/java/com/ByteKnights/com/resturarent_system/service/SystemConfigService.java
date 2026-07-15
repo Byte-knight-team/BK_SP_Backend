@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service;
 
+import com.ByteKnights.com.resturarent_system.dto.cache.SystemConfigCacheDto;
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateBranchConfigRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateGlobalConfigRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.BranchConfigResponse;
@@ -29,6 +30,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+
 
 @Service
 @Transactional
@@ -65,12 +70,19 @@ public class SystemConfigService {
         return mapGlobalConfig(config);
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "crave:system_config", key = "'global'", sync = true)
+    public SystemConfigCacheDto getCachedGlobalConfig() {
+        SystemConfig config = getOrCreateGlobalConfig();
+        return mapSystemConfigCacheDto(config);
+    }
+
     /*
      * Updates global system settings.
      *
      * Manual audit is used because old and new configuration values
      * are important for governance.
      */
+    @org.springframework.cache.annotation.CacheEvict(value = "crave:system_config", key = "'global'")
     public GlobalConfigResponse updateGlobalConfig(
             UpdateGlobalConfigRequest request
     ) {
@@ -151,6 +163,14 @@ public class SystemConfigService {
      * Returns branch-specific order, delivery, and reservation
      * configuration.
      */
+
+    @Cacheable(value = "crave:branch_config", key = "#branchId", sync = true)
+    public BranchConfigCacheDto getCachedBranchConfig(Long branchId) {
+        Branch branch = getBranchOrThrow(branchId);
+        BranchConfig config = getOrCreateBranchConfig(branch);
+        return mapBranchConfigCacheDto(config);
+    }
+
     public BranchConfigResponse getBranchConfig(
             Long branchId
     ) {
@@ -170,6 +190,7 @@ public class SystemConfigService {
      * Reservation fields are updated only when they are included
      * in the request. This keeps older clients compatible.
      */
+    @CacheEvict(value = "crave:branch_config", key = "#branchId")
     public BranchConfigResponse updateBranchConfig(
             Long branchId,
             UpdateBranchConfigRequest request
@@ -667,6 +688,26 @@ public class SystemConfigService {
     /*
      * Maps global configuration into its API response.
      */
+    private SystemConfigCacheDto mapSystemConfigCacheDto(SystemConfig config) {
+        SystemConfigCacheDto dto = new SystemConfigCacheDto();
+        dto.setId(config.getId());
+        if (config.getDeliveryBranch() != null) {
+            dto.setDeliveryBranchId(config.getDeliveryBranch().getId());
+        }
+        dto.setTaxEnabled(config.isTaxEnabled());
+        dto.setTaxPercentage(config.getTaxPercentage());
+        dto.setServiceChargeEnabled(config.isServiceChargeEnabled());
+        dto.setServiceChargePercentage(config.getServiceChargePercentage());
+        dto.setLoyaltyEnabled(config.isLoyaltyEnabled());
+        dto.setPointsPerAmount(config.getPointsPerAmount());
+        dto.setAmountPerPoint(config.getAmountPerPoint());
+        dto.setMinPointsToRedeem(config.getMinPointsToRedeem());
+        dto.setValuePerPoint(config.getValuePerPoint());
+        dto.setOrderCancelWindowMinutes(config.getOrderCancelWindowMinutes());
+        dto.setUpdatedAt(config.getUpdatedAt());
+        return dto;
+    }
+
     private GlobalConfigResponse mapGlobalConfig(
             SystemConfig config
     ) {
@@ -742,6 +783,28 @@ public class SystemConfigService {
     /*
      * Maps branch configuration into its API response.
      */
+
+    private BranchConfigCacheDto mapBranchConfigCacheDto(BranchConfig config) {
+        BranchConfigCacheDto dto = new BranchConfigCacheDto();
+        dto.setId(config.getId());
+        dto.setBranchId(config.getBranch().getId());
+        dto.setDeliveryFee(config.getDeliveryFee());
+        dto.setDeliveryFeePerKm(config.getDeliveryFeePerKm());
+        dto.setMaxDeliveryRadiusKm(config.getMaxDeliveryRadiusKm());
+        dto.setDeliveryEnabled(config.isDeliveryEnabled());
+        dto.setPickupEnabled(config.isPickupEnabled());
+        dto.setDineInEnabled(config.isDineInEnabled());
+        dto.setBranchActiveForOrders(config.isBranchActiveForOrders());
+        dto.setReservationFeePerHour(config.getReservationFeePerHour());
+        dto.setReservationHandlingFee(config.getReservationHandlingFee());
+        dto.setReservationPaymentWindowMinutes(config.getReservationPaymentWindowMinutes());
+        dto.setReservationMinLeadHours(config.getReservationMinLeadHours());
+        dto.setReservationMaxGuestCount(config.getReservationMaxGuestCount());
+        dto.setReservationsEnabled(config.isReservationsEnabled());
+        dto.setUpdatedAt(config.getUpdatedAt());
+        return dto;
+    }
+
     private BranchConfigResponse mapBranchConfig(
             BranchConfig config
     ) {

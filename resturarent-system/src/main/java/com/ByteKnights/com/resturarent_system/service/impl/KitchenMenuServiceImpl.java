@@ -25,6 +25,8 @@ import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.KitchenMenuService;
 import com.ByteKnights.com.resturarent_system.service.MenuItemIngredientService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -131,6 +133,7 @@ public class KitchenMenuServiceImpl implements KitchenMenuService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "crave:menu:customer", allEntries = true)
     public KitchenMenuItemResponse toggleAvailability(Long id, boolean isAvailable, String userEmail) {
         Staff chef = resolveStaff(userEmail);
         MenuItem item = findOwnedItem(id, chef);
@@ -164,6 +167,7 @@ public class KitchenMenuServiceImpl implements KitchenMenuService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "crave:menu:categories", key = "'active'")
     public List<KitchenMenuCategoryResponse> getActiveCategories() {
         return menuCategoryRepository.findAll()
                 .stream()
