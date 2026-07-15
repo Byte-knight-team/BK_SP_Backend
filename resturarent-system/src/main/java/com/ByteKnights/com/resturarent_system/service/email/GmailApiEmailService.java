@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Sends ServeSync transactional emails through the Gmail HTTPS API.
+ * Sends Crave House transactional emails through the Gmail HTTPS API.
  *
  * This implementation does not use SMTP ports 25, 465, or 587.
  */
@@ -76,7 +76,7 @@ public class GmailApiEmailService implements EmailService {
 
             @Value("${app.email.gmail.sender-email:}") String senderEmail,
 
-            @Value("${app.email.gmail.sender-name:ServeSync}") String senderName,
+            @Value("${app.email.gmail.sender-name:Crave House}") String senderName,
 
             @Value("${app.email.gmail.token-url:https://oauth2.googleapis.com/token}") String tokenUrl,
 
