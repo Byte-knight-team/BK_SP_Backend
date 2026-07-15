@@ -29,6 +29,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+
 
 @Service
 @Transactional
@@ -151,6 +155,14 @@ public class SystemConfigService {
      * Returns branch-specific order, delivery, and reservation
      * configuration.
      */
+
+    @Cacheable(value = "crave:branch_config", key = "#branchId", sync = true)
+    public BranchConfigCacheDto getCachedBranchConfig(Long branchId) {
+        Branch branch = getBranchOrThrow(branchId);
+        BranchConfig config = getOrCreateBranchConfig(branch);
+        return mapBranchConfigCacheDto(config);
+    }
+
     public BranchConfigResponse getBranchConfig(
             Long branchId
     ) {
@@ -170,6 +182,7 @@ public class SystemConfigService {
      * Reservation fields are updated only when they are included
      * in the request. This keeps older clients compatible.
      */
+    @CacheEvict(value = "crave:branch_config", key = "#branchId")
     public BranchConfigResponse updateBranchConfig(
             Long branchId,
             UpdateBranchConfigRequest request
@@ -742,6 +755,28 @@ public class SystemConfigService {
     /*
      * Maps branch configuration into its API response.
      */
+
+    private BranchConfigCacheDto mapBranchConfigCacheDto(BranchConfig config) {
+        BranchConfigCacheDto dto = new BranchConfigCacheDto();
+        dto.setId(config.getId());
+        dto.setBranchId(config.getBranch().getId());
+        dto.setDeliveryFee(config.getDeliveryFee());
+        dto.setDeliveryFeePerKm(config.getDeliveryFeePerKm());
+        dto.setMaxDeliveryRadiusKm(config.getMaxDeliveryRadiusKm());
+        dto.setDeliveryEnabled(config.isDeliveryEnabled());
+        dto.setPickupEnabled(config.isPickupEnabled());
+        dto.setDineInEnabled(config.isDineInEnabled());
+        dto.setBranchActiveForOrders(config.isBranchActiveForOrders());
+        dto.setReservationFeePerHour(config.getReservationFeePerHour());
+        dto.setReservationHandlingFee(config.getReservationHandlingFee());
+        dto.setReservationPaymentWindowMinutes(config.getReservationPaymentWindowMinutes());
+        dto.setReservationMinLeadHours(config.getReservationMinLeadHours());
+        dto.setReservationMaxGuestCount(config.getReservationMaxGuestCount());
+        dto.setReservationsEnabled(config.isReservationsEnabled());
+        dto.setUpdatedAt(config.getUpdatedAt());
+        return dto;
+    }
+
     private BranchConfigResponse mapBranchConfig(
             BranchConfig config
     ) {

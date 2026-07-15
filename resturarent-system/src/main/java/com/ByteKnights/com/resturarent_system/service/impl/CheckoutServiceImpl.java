@@ -7,6 +7,8 @@ import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.exception.CustomerAuthException;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.CheckoutService;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -21,7 +23,7 @@ import java.util.stream.Collectors;
 public class CheckoutServiceImpl implements CheckoutService {
 
     private final MenuItemRepository menuItemRepository;
-    private final BranchConfigRepository branchConfigRepository;
+    private final SystemConfigService systemConfigService;
     private final SystemConfigRepository systemConfigRepository;
     private final CouponRepository couponRepository;
     private final CustomerRepository customerRepository;
@@ -29,14 +31,14 @@ public class CheckoutServiceImpl implements CheckoutService {
     private final BranchRepository branchRepository;
 
     public CheckoutServiceImpl(MenuItemRepository menuItemRepository,
-            BranchConfigRepository branchConfigRepository,
+            SystemConfigService systemConfigService,
             SystemConfigRepository systemConfigRepository,
             CouponRepository couponRepository,
             CustomerRepository customerRepository,
             UserRepository userRepository,
             BranchRepository branchRepository) {
         this.menuItemRepository = menuItemRepository;
-        this.branchConfigRepository = branchConfigRepository;
+        this.systemConfigService = systemConfigService;
         this.systemConfigRepository = systemConfigRepository;
         this.couponRepository = couponRepository;
         this.customerRepository = customerRepository;
@@ -64,9 +66,7 @@ public class CheckoutServiceImpl implements CheckoutService {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
         }
 
-        BranchConfig branchConfig = branchConfigRepository.findByBranchId(request.getBranchId())
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
-                        "Branch configuration is missing for Branch ID: " + request.getBranchId()));
+        BranchConfigCacheDto branchConfig = systemConfigService.getCachedBranchConfig(request.getBranchId());
 
         double orderDistanceKm = 0.0;
         if ("ONLINE_DELIVERY".equals(request.getOrderType())) {

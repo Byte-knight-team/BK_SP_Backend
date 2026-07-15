@@ -30,6 +30,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+
 
 /**
  * Reservation logic for the receptionist. Key operations:
@@ -48,7 +51,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final OrderRepository orderRepository;
-    private final BranchConfigRepository branchConfigRepository;
+    private final SystemConfigService systemConfigService;
     private final ReservationPaymentRepository reservationPaymentRepository;
     private final CustomerRepository customerRepository;
     private final WebSocketNotificationService webSocketNotificationService;
@@ -399,8 +402,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("Only a requested reservation can be confirmed");
         }
 
-        BranchConfig config = branchConfigRepository.findByBranchId(branchId)
-                .orElseThrow(() -> new RuntimeException("Branch config not found"));
+        BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branchId);
 
         // Load the assigned tables and validate they all belong to this branch.
         List<RestaurantTable> assignedTables = tableRepository
