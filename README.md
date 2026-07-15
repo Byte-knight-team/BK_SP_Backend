@@ -34,7 +34,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 | **Build Tool** | Maven (via Maven Wrapper) |
 | **Authentication** | Spring Security with JWT/Session-based auth |
 | **Testing** | JUnit 5, Spring Test Framework |
-| **Utilities** | QR Code generation, Email notifications, TextLK SMS |
+| **Utilities** | QR Code generation, Gmail API (OAuth2), TextLK SMS |
 
 ---
 
@@ -116,9 +116,12 @@ JWT_EXPIRATION_MS=28800000
 # SMS Integration (TextLK)
 SMS_TEXTLK_TOKEN=your-textlk-token
 
-# Email Configuration
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
+# Gmail API (OAuth2) Configuration
+GMAIL_CLIENT_ID=your-google-oauth-client-id
+GMAIL_CLIENT_SECRET=your-google-oauth-client-secret
+GMAIL_REFRESH_TOKEN=your-google-oauth-refresh-token
+GMAIL_SENDER_EMAIL=your-email@gmail.com
+GMAIL_SENDER_NAME=Your App Name
 
 # Frontend URLs & CORS
 FRONTEND_ALLOWED_ORIGINS=http://localhost:5173,https://your-domain.com
