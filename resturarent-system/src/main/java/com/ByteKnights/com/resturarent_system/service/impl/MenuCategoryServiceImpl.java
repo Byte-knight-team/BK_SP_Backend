@@ -17,6 +17,9 @@ import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.MenuCategoryService;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,6 +49,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "crave:menu:categories", key = "'all'")
     public List<MenuCategoryResponse> getAllCategories() {
         return menuCategoryRepository.findAll()
                 .stream()
@@ -63,6 +67,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     @Override
     @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_CATEGORY_CREATED, targetType = AuditTargetType.MENU_CATEGORY, description = "Menu category created successfully", captureResultAsNewValue = false)
     @Transactional
+    @CacheEvict(value = "crave:menu:categories", allEntries = true)
     public MenuCategoryResponse createCategory(CreateMenuCategoryRequest request) {
         String normalizedName = validateAndNormalizeRequiredName(request != null ? request.getName() : null);
         String normalizedDescription = validateAndNormalizeOptionalDescription(
@@ -89,6 +94,10 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     @Override
     @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_CATEGORY_UPDATED, targetType = AuditTargetType.MENU_CATEGORY, description = "Menu category updated successfully", captureResultAsNewValue = false)
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "crave:menu:categories", allEntries = true),
+        @CacheEvict(value = "crave:menu:customer", allEntries = true)
+    })
     public MenuCategoryResponse updateCategory(Long id, UpdateMenuCategoryRequest request) {
         MenuCategory category = findCategoryOrThrow(id);
 
@@ -117,6 +126,11 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "crave:menu:categories", allEntries = true),
+        @CacheEvict(value = "crave:menu:customer", allEntries = true),
+        @CacheEvict(value = "crave:menu:subcategories", allEntries = true)
+    })
     public MenuCategoryResponse toggleCategoryStatus(Long id, boolean isActive) {
         MenuCategory category = findCategoryOrThrow(id);
 

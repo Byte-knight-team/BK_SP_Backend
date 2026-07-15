@@ -27,6 +27,9 @@ import com.ByteKnights.com.resturarent_system.repository.ReviewRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.MenuService;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.core.Authentication;
@@ -271,6 +274,7 @@ public class MenuServiceImpl implements MenuService {
     // for customer menu - (dileepa)
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "crave:menu:customer", key = "#branchId", sync = true)
     public List<com.ByteKnights.com.resturarent_system.dto.response.customer.MenuItemResponse> fetchCustomerMenu(
             Long branchId) {
         // ENFORCE BUSINESS RULE: Default to Branch 1 for Online customers
@@ -306,6 +310,7 @@ public class MenuServiceImpl implements MenuService {
     // Retrieves all distinct sub-category names for a given category in a branch.
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "crave:menu:subcategories", key = "#branchId + '-' + #categoryId")
     public List<String> getDistinctSubCategories(Long branchId, Long categoryId) {
         if (branchId == null) {
             branchId = resolveCurrentAdminBranchIdOrNull();
@@ -330,6 +335,10 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "crave:menu:customer", allEntries = true),
+        @CacheEvict(value = "crave:menu:subcategories", allEntries = true)
+    })
     public MenuItemResponse updateMenuItem(Long id, UpdateMenuItemRequest request) {
         if (!isCurrentUserAdmin()) {
             throw new InvalidOperationException("Only ADMIN is allowed to update menu items");
@@ -448,6 +457,7 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "crave:menu:customer", allEntries = true)
     public MenuItemActionResponse approveMenuItem(Long id, ApproveMenuItemRequest request) {
         ensureCurrentUserIsAdminForWorkflow();
 
@@ -575,6 +585,7 @@ public class MenuServiceImpl implements MenuService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "crave:menu:customer", allEntries = true)
     public MenuItemActionResponse toggleMenuItemAvailability(Long id, boolean isAvailable) {
         MenuItem menuItem = findMenuItemOrThrow(id);
         enforceCurrentUserBranchAccess(menuItem.getBranch() != null ? menuItem.getBranch().getId() : null);
