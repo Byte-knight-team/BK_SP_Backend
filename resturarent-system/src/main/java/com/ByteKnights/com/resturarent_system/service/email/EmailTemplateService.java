@@ -40,7 +40,7 @@ public class EmailTemplateService {
                                 + "</strong>,</p>"
 
                                 + "<p>An administrator has created a "
-                                + "ServeSync staff account for you.</p>"
+                                + "Crave House staff account for you.</p>"
 
                                 + "<div style=\"margin:24px 0;\">"
                                 + "<a href=\""
@@ -275,7 +275,7 @@ public class EmailTemplateService {
 
                                 + "<p style=\"margin-top:28px;\">"
                                 + "Regards,<br>"
-                                + "<strong>ServeSync Team</strong>"
+                                + "<strong>Crave House Team</strong>"
                                 + "</p>"
 
                                 + "</div>"
