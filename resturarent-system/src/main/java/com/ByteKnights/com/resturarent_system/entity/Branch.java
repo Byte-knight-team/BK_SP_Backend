@@ -29,6 +29,12 @@ public class Branch {
     @Column(length = 150)
     private String email;
 
+    @Column(name = "latitude")
+    private Double latitude;
+
+    @Column(name = "longitude")
+    private Double longitude;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private BranchStatus status = BranchStatus.ACTIVE;

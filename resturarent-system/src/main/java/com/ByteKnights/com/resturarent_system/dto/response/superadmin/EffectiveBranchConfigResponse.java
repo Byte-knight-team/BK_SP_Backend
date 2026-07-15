@@ -4,7 +4,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 @Getter
 @Setter
@@ -28,6 +27,9 @@ public class EffectiveBranchConfigResponse {
     private Integer orderCancelWindowMinutes;
 
     private BigDecimal deliveryFee;
+    private BigDecimal deliveryFeePerKm;
+    private Double maxDeliveryRadiusKm;
+
     private boolean deliveryEnabled;
     private boolean pickupEnabled;
     private boolean dineInEnabled;

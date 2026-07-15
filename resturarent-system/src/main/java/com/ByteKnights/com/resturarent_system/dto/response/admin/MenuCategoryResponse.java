@@ -15,5 +15,8 @@ public class MenuCategoryResponse {
     private Long id;
     private String name;
     private String description;
+    private String status;
+    private java.time.LocalDateTime createdAt;
+    private java.time.LocalDateTime updatedAt;
     private String message;
 }

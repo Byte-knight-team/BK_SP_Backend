@@ -18,6 +18,13 @@ public interface LoyaltyTransactionRepository extends JpaRepository<LoyaltyTrans
 
     // ───────────────────────── Customer Statistics Dashboard ─────────────────────────
 
+    @Query("SELECT lt.transactionType, COALESCE(SUM(lt.points), 0) FROM LoyaltyTransaction lt " +
+            "WHERE lt.customer.id = :cid AND lt.transactionType IN (" +
+            "com.ByteKnights.com.resturarent_system.entity.LoyaltyTransactionType.EARN, " +
+            "com.ByteKnights.com.resturarent_system.entity.LoyaltyTransactionType.REDEEM) " +
+            "GROUP BY lt.transactionType")
+    List<Object[]> findStatisticsPoints(@Param("cid") Long customerId);
+
     @Query("SELECT COALESCE(SUM(lt.points), 0) FROM LoyaltyTransaction lt " +
             "WHERE lt.customer.id = :cid AND lt.transactionType = com.ByteKnights.com.resturarent_system.entity.LoyaltyTransactionType.EARN")
     Integer sumPointsEarned(@Param("cid") Long customerId);

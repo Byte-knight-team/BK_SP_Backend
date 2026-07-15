@@ -86,4 +86,43 @@ public class SmtpEmailService implements EmailService {
 
         mailSender.send(message);
     }
+
+    @Override
+    public void sendSimpleEmail(String toEmail, String subject, String body) {
+        if (!toEmail.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+            throw new IllegalArgumentException("Invalid email format: " + toEmail);
+        }
+
+        if (emailTestingService.isForceFail()) {
+            throw new RuntimeException("Forced email failure for testing");
+        }
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(toEmail);
+        message.setSubject(subject);
+        message.setText(body);
+
+        mailSender.send(message);
+    }
+
+    @Override
+    public void sendCustomerEmailVerification(String toEmail, String verificationLink) {
+        if (!toEmail.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+            throw new IllegalArgumentException("Invalid email format: " + toEmail);
+        }
+
+        if (emailTestingService.isForceFail()) {
+            throw new RuntimeException("Forced email failure for testing");
+        }
+
+        String subject = templateService.getCustomerEmailVerificationSubject();
+        String body = templateService.buildCustomerEmailVerificationBody(verificationLink);
+
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(toEmail);
+        message.setSubject(subject);
+        message.setText(body);
+
+        mailSender.send(message);
+    }
 }

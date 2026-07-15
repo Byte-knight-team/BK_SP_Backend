@@ -17,6 +17,9 @@ import com.ByteKnights.com.resturarent_system.repository.MenuCategoryRepository;
 import com.ByteKnights.com.resturarent_system.repository.MenuItemRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.MenuCategoryService;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,8 +41,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     public MenuCategoryServiceImpl(
             MenuCategoryRepository menuCategoryRepository,
             MenuItemRepository menuItemRepository,
-            AuditLogService auditLogService
-    ) {
+            AuditLogService auditLogService) {
         this.menuCategoryRepository = menuCategoryRepository;
         this.menuItemRepository = menuItemRepository;
         this.auditLogService = auditLogService;
@@ -47,6 +49,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "crave:menu:categories", key = "'all'")
     public List<MenuCategoryResponse> getAllCategories() {
         return menuCategoryRepository.findAll()
                 .stream()
@@ -62,19 +65,13 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     }
 
     @Override
-    @Auditable(
-            module = AuditModule.MENU,
-            eventType = AuditEventType.MENU_CATEGORY_CREATED,
-            targetType = AuditTargetType.MENU_CATEGORY,
-            description = "Menu category created successfully",
-            captureResultAsNewValue = false
-    )
+    @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_CATEGORY_CREATED, targetType = AuditTargetType.MENU_CATEGORY, description = "Menu category created successfully", captureResultAsNewValue = false)
     @Transactional
+    @CacheEvict(value = "crave:menu:categories", allEntries = true)
     public MenuCategoryResponse createCategory(CreateMenuCategoryRequest request) {
         String normalizedName = validateAndNormalizeRequiredName(request != null ? request.getName() : null);
         String normalizedDescription = validateAndNormalizeOptionalDescription(
-                request != null ? request.getDescription() : null
-        );
+                request != null ? request.getDescription() : null);
 
         if (menuCategoryRepository.existsByNameIgnoreCase(normalizedName)) {
             throw new DuplicateResourceException("Category already exists: " + normalizedName);
@@ -95,14 +92,12 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
     }
 
     @Override
-    @Auditable(
-            module = AuditModule.MENU,
-            eventType = AuditEventType.MENU_CATEGORY_UPDATED,
-            targetType = AuditTargetType.MENU_CATEGORY,
-            description = "Menu category updated successfully",
-            captureResultAsNewValue = false
-    )
+    @Auditable(module = AuditModule.MENU, eventType = AuditEventType.MENU_CATEGORY_UPDATED, targetType = AuditTargetType.MENU_CATEGORY, description = "Menu category updated successfully", captureResultAsNewValue = false)
     @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "crave:menu:categories", allEntries = true),
+        @CacheEvict(value = "crave:menu:customer", allEntries = true)
+    })
     public MenuCategoryResponse updateCategory(Long id, UpdateMenuCategoryRequest request) {
         MenuCategory category = findCategoryOrThrow(id);
 
@@ -131,41 +126,24 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
     @Override
     @Transactional
-    public MenuCategoryResponse deleteCategory(Long id) {
+    @Caching(evict = {
+        @CacheEvict(value = "crave:menu:categories", allEntries = true),
+        @CacheEvict(value = "crave:menu:customer", allEntries = true),
+        @CacheEvict(value = "crave:menu:subcategories", allEntries = true)
+    })
+    public MenuCategoryResponse toggleCategoryStatus(Long id, boolean isActive) {
         MenuCategory category = findCategoryOrThrow(id);
 
-        if (menuItemRepository.existsByCategoryIdAndIsAvailableTrue(id)) {
-            throw new InvalidOperationException("Cannot delete category with available menu items");
+        String newStatus = isActive ? "ACTIVE" : "INACTIVE";
+
+        if (category.getStatus() != null && category.getStatus().equals(newStatus)) {
+            return mapToResponse(category, "Category status is already " + newStatus);
         }
 
-        if (menuItemRepository.existsByCategoryId(id)) {
-            throw new InvalidOperationException("Cannot delete category with existing menu items");
-        }
+        category.setStatus(newStatus);
+        MenuCategory updated = menuCategoryRepository.save(category);
 
-        /*
-         * Delete stays manual because after deleting the entity,
-         * oldValuesJson is useful to show what category was removed.
-         */
-        Map<String, Object> oldValues = buildMenuCategoryAuditSnapshot(category);
-
-        MenuCategoryResponse response = mapToResponse(category, "Category deleted successfully");
-
-        menuCategoryRepository.delete(category);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.MENU,
-                AuditEventType.MENU_CATEGORY_DELETED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.MENU_CATEGORY,
-                id,
-                null,
-                "Menu category deleted successfully",
-                oldValues,
-                null
-        );
-
-        return response;
+        return mapToResponse(updated, "Category marked as " + newStatus);
     }
 
     private MenuCategory findCategoryOrThrow(Long id) {
@@ -200,8 +178,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
 
         if (normalizedDescription.length() > MAX_DESCRIPTION_LENGTH) {
             throw new InvalidOperationException(
-                    "Category description must be at most " + MAX_DESCRIPTION_LENGTH + " characters"
-            );
+                    "Category description must be at most " + MAX_DESCRIPTION_LENGTH + " characters");
         }
 
         return normalizedDescription;
@@ -212,6 +189,9 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
                 .id(category.getId())
                 .name(category.getName())
                 .description(category.getDescription())
+                .status(category.getStatus())
+                .createdAt(category.getCreatedAt())
+                .updatedAt(category.getUpdatedAt())
                 .message(message)
                 .build();
     }
@@ -229,6 +209,7 @@ public class MenuCategoryServiceImpl implements MenuCategoryService {
         snapshot.put("categoryId", category.getId());
         snapshot.put("name", category.getName());
         snapshot.put("description", category.getDescription());
+        snapshot.put("status", category.getStatus());
 
         return snapshot;
     }

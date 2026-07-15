@@ -28,6 +28,7 @@ public class CreateMenuItemRequest {
     @NotNull(message = "Category ID is required")
     private Long categoryId;
 
+    @NotBlank(message = "Sub category is required")
     private String subCategory;
 
     @NotBlank(message = "Name is required")

@@ -5,8 +5,10 @@ import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
+import java.util.List;
 
 public interface BranchRepository extends JpaRepository<Branch, Long> {
+    List<Branch> findByStatus(BranchStatus status);
 
     Optional<Branch> findByIdAndStatus(Long id, BranchStatus status);
 

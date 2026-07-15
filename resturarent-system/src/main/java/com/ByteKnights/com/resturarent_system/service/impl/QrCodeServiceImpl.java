@@ -1,6 +1,11 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.response.admin.QrCodeResponse;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
+import com.ByteKnights.com.resturarent_system.entity.AuditStatus;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.QrCode;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.User;
@@ -13,6 +18,7 @@ import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtService;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.QrCodeService;
 import com.ByteKnights.com.resturarent_system.util.QrCodeGenerator;
 import lombok.RequiredArgsConstructor;
@@ -30,10 +36,25 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+/**
+ * Service implementing QR code lifecycle operations.
+ *
+ * Responsibilities:
+ * - Create, revoke and regenerate QR code records in the database.
+ * - Build a secure QR payload (short URL containing a JWT token), render the
+ *   QR image bytes and return a DTO suitable for admin UI consumption.
+ *
+ * Important notes:
+ * - The QR image is purely a rendering of a URL that contains a signed JWT
+ *   (`qr_token`). Token expiry is controlled by `app.jwt.qr-token-expiration-ms`.
+ * - Revocation is enforced via the `QrCode.active` flag in the database;
+ *   even if a token is unexpired, a revoked QR is considered invalid.
+ **/
 public class QrCodeServiceImpl implements QrCodeService {
 
     private final QrCodeRepository qrCodeRepository;
@@ -41,8 +62,9 @@ public class QrCodeServiceImpl implements QrCodeService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final JwtService jwtService;
+    private final AuditLogService auditLogService;
 
-    @Value("${app.jwt.qr-token-expiration-ms:2400000}")
+    @Value("${app.jwt.qr-token-expiration-ms:31536000000}")
     private long qrTokenExpirationMs;
 
     @Value("${app.qr.scan-base-url:http://localhost:5173/scan}")
@@ -51,12 +73,26 @@ public class QrCodeServiceImpl implements QrCodeService {
     @Override
     @Transactional
     public QrCodeResponse createQrCode(Long tableId, Long actorUserId) {
+
+        /* 
+            Creates and persists a new QrCode entity for the given table.
+            If an active QR already exists, the existing active QR is returned
+            (idempotent behavior for repeated create requests).
+        */
+       
         RestaurantTable table = findTableForUpdateOrThrow(tableId);
         validateTableHasBranch(table);
         enforceAdminBranchAccess(table.getBranch().getId());
+
         User actorUser = findUserByIdOrThrow(actorUserId);
 
+        // If QR already exists donot create a new one, return existing one.
         QrCode activeQr = qrCodeRepository.findFirstByTableIdAndActiveTrue(tableId).orElse(null);
+
+        /*
+         * If an active QR already exists, no new QR is created.
+         * Therefore, we should not write QR_CODE_CREATED audit here.
+         */
         if (activeQr != null) {
             return mapToResponseWithSecureQr(activeQr);
         }
@@ -70,12 +106,33 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .build();
 
         QrCode saved = qrCodeRepository.save(qrCode);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.QR,
+                AuditEventType.QR_CODE_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.QR_CODE,
+                saved.getId(),
+                getQrCodeBranchId(saved),
+                "QR code created successfully",
+                null,
+                buildQrCodeAuditSnapshot(saved)
+        );
+
         return mapToResponseWithSecureQr(saved);
     }
 
     @Override
     @Transactional
     public QrCodeResponse revokeQrCode(Long qrCodeId, String revokedReason) {
+
+        /*
+            Mark an existing QR code as revoked. This makes the QR immediately
+            inactive for scanning even if the previously issued JWT token
+            would otherwise remain valid until its `exp` time.
+        */
+
         QrCode qrCode = findQrCodeOrThrow(qrCodeId);
         enforceAdminBranchAccess(qrCode.getBranch().getId());
 
@@ -83,39 +140,67 @@ public class QrCodeServiceImpl implements QrCodeService {
             throw new InvalidOperationException("QR code is already revoked: " + qrCodeId);
         }
 
+        Map<String, Object> oldValues = buildQrCodeAuditSnapshot(qrCode);
+
         qrCode.setActive(false);
         qrCode.setRevokedAt(LocalDateTime.now());
         qrCode.setRevokedReason(resolveReason(revokedReason, "Revoked by admin"));
 
         QrCode updated = qrCodeRepository.save(qrCode);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.QR,
+                AuditEventType.QR_CODE_REVOKED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.QR_CODE,
+                updated.getId(),
+                getQrCodeBranchId(updated),
+                "QR code revoked successfully",
+                oldValues,
+                buildQrCodeAuditSnapshot(updated)
+        );
+
         return mapToResponse(updated);
     }
 
     @Override
     @Transactional
     public QrCodeResponse regenerateQrCode(Long qrCodeId, Long actorUserId, String revokeReason) {
+
+        /* 
+            Safely replace an active QR with a newly generated one. The
+            operation revokes the old QR and creates a replacement bound to
+            the same table and branch. This avoids token reuse after rotation.
+        */
+
         QrCode existing = findQrCodeOrThrow(qrCodeId);
         enforceAdminBranchAccess(existing.getBranch().getId());
-        User actorUser = findUserByIdOrThrow(actorUserId);
-        RestaurantTable lockedTable = findTableForUpdateOrThrow(existing.getTable().getId());
-        validateTableHasBranch(lockedTable);
 
         if (!Boolean.TRUE.equals(existing.getActive())) {
             throw new InvalidOperationException("Cannot regenerate a revoked QR code: " + qrCodeId);
         }
 
+        Map<String, Object> oldValues = buildQrCodeAuditSnapshot(existing);
+
+        User actorUser = findUserByIdOrThrow(actorUserId);
+        RestaurantTable lockedTable = findTableForUpdateOrThrow(existing.getTable().getId());
+        validateTableHasBranch(lockedTable);
+
         qrCodeRepository.findFirstByTableIdAndActiveTrue(existing.getTable().getId())
                 .ifPresent(activeQr -> {
                     if (!activeQr.getId().equals(existing.getId())) {
                         throw new DuplicateResourceException(
-                                "Another active QR code exists for table " + existing.getTable().getId());
+                                "Another active QR code exists for table " + existing.getTable().getId()
+                        );
                     }
                 });
 
         existing.setActive(false);
         existing.setRevokedAt(LocalDateTime.now());
         existing.setRevokedReason(resolveReason(revokeReason, "Revoked due to regeneration"));
-        qrCodeRepository.save(existing);
+
+        QrCode revokedOldQr = qrCodeRepository.save(existing);
 
         QrCode replacement = QrCode.builder()
                 .branch(existing.getBranch())
@@ -126,28 +211,74 @@ public class QrCodeServiceImpl implements QrCodeService {
                 .build();
 
         QrCode saved = qrCodeRepository.save(replacement);
+
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("revokedOldQrCode", buildQrCodeAuditSnapshot(revokedOldQr));
+        newValues.put("replacementQrCode", buildQrCodeAuditSnapshot(saved));
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.QR,
+                AuditEventType.QR_CODE_REGENERATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.QR_CODE,
+                saved.getId(),
+                getQrCodeBranchId(saved),
+                "QR code regenerated successfully",
+                oldValues,
+                newValues
+        );
+
         return mapToResponseWithSecureQr(saved);
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public byte[] downloadQrCodeImage(Long qrCodeId) {
+
+        // Produce PNG bytes for the active QR's URL. Throws if QR is
+        // revoked or the caller lacks admin access to the branch.
+
         QrCode qrCode = findQrCodeOrThrow(qrCodeId);
         enforceAdminBranchAccess(qrCode.getBranch().getId());
+
         if (!Boolean.TRUE.equals(qrCode.getActive())) {
             throw new InvalidOperationException("Cannot download image for a revoked QR code: " + qrCodeId);
         }
 
         SecureQrPayload payload = buildSecureQrPayload(qrCode);
+
+        /*
+         * QR download is security-sensitive.
+         * We audit the download, but we do not store token, URL, or image bytes.
+         */
+        auditLogService.logCurrentUserAction(
+                AuditModule.QR,
+                AuditEventType.QR_CODE_DOWNLOADED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.QR_CODE,
+                qrCode.getId(),
+                getQrCodeBranchId(qrCode),
+                "QR code image downloaded successfully",
+                null,
+                buildQrCodeAuditSnapshot(qrCode)
+        );
+
         return payload.imageBytes();
     }
 
     @Override
     @Transactional(readOnly = true)
     public QrCodeResponse getActiveQrCodeForTable(Long tableId) {
+
+        /* Retrieve the active QR for a table and return a DTO that
+        includes a secure payload and base64 image for easy UI display. */
+
         QrCode activeQr = qrCodeRepository.findFirstByTableIdAndActiveTrue(tableId)
                 .orElseThrow(() -> new ResourceNotFoundException("No active QR code found for table: " + tableId));
-
+        
+        //Ensures admin can only access: their own branch
         enforceAdminBranchAccess(activeQr.getBranch().getId());
 
         return mapToResponseWithSecureQr(activeQr);
@@ -178,6 +309,7 @@ public class QrCodeServiceImpl implements QrCodeService {
         if (reason == null || reason.isBlank()) {
             return fallback;
         }
+
         return reason;
     }
 
@@ -194,14 +326,23 @@ public class QrCodeServiceImpl implements QrCodeService {
     }
 
     private SecureQrPayload buildSecureQrPayload(QrCode qrCode) {
+
+        // Build the secure payload included in responses. The payload
+        // contains:
+        // - a signed `qr_token` JWT with expiry set from configuration
+        // - a `qrUrl` that appends the token as a query parameter
+        // - rendered PNG bytes for the QR image
+
         Instant expiresAt = Instant.now().plusMillis(qrTokenExpirationMs);
-        String qrToken = generateQrToken(qrCode, expiresAt);
+        String qrToken = generateQrToken(qrCode, expiresAt); //generates JWT
         String qrUrl = buildQrUrl(qrToken);
-        byte[] qrImageBytes = QrCodeGenerator.generateQRCodeImage(qrUrl);
+        byte[] qrImageBytes = QrCodeGenerator.generateQRCodeImage(qrUrl); //converts URL to QR image
         String expiresAtIso = DateTimeFormatter.ISO_INSTANT.format(expiresAt.atOffset(ZoneOffset.UTC));
+
         return new SecureQrPayload(qrToken, qrUrl, qrImageBytes, expiresAtIso);
     }
 
+    // JWT payload
     private String generateQrToken(QrCode qrCode, Instant expiresAt) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("qr_id", qrCode.getId());
@@ -209,13 +350,20 @@ public class QrCodeServiceImpl implements QrCodeService {
         claims.put("table_id", qrCode.getTable().getId());
         claims.put("token_type", "table_qr");
 
+        /* Calculate remaining milliseconds until the chosen expiry instant
+        and delegate JWT assembly to `JwtService`. The resulting token
+        contains the `exp` claim and is signed with the application key. */
+
         long remainingMs = Math.max(1, expiresAt.toEpochMilli() - Instant.now().toEpochMilli());
+
         return jwtService.generateQrToken(claims, "table-qr-" + qrCode.getId(), remainingMs);
     }
-
+    
+    // URL Builder
     private String buildQrUrl(String qrToken) {
         String separator = qrScanBaseUrl.contains("?") ? "&" : "?";
         String encodedToken = URLEncoder.encode(qrToken, StandardCharsets.UTF_8);
+
         return qrScanBaseUrl + separator + "qr_token=" + encodedToken;
     }
 
@@ -265,6 +413,7 @@ public class QrCodeServiceImpl implements QrCodeService {
         }
 
         Object principal = authentication.getPrincipal();
+
         if (!(principal instanceof JwtUserPrincipal jwtUser)
                 || jwtUser.getUser() == null
                 || jwtUser.getUser().getId() == null) {
@@ -274,6 +423,52 @@ public class QrCodeServiceImpl implements QrCodeService {
         return staffRepository.findByUserId(jwtUser.getUser().getId())
                 .map(staff -> staff.getBranch().getId())
                 .orElseThrow(() -> new InvalidOperationException("Admin staff profile not found"));
+    }
+
+    /*
+     * Builds safe QR audit JSON.
+     *
+     * Important:
+     * - QR token is not stored.
+     * - QR URL is not stored.
+     * - QR image base64/bytes are not stored.
+     */
+    private Map<String, Object> buildQrCodeAuditSnapshot(QrCode qrCode) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (qrCode == null) {
+            return snapshot;
+        }
+
+        snapshot.put("qrCodeId", qrCode.getId());
+
+        snapshot.put("branchId", qrCode.getBranch() != null ? qrCode.getBranch().getId() : null);
+        snapshot.put("branchName", qrCode.getBranch() != null ? qrCode.getBranch().getName() : null);
+
+        snapshot.put("tableId", qrCode.getTable() != null ? qrCode.getTable().getId() : null);
+
+        snapshot.put("active", qrCode.getActive());
+        snapshot.put("lastGeneratedAt", qrCode.getLastGeneratedAt());
+        snapshot.put("revokedAt", qrCode.getRevokedAt());
+        snapshot.put("revokedReason", qrCode.getRevokedReason());
+
+        snapshot.put("createdByUserId",
+                qrCode.getCreatedByUser() != null ? qrCode.getCreatedByUser().getId() : null);
+        snapshot.put("createdByEmail",
+                qrCode.getCreatedByUser() != null ? qrCode.getCreatedByUser().getEmail() : null);
+
+        snapshot.put("createdAt", qrCode.getCreatedAt());
+        snapshot.put("updatedAt", qrCode.getUpdatedAt());
+
+        return snapshot;
+    }
+
+    private Long getQrCodeBranchId(QrCode qrCode) {
+        if (qrCode == null || qrCode.getBranch() == null) {
+            return null;
+        }
+
+        return qrCode.getBranch().getId();
     }
 
     private record SecureQrPayload(String token, String url, byte[] imageBytes, String expiresAt) {
