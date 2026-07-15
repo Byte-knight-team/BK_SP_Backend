@@ -50,3 +50,7 @@ error_log_utf8.txt
 
 #doc files
 docs/
+
+# Google OAuth credentials
+.secrets/
+gmail-oauth-client.json
