@@ -166,17 +166,21 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
             customerRepository.save(c);
 
-            try {
-                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
-                        "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
-            } catch (Exception e) {
-            }
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
+                            "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
+                } catch (Exception e) {
+                }
+            });
         } else {
-            try {
-                emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
-                        "Your reservation has been cancelled as requested.");
-            } catch (Exception e) {
-            }
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
+                            "Your reservation has been cancelled as requested.");
+                } catch (Exception e) {
+                }
+            });
         }
 
         r.setStatus(ReservationStatus.CANCELLED);
@@ -245,11 +249,13 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "PAID", r.getCustomerName());
         }
 
-        try {
-            emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
-                    "Your payment was successful and your reservation is now confirmed!");
-        } catch (Exception e) {
-        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
+                        "Your payment was successful and your reservation is now confirmed!");
+            } catch (Exception e) {
+            }
+        });
 
         return toDTO(r);
     }
