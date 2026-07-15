@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service;
 
+import com.ByteKnights.com.resturarent_system.dto.cache.SystemConfigCacheDto;
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateBranchConfigRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.superadmin.UpdateGlobalConfigRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.superadmin.BranchConfigResponse;
@@ -69,12 +70,19 @@ public class SystemConfigService {
         return mapGlobalConfig(config);
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "crave:system_config", key = "'global'", sync = true)
+    public SystemConfigCacheDto getCachedGlobalConfig() {
+        SystemConfig config = getOrCreateGlobalConfig();
+        return mapSystemConfigCacheDto(config);
+    }
+
     /*
      * Updates global system settings.
      *
      * Manual audit is used because old and new configuration values
      * are important for governance.
      */
+    @org.springframework.cache.annotation.CacheEvict(value = "crave:system_config", key = "'global'")
     public GlobalConfigResponse updateGlobalConfig(
             UpdateGlobalConfigRequest request
     ) {
@@ -680,6 +688,26 @@ public class SystemConfigService {
     /*
      * Maps global configuration into its API response.
      */
+    private SystemConfigCacheDto mapSystemConfigCacheDto(SystemConfig config) {
+        SystemConfigCacheDto dto = new SystemConfigCacheDto();
+        dto.setId(config.getId());
+        if (config.getDeliveryBranch() != null) {
+            dto.setDeliveryBranchId(config.getDeliveryBranch().getId());
+        }
+        dto.setTaxEnabled(config.isTaxEnabled());
+        dto.setTaxPercentage(config.getTaxPercentage());
+        dto.setServiceChargeEnabled(config.isServiceChargeEnabled());
+        dto.setServiceChargePercentage(config.getServiceChargePercentage());
+        dto.setLoyaltyEnabled(config.isLoyaltyEnabled());
+        dto.setPointsPerAmount(config.getPointsPerAmount());
+        dto.setAmountPerPoint(config.getAmountPerPoint());
+        dto.setMinPointsToRedeem(config.getMinPointsToRedeem());
+        dto.setValuePerPoint(config.getValuePerPoint());
+        dto.setOrderCancelWindowMinutes(config.getOrderCancelWindowMinutes());
+        dto.setUpdatedAt(config.getUpdatedAt());
+        return dto;
+    }
+
     private GlobalConfigResponse mapGlobalConfig(
             SystemConfig config
     ) {
