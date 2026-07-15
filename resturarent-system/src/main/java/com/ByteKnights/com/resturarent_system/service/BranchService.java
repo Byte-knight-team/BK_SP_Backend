@@ -15,8 +15,6 @@ import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.ByteKnights.com.resturarent_system.entity.SystemConfig;
-import com.ByteKnights.com.resturarent_system.repository.SystemConfigRepository;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,7 +27,7 @@ public class BranchService {
 
         private final BranchRepository branchRepository;
         private final AuditLogService auditLogService;
-        private final SystemConfigRepository systemConfigRepository;
+        private final SystemConfigService systemConfigService;
 
         /*
          * Creates a new branch.
@@ -282,12 +280,8 @@ public class BranchService {
                 Branch branch = branchRepository.findById(id)
                                 .orElseThrow(() -> new RuntimeException("Branch not found"));
 
-                boolean selectedDeliveryBranch = systemConfigRepository
-                                .findFirstByOrderByIdAsc()
-                                .map(SystemConfig::getDeliveryBranch)
-                                .map(Branch::getId)
-                                .filter(id::equals)
-                                .isPresent();
+                Long deliveryBranchId = systemConfigService.getCachedGlobalConfig().getDeliveryBranchId();
+                boolean selectedDeliveryBranch = deliveryBranchId != null && deliveryBranchId.equals(id);
 
                 if (selectedDeliveryBranch) {
                         throw new IllegalArgumentException(

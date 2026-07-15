@@ -18,6 +18,9 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +29,7 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     private final ReservationRepository reservationRepository;
     private final ReservationPaymentRepository reservationPaymentRepository;
     private final BranchRepository branchRepository;
-    private final BranchConfigRepository branchConfigRepository;
+    private final SystemConfigService systemConfigService;
     private final RestaurantTableRepository restaurantTableRepository;
     private final CustomerRepository customerRepository;
     private final UserRepository userRepository;
@@ -46,8 +49,7 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
 
         Branch branch = branchRepository.findById(request.getBranchId())
                 .orElseThrow(() -> new RuntimeException("Branch not found"));
-        BranchConfig config = branchConfigRepository.findByBranchId(branch.getId())
-                .orElseThrow(() -> new RuntimeException("Branch config not found"));
+        BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branch.getId());
 
         if (!config.isBranchActiveForOrders() || !config.isDineInEnabled() || !config.isReservationsEnabled()) {
             throw new RuntimeException("Reservations are currently unavailable for this branch");
@@ -90,13 +92,15 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         // Also emit the generic reservation update so the receptionist's queue tables refresh in real time.
         webSocketNotificationService.broadcastReservationUpdate(branch.getId());
 
-        try {
-            emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
-                    "We have received your reservation request for " + branch.getName() + " on "
-                            + saved.getReservationTime() + ". We will review it shortly.");
-        } catch (Exception e) {
-            // Ignore email errors if SMTP is down
-        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
+                        "We have received your reservation request for " + branch.getName() + " on "
+                                + saved.getReservationTime() + ". We will review it shortly.");
+            } catch (Exception e) {
+                // Ignore email errors if SMTP is down
+            }
+        });
 
         return toDTO(saved);
     }
@@ -162,17 +166,21 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
             customerRepository.save(c);
 
-            try {
-                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
-                        "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
-            } catch (Exception e) {
-            }
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
+                            "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
+                } catch (Exception e) {
+                }
+            });
         } else {
-            try {
-                emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
-                        "Your reservation has been cancelled as requested.");
-            } catch (Exception e) {
-            }
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
+                            "Your reservation has been cancelled as requested.");
+                } catch (Exception e) {
+                }
+            });
         }
 
         r.setStatus(ReservationStatus.CANCELLED);
@@ -241,11 +249,13 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "PAID", r.getCustomerName());
         }
 
-        try {
-            emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
-                    "Your payment was successful and your reservation is now confirmed!");
-        } catch (Exception e) {
-        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
+                        "Your payment was successful and your reservation is now confirmed!");
+            } catch (Exception e) {
+            }
+        });
 
         return toDTO(r);
     }
@@ -253,13 +263,12 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     @Override
     public ReservationChargeBreakdown previewCharge(Long branchId, int guestCount, LocalDateTime start,
             LocalDateTime end) {
-        BranchConfig config = branchConfigRepository.findByBranchId(branchId)
-                .orElseThrow(() -> new RuntimeException("Branch config not found"));
+        BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branchId);
         return calculateCharge(guestCount, start, end, config);
     }
 
     private ReservationChargeBreakdown calculateCharge(int guestCount, LocalDateTime start, LocalDateTime end,
-            BranchConfig config) {
+            BranchConfigCacheDto config) {
         long minutes = Duration.between(start, end).toMinutes();
         long hours = (long) Math.ceil(minutes / 60.0);
 
@@ -321,12 +330,12 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     public List<com.ByteKnights.com.resturarent_system.dto.BranchResponse> getActiveReservationBranches() {
         return branchRepository.findByStatus(BranchStatus.ACTIVE).stream()
                 .filter(branch -> {
-                    BranchConfig config = branchConfigRepository.findByBranchId(branch.getId()).orElse(null);
+                    BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branch.getId());
                     return config != null && config.isBranchActiveForOrders() && config.isDineInEnabled()
                             && config.isReservationsEnabled();
                 })
                 .map(branch -> {
-                    BranchConfig config = branchConfigRepository.findByBranchId(branch.getId()).orElse(null);
+                    BranchConfigCacheDto config = systemConfigService.getCachedBranchConfig(branch.getId());
                     return com.ByteKnights.com.resturarent_system.dto.BranchResponse.builder()
                         .id(branch.getId())
                         .name(branch.getName())
