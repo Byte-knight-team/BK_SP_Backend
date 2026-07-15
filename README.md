@@ -19,6 +19,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Kitchen Operations**: Real-time kitchen dashboard with order tracking and chef assignments for both QR-based and online orders.
 - **Audit & Compliance**: Comprehensive audit logging for all system transactions, staff actions, and order modifications.
 - **Customer Portal**: Customer authentication, profile management, order history, QR-code session access, and online order management.
+- **Reservation & Table Management**: Smart table booking with capacity checking, automated payment deadlines, receptionist approval workflows, and real-time table occupancy tracking.
 - **Admin Dashboard**: Centralized admin panel for business metrics, QR code management, online order analytics, and system management.
 
 ---
@@ -34,7 +35,8 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 | **Build Tool** | Maven (via Maven Wrapper) |
 | **Authentication** | Spring Security with JWT/Session-based auth |
 | **Testing** | JUnit 5, Spring Test Framework |
-| **Utilities** | QR Code generation, Email notifications, TextLK SMS |
+| **Cloud Storage** | AWS S3, Cloudinary |
+| **Utilities** | QR Code generation, Gmail API (OAuth2), TextLK SMS |
 
 ---
 
@@ -49,6 +51,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **RBAC (Role-Based Access Control)**: Granular permissions for Admin, Manager, Chef, Staff, Receptionist, Delivery, and Customer roles.
 - **Real-time Order Tracking**: Live updates on order status from placement through kitchen to delivery/pickup for all order channels.
 - **Inventory Management**: Dynamic stock tracking with real-time availability sync to QR menus and online platform.
+- **Reservation System**: Customer self-service table booking with configurable lead times, guest limits, automated payment windows, and refund processing.
 - **Audit Logging**: Track all critical operations, staff actions, order modifications, and system changes for compliance.
 - **Multi-language Support**: Foundation for internationalization (i18n) across all order channels.
 - **API Rate Limiting**: Protect endpoints from abuse and ensure service reliability.
@@ -116,9 +119,12 @@ JWT_EXPIRATION_MS=28800000
 # SMS Integration (TextLK)
 SMS_TEXTLK_TOKEN=your-textlk-token
 
-# Email Configuration
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
+# Gmail API (OAuth2) Configuration
+GMAIL_CLIENT_ID=your-google-oauth-client-id
+GMAIL_CLIENT_SECRET=your-google-oauth-client-secret
+GMAIL_REFRESH_TOKEN=your-google-oauth-refresh-token
+GMAIL_SENDER_EMAIL=your-email@gmail.com
+GMAIL_SENDER_NAME=Your App Name
 
 # Frontend URLs & CORS
 FRONTEND_ALLOWED_ORIGINS=http://localhost:5173,https://your-domain.com
