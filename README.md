@@ -28,12 +28,13 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 | Component | Technology |
 |-----------|-----------|
 | **Framework** | Spring Boot 3.x |
-| **Language** | Java 11+(17) |
+| **Language** | Java 17+ (Java 24 supported) |
 | **Database** | Relational Database (SQL) with JPA/Hibernate ORM |
+| **Cache** | Redis (via Spring Data Redis) |
 | **Build Tool** | Maven (via Maven Wrapper) |
 | **Authentication** | Spring Security with JWT/Session-based auth |
 | **Testing** | JUnit 5, Spring Test Framework |
-| **Utilities** | QR Code generation, Email notifications |
+| **Utilities** | QR Code generation, Email notifications, TextLK SMS |
 
 ---
 
@@ -69,7 +70,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 
 ## Prerequisites
 
-- **Java 11** or newer (Java 17 LTS or Java 21 LTS recommended).
+- **Java 17** or newer (Java 24 is fully supported).
 - **Git** (to clone the repository).
 - **Maven** is not required locally — the project includes the Maven Wrapper (`mvnw` / `mvnw.cmd`).
 - **Database**: MySQL, PostgreSQL, or compatible SQL database (must be provisioned separately).
@@ -105,40 +106,26 @@ touch .env  # On macOS/Linux
 Copy and customize the following template in your `.env` file:
 
 ```properties
-# Server Configuration
-SERVER_PORT=8080
-SERVER_SERVLET_CONTEXT_PATH=/api
-
 # Database Configuration
-SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/restaurant_db?useSSL=false&serverTimezone=UTC
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=your_db_password
-SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
-
-# JPA/Hibernate Configuration
-SPRING_JPA_DATABASE_PLATFORM=org.hibernate.dialect.MySQL8Dialect
-SPRING_JPA_HIBERNATE_DDL_AUTO=update
-SPRING_JPA_SHOW_SQL=false
-SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL=true
-
-# Logging
-LOGGING_LEVEL_ROOT=INFO
-LOGGING_LEVEL_COM_BK_RESTAURANT=DEBUG
+DB_PASSWORD=your_db_password
 
 # JWT/Authentication
-JWT_SECRET_KEY=your-super-secret-jwt-key-min-32-chars-long
-JWT_EXPIRATION_MS=86400000
+JWT_SECRET=your-super-secret-jwt-key-min-32-chars-long
+JWT_EXPIRATION_MS=28800000
 
-# Email Configuration (if applicable)
-SPRING_MAIL_HOST=smtp.gmail.com
-SPRING_MAIL_PORT=587
-SPRING_MAIL_USERNAME=your-email@gmail.com
-SPRING_MAIL_PASSWORD=your-app-password
-SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
-SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
+# SMS Integration (TextLK)
+SMS_TEXTLK_TOKEN=your-textlk-token
 
-# QR Code Configuration
-QR_CODE_SIZE=300
+# Email Configuration
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+
+# Frontend URLs & CORS
+FRONTEND_ALLOWED_ORIGINS=http://localhost:5173,https://your-domain.com
+FRONTEND_STAFF_LOGIN_URL=http://localhost:5173/staff/login
+FRONTEND_CUSTOMER_FORGOT_PASSWORD_URL=http://localhost:5173/reset-password
+FRONTEND_URL=http://localhost:5173
+QR_SCAN_BASE_URL=http://localhost:5173/scan
 
 # AWS S3 Cloud Infrastructure
 AWS_S3_BUCKET_NAME=your-bucket-name
@@ -146,39 +133,13 @@ AWS_REGION=ap-south-1
 AWS_ACCESS_KEY_ID=your-aws-access-key
 AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 
-# Application Profiles
-SPRING_PROFILES_ACTIVE=dev
+# Redis Caching
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
 ```
 
-#### Load `.env` in `application.properties`
-
-Update `src/main/resources/application.properties` to reference environment variables:
-
-```properties
-server.port=${SERVER_PORT:8080}
-server.servlet.context-path=${SERVER_SERVLET_CONTEXT_PATH:/api}
-
-spring.datasource.url=${SPRING_DATASOURCE_URL}
-spring.datasource.username=${SPRING_DATASOURCE_USERNAME}
-spring.datasource.password=${SPRING_DATASOURCE_PASSWORD}
-spring.datasource.driver-class-name=${SPRING_DATASOURCE_DRIVER_CLASS_NAME}
-
-spring.jpa.database-platform=${SPRING_JPA_DATABASE_PLATFORM}
-spring.jpa.hibernate.ddl-auto=${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
-spring.jpa.show-sql=${SPRING_JPA_SHOW_SQL:false}
-
-jwt.secret=${JWT_SECRET_KEY}
-jwt.expiration=${JWT_EXPIRATION_MS:86400000}
-
-logging.level.root=${LOGGING_LEVEL_ROOT:INFO}
-logging.level.com.bk.restaurant=${LOGGING_LEVEL_COM_BK_RESTAURANT:DEBUG}
-
-# AWS S3 Cloud Infrastructure Configuration
-aws.s3.bucket-name=${AWS_S3_BUCKET_NAME:bucket-name}
-aws.s3.region=${AWS_REGION:ap-south-1}
-aws.s3.access-key=${AWS_ACCESS_KEY_ID:dummy-key}
-aws.s3.secret-key=${AWS_SECRET_ACCESS_KEY:dummy-key}
-```
+Update `src/main/resources/application.properties` to reference environment variables (this is already configured in the repository, just ensure your `.env` keys match).
 
 #### (Alternative) Load `.env` via Maven
 
@@ -389,5 +350,5 @@ For questions or issues, contact the backend team.
 
 ---
 
-**Last Updated**: June 2026
+**Last Updated**: July 2026
 

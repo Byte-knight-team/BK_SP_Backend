@@ -92,13 +92,15 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         // Also emit the generic reservation update so the receptionist's queue tables refresh in real time.
         webSocketNotificationService.broadcastReservationUpdate(branch.getId());
 
-        try {
-            emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
-                    "We have received your reservation request for " + branch.getName() + " on "
-                            + saved.getReservationTime() + ". We will review it shortly.");
-        } catch (Exception e) {
-            // Ignore email errors if SMTP is down
-        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendSimpleEmail(user.getEmail(), "Reservation Request Received",
+                        "We have received your reservation request for " + branch.getName() + " on "
+                                + saved.getReservationTime() + ". We will review it shortly.");
+            } catch (Exception e) {
+                // Ignore email errors if SMTP is down
+            }
+        });
 
         return toDTO(saved);
     }
@@ -164,17 +166,21 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
             customerRepository.save(c);
 
-            try {
-                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
-                        "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
-            } catch (Exception e) {
-            }
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
+                            "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
+                } catch (Exception e) {
+                }
+            });
         } else {
-            try {
-                emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
-                        "Your reservation has been cancelled as requested.");
-            } catch (Exception e) {
-            }
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    emailService.sendSimpleEmail(r.getCustomer().getUser().getEmail(), "Reservation Cancelled",
+                            "Your reservation has been cancelled as requested.");
+                } catch (Exception e) {
+                }
+            });
         }
 
         r.setStatus(ReservationStatus.CANCELLED);
@@ -243,11 +249,13 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "PAID", r.getCustomerName());
         }
 
-        try {
-            emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
-                    "Your payment was successful and your reservation is now confirmed!");
-        } catch (Exception e) {
-        }
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
+                        "Your payment was successful and your reservation is now confirmed!");
+            } catch (Exception e) {
+            }
+        });
 
         return toDTO(r);
     }
