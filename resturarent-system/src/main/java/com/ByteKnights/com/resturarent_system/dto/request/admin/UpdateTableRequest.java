@@ -13,12 +13,15 @@ import lombok.*;
  */
 public class UpdateTableRequest {
 
+
+
     @Min(value = 1, message = "Table number must be at least 1")
     private Integer tableNumber;
 
     @Min(value = 1, message = "Capacity must be at least 1")
     private Integer capacity;
 
-    // Allowed values: AVAILABLE, OCCUPIED, RESERVED.
-    private String status;
+    private Boolean isAvailable;
+
+
 }
