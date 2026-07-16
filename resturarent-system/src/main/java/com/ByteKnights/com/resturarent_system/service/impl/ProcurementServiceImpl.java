@@ -498,10 +498,10 @@ public class ProcurementServiceImpl implements ProcurementService {
     // ─────────────────────────────────────────────────────────────────────────
 
     private VendorDTO toVendorDTO(Vendor vendor) {
-        long activePoCount = purchaseOrderRepository.countByBranchIdAndStatus(
-                vendor.getBranch().getId(), PurchaseOrderStatus.SUBMITTED)
-                + purchaseOrderRepository.countByBranchIdAndStatus(
-                vendor.getBranch().getId(), PurchaseOrderStatus.PARTIALLY_RECEIVED);
+        long activePoCount = purchaseOrderRepository.countByVendorIdAndStatus(
+                vendor.getId(), PurchaseOrderStatus.SUBMITTED)
+                + purchaseOrderRepository.countByVendorIdAndStatus(
+                vendor.getId(), PurchaseOrderStatus.PARTIALLY_RECEIVED);
 
         return VendorDTO.builder()
                 .id(vendor.getId())

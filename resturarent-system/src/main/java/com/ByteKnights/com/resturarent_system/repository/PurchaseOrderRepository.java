@@ -21,6 +21,9 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
     // Count POs by branch and status — used in the procurement summary cards
     long countByBranchIdAndStatus(Long branchId, PurchaseOrderStatus status);
 
+    // Count POs by vendor and status — used for vendor active PO count
+    long countByVendorIdAndStatus(Long vendorId, PurchaseOrderStatus status);
+
     // Count POs that are still awaiting full delivery (SUBMITTED or PARTIALLY_RECEIVED)
     @Query("SELECT COUNT(p) FROM PurchaseOrder p WHERE p.branch.id = :branchId " +
            "AND p.status IN (com.ByteKnights.com.resturarent_system.entity.PurchaseOrderStatus.SUBMITTED, " +
