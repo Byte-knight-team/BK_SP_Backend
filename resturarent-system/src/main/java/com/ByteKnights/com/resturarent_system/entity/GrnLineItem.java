@@ -54,7 +54,7 @@ public class GrnLineItem {
      */
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    @Column(nullable = false, length = 20)
+    @Column(name = "item_condition", nullable = false, length = 20)
     private GrnItemCondition condition = GrnItemCondition.GOOD;
 
     /**
