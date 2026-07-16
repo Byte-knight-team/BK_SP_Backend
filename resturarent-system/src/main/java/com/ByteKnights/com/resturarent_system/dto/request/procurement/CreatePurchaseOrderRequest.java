@@ -23,4 +23,7 @@ public class CreatePurchaseOrderRequest {
     @NotEmpty(message = "At least one line item is required")
     @Valid
     private List<POLineItemRequest> items;
+
+    /** Optional ID of a Chef Request this PO is fulfilling */
+    private Long chefRequestId;
 }

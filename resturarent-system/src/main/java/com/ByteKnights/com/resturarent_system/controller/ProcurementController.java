@@ -11,6 +11,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.manager.procurement.P
 import com.ByteKnights.com.resturarent_system.dto.response.manager.procurement.VendorDTO;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.ProcurementService;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -232,5 +233,17 @@ public class ProcurementController {
 
         ProcurementSummaryDTO summary = procurementService.getProcurementSummary(branchId);
         return ResponseEntity.ok(ApiResponse.success("Procurement summary retrieved successfully", summary));
+    }
+
+    /**
+     * Get pending chef requests (APPROVED status) for the manager's branch
+     */
+    @GetMapping("/pending-chef-requests")
+    @PreAuthorize("hasAuthority('VIEW_DASHBOARD')")
+    public ResponseEntity<ApiResponse<List<ChefRequestDTO>>> getPendingChefRequests(
+            @RequestParam Long branchId) {
+        
+        List<ChefRequestDTO> requests = procurementService.getPendingChefRequests(branchId);
+        return ResponseEntity.ok(ApiResponse.success("Pending chef requests retrieved successfully", requests));
     }
 }

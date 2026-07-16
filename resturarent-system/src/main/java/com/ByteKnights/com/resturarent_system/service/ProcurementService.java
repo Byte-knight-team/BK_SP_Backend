@@ -32,6 +32,8 @@ public interface ProcurementService {
 
     // ── Purchase Order Management ─────────────────────────────────────────────
 
+    List<com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO> getPendingChefRequests(Long branchId);
+
     /**
      * Create a new Purchase Order against a vendor.
      * Automatically generates a unique poNumber (PO-{YEAR}-{seq}).

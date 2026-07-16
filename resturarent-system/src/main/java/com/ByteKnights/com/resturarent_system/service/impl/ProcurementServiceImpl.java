@@ -12,6 +12,7 @@ import com.ByteKnights.com.resturarent_system.repository.PurchaseOrderItemReposi
 import com.ByteKnights.com.resturarent_system.repository.PurchaseOrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.VendorRepository;
+import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
 import com.ByteKnights.com.resturarent_system.service.ProcurementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final InventoryItemRepository inventoryItemRepository;
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final StaffRepository staffRepository;
+    private final ChefRequestRepository chefRequestRepository;
 
     // ─────────────────────────────────────────────────────────────────────────
     // HELPERS
@@ -126,6 +128,44 @@ public class ProcurementServiceImpl implements ProcurementService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // CHEF REQUESTS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO> getPendingChefRequests(Long branchId) {
+        return chefRequestRepository.findByBranchIdAndStatusOrderByCreatedAtDesc(branchId, ChefRequestStatus.APPROVED)
+                .stream()
+                .map(this::toChefRequestDTO)
+                .collect(Collectors.toList());
+    }
+
+    private com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO toChefRequestDTO(ChefRequest req) {
+        java.time.format.DateTimeFormatter timeFormatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
+        String formattedTime = req.getCreatedAt() != null ? req.getCreatedAt().format(timeFormatter) : "";
+        String formattedQuantity = req.getRequestedQuantity() + " " + req.getUnit();
+
+        String[] colors = { "#F97316", "#3B82F6", "#10B981", "#8B5CF6", "#EF4444", "#EC4899" };
+        String color = colors[0];
+        if (req.getChefName() != null && !req.getChefName().isEmpty()) {
+            color = colors[Math.abs(req.getChefName().hashCode()) % colors.length];
+        }
+
+        return com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO.builder()
+                .id(req.getId())
+                .chefName(req.getChefName())
+                .time(formattedTime)
+                .item(req.getItemName())
+                .quantity(formattedQuantity)
+                .note(req.getChefNote())
+                .managerNote(req.getManagerNote())
+                .status(req.getStatus() != null ? req.getStatus().name() : "PENDING")
+                .requestType(req.getRequestType() != null ? req.getRequestType().name() : null)
+                .avatarColor(color)
+                .build();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // PURCHASE ORDER MANAGEMENT
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -150,6 +190,16 @@ public class ProcurementServiceImpl implements ProcurementService {
                 .build();
 
         PurchaseOrder savedPo = purchaseOrderRepository.save(po);
+
+        if (request.getChefRequestId() != null) {
+            ChefRequest chefRequest = chefRequestRepository.findById(request.getChefRequestId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Chef request not found with id: " + request.getChefRequestId()));
+            if (!chefRequest.getBranch().getId().equals(staff.getBranch().getId())) {
+                throw new RuntimeException("Chef request does not belong to your branch");
+            }
+            chefRequest.setStatus(ChefRequestStatus.ORDERED);
+            chefRequestRepository.save(chefRequest);
+        }
 
         // Save each line item
         for (POLineItemRequest lineReq : request.getItems()) {
