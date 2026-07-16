@@ -442,8 +442,14 @@ public class InventoryServiceImpl implements InventoryService {
     public List<InventoryLogDTO> getInventoryLogs(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
 
+        List<InventoryTransactionType> allowedTypes = List.of(
+                InventoryTransactionType.RESTOCK,
+                InventoryTransactionType.WASTAGE,
+                InventoryTransactionType.CORRECTION
+        );
+
         List<InventoryTransaction> transactions = inventoryTransactionRepository
-                .findByInventoryItemBranchIdOrderByCreatedAtDesc(finalBranchId);
+                .findByInventoryItemBranchIdAndTransactionTypeInOrderByCreatedAtDesc(finalBranchId, allowedTypes);
 
         return transactions.stream()
                 .map(this::toLogDTO)
@@ -480,6 +486,11 @@ public class InventoryServiceImpl implements InventoryService {
                     : "";
         }
 
+        String notes = transaction.getNotes();
+        if (notes == null || notes.trim().isEmpty()) {
+            notes = "No notes provided.";
+        }
+
         return InventoryLogDTO.builder()
                 .id(transaction.getId())
                 .itemName(transaction.getInventoryItem().getName())
@@ -492,7 +503,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .newQuantity(transaction.getNewQuantity())
                 .unitPrice(transaction.getUnitPrice())
                 .performedBy(performedBy)
-                .notes(transaction.getNotes())
+                .notes(notes)
                 .build();
     }
 
