@@ -30,6 +30,7 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     private final VendorRepository vendorRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final PurchaseOrderItemRepository purchaseOrderItemRepository;
     private final GoodsReceiptNoteRepository goodsReceiptNoteRepository;
     private final GrnLineItemRepository grnLineItemRepository;
@@ -38,6 +39,16 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final StaffRepository staffRepository;
     private final ChefRequestRepository chefRequestRepository;
     private final com.ByteKnights.com.resturarent_system.repository.PurchaseOrderLogRepository purchaseOrderLogRepository;
+
+    @jakarta.annotation.PostConstruct
+    public void fixChefRequestStatusEnum() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE chef_requests MODIFY COLUMN status VARCHAR(255) NOT NULL");
+            System.out.println("Successfully altered chef_requests.status to VARCHAR(255)");
+        } catch (Exception e) {
+            System.out.println("Could not alter chef_requests.status: " + e.getMessage());
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // HELPERS
@@ -256,6 +267,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<PurchaseOrderDTO> getPurchaseOrders(Long branchId, String status) {
         List<PurchaseOrder> pos;
 
@@ -274,6 +286,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PurchaseOrderDTO getPurchaseOrderById(Long poId) {
         PurchaseOrder po = purchaseOrderRepository.findById(poId)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + poId));
