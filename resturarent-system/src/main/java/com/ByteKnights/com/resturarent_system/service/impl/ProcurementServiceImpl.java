@@ -362,12 +362,14 @@ public class ProcurementServiceImpl implements ProcurementService {
 
         boolean allFullyReceived = poItems.stream().allMatch(item -> {
             BigDecimal totalReceived = grnLineItemRepository.sumReceivedQuantityByPoItemId(item.getId());
-            return totalReceived != null && totalReceived.compareTo(item.getOrderedQuantity()) >= 0;
+            totalReceived = totalReceived != null ? totalReceived : BigDecimal.ZERO;
+            return totalReceived.compareTo(item.getOrderedQuantity()) >= 0;
         });
 
         boolean anyReceived = poItems.stream().anyMatch(item -> {
             BigDecimal totalReceived = grnLineItemRepository.sumReceivedQuantityByPoItemId(item.getId());
-            return totalReceived != null && totalReceived.compareTo(BigDecimal.ZERO) > 0;
+            totalReceived = totalReceived != null ? totalReceived : BigDecimal.ZERO;
+            return totalReceived.compareTo(BigDecimal.ZERO) > 0;
         });
 
         if (allFullyReceived) {

@@ -28,6 +28,6 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
     long countActivePendingByBranchId(@Param("branchId") Long branchId);
 
     // Get the highest existing PO sequence number for a given year (for auto-generating poNumber)
-    @Query("SELECT MAX(p.poNumber) FROM PurchaseOrder p WHERE p.branch.id = :branchId AND p.poNumber LIKE :yearPrefix%")
+    @Query("SELECT MAX(p.poNumber) FROM PurchaseOrder p WHERE p.branch.id = :branchId AND p.poNumber LIKE CONCAT(:yearPrefix, '%')")
     String findMaxPoNumberByBranchAndYear(@Param("branchId") Long branchId, @Param("yearPrefix") String yearPrefix);
 }

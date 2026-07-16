@@ -15,9 +15,7 @@ public interface GrnLineItemRepository extends JpaRepository<GrnLineItem, Long> 
     // Find all line items for a specific GRN
     List<GrnLineItem> findByGoodsReceiptNoteId(Long goodsReceiptNoteId);
 
-    // Sum total received quantity for a specific PO line item across all GRNs
-    // Used to determine if a PO line item has been fully received
-    @Query("SELECT COALESCE(SUM(g.receivedQuantity), 0) FROM GrnLineItem g " +
+    @Query("SELECT SUM(g.receivedQuantity) FROM GrnLineItem g " +
            "WHERE g.purchaseOrderItem.id = :poItemId " +
            "AND g.condition = com.ByteKnights.com.resturarent_system.entity.GrnItemCondition.GOOD")
     BigDecimal sumReceivedQuantityByPoItemId(@Param("poItemId") Long poItemId);
