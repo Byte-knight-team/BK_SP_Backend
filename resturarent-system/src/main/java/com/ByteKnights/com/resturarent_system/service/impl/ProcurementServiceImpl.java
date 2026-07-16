@@ -37,6 +37,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final StaffRepository staffRepository;
     private final ChefRequestRepository chefRequestRepository;
+    private final com.ByteKnights.com.resturarent_system.repository.PurchaseOrderLogRepository purchaseOrderLogRepository;
 
     // ─────────────────────────────────────────────────────────────────────────
     // HELPERS
@@ -221,6 +222,14 @@ public class ProcurementServiceImpl implements ProcurementService {
             purchaseOrderItemRepository.save(poItem);
         }
 
+        // Create initial log entry
+        PurchaseOrderLog log = PurchaseOrderLog.builder()
+                .purchaseOrder(savedPo)
+                .status(PurchaseOrderStatus.SUBMITTED)
+                .actionBy(staff)
+                .build();
+        purchaseOrderLogRepository.save(log);
+
         return getPurchaseOrderById(savedPo.getId());
     }
 
@@ -236,6 +245,14 @@ public class ProcurementServiceImpl implements ProcurementService {
 
         po.setStatus(PurchaseOrderStatus.CANCELLED);
         purchaseOrderRepository.save(po);
+
+        Staff staff = resolveStaff(userId);
+        PurchaseOrderLog log = PurchaseOrderLog.builder()
+                .purchaseOrder(po)
+                .status(PurchaseOrderStatus.CANCELLED)
+                .actionBy(staff)
+                .build();
+        purchaseOrderLogRepository.save(log);
     }
 
     @Override
@@ -348,7 +365,7 @@ public class ProcurementServiceImpl implements ProcurementService {
         }
 
         // Update PO status based on total received quantities across ALL GRNs
-        updatePoStatusAfterGrn(po);
+        updatePoStatusAfterGrn(po, staff);
 
         return getGrnById(savedGrn.getId());
     }
@@ -357,7 +374,7 @@ public class ProcurementServiceImpl implements ProcurementService {
      * After saving a GRN, re-evaluates all PO line items to determine if the PO
      * is fully received, partially received, or still submitted.
      */
-    private void updatePoStatusAfterGrn(PurchaseOrder po) {
+    private void updatePoStatusAfterGrn(PurchaseOrder po, Staff staff) {
         List<PurchaseOrderItem> poItems = purchaseOrderItemRepository.findByPurchaseOrderId(po.getId());
 
         boolean allFullyReceived = poItems.stream().allMatch(item -> {
@@ -372,13 +389,26 @@ public class ProcurementServiceImpl implements ProcurementService {
             return totalReceived.compareTo(BigDecimal.ZERO) > 0;
         });
 
+        PurchaseOrderStatus oldStatus = po.getStatus();
+
         if (allFullyReceived) {
             po.setStatus(PurchaseOrderStatus.RECEIVED);
         } else if (anyReceived) {
             po.setStatus(PurchaseOrderStatus.PARTIALLY_RECEIVED);
         }
 
-        purchaseOrderRepository.save(po);
+        if (oldStatus != po.getStatus()) {
+            purchaseOrderRepository.save(po);
+
+            PurchaseOrderLog log = PurchaseOrderLog.builder()
+                    .purchaseOrder(po)
+                    .status(po.getStatus())
+                    .actionBy(staff)
+                    .build();
+            purchaseOrderLogRepository.save(log);
+        } else {
+            purchaseOrderRepository.save(po);
+        }
     }
 
     @Override
@@ -386,6 +416,22 @@ public class ProcurementServiceImpl implements ProcurementService {
         return goodsReceiptNoteRepository.findByPurchaseOrderBranchIdOrderByReceivedAtDesc(branchId)
                 .stream()
                 .map(this::toGrnDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<com.ByteKnights.com.resturarent_system.dto.response.procurement.PurchaseOrderLogDTO> getPurchaseOrderLogs(Long branchId) {
+        return purchaseOrderLogRepository.findByBranchIdOrderByCreatedAtDesc(branchId)
+                .stream()
+                .map(log -> com.ByteKnights.com.resturarent_system.dto.response.procurement.PurchaseOrderLogDTO.builder()
+                        .id(log.getId())
+                        .purchaseOrderId(log.getPurchaseOrder().getId())
+                        .poNumber(log.getPurchaseOrder().getPoNumber())
+                        .vendorName(log.getPurchaseOrder().getVendor().getName())
+                        .status(log.getStatus())
+                        .actionByName(log.getActionBy().getFirstName() + " " + log.getActionBy().getLastName())
+                        .createdAt(log.getCreatedAt())
+                        .build())
                 .collect(Collectors.toList());
     }
 

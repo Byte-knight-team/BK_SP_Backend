@@ -53,6 +53,9 @@ public interface ProcurementService {
     /** Get a single PO by its ID including all line items */
     PurchaseOrderDTO getPurchaseOrderById(Long poId);
 
+    /** Get the audit log of all PO status changes for a branch */
+    List<com.ByteKnights.com.resturarent_system.dto.response.procurement.PurchaseOrderLogDTO> getPurchaseOrderLogs(Long branchId);
+
     // ── Goods Receipt Note (GRN) ──────────────────────────────────────────────
 
     /**
