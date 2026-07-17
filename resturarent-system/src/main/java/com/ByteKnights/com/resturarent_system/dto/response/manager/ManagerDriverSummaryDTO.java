@@ -12,9 +12,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ManagerDriverSummaryDTO {
-    private int driversOnline;
     private int available;
-    private int busy;
+    private int activeDeliveries;
     private int pendingDispatch;
     
     private List<DispatchOrderDTO> dispatchOrders;

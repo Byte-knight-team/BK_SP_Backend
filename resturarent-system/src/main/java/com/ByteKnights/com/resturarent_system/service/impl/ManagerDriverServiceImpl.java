@@ -192,9 +192,8 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 .collect(Collectors.toList());
 
                 return ManagerDriverSummaryDTO.builder()
-                                .driversOnline(driversOnline)
                                 .available(available)
-                                .busy(busy)
+                                .activeDeliveries(busy)
                                 .pendingDispatch(orderDTOs.size())
                                 .dispatchOrders(orderDTOs)
                                 .drivers(driverDTOs)
