@@ -182,9 +182,12 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                                 .deliveryStatus(d.getDeliveryStatus().name())
                                                 .driverName(d.getDeliveryStaff().getFirstName() + " "
                                                                 + d.getDeliveryStaff().getLastName())
-                                                .completedAt(d.getDeliveredAt() != null
+                                                .resolvedAt(d.getDeliveredAt() != null
                                                                 ? d.getDeliveredAt().format(historyFormatter)
-                                                                : "N/A")
+                                                                : d.getCancelledAt() != null
+                                                                        ? d.getCancelledAt().format(historyFormatter)
+                                                                        : "N/A")
+                                                .cancelledReason(d.getCancelledReason())
                                                 .build())
                                 .collect(Collectors.toList());
 

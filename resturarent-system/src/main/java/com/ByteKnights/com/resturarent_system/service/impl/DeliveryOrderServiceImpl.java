@@ -147,6 +147,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         Map<String, Object> oldValues = buildDeliveryAuditSnapshot(delivery);
 
         delivery.setDeliveryStatus(DeliveryStatus.CANCELLED);
+        delivery.setCancelledAt(LocalDateTime.now());
         delivery.setCancelledReason(reason);
 
         Delivery savedDelivery = deliveryRepository.save(delivery);
@@ -186,7 +187,10 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         oldValues.put("delivery", buildDeliveryAuditSnapshot(delivery));
         oldValues.put("order", buildDeliveryOrderAuditSnapshot(delivery.getOrder()));
 
-                delivery.setDeliveryStatus(status);
+        delivery.setDeliveryStatus(status);
+        if (status == DeliveryStatus.CANCELLED) {
+            delivery.setCancelledAt(LocalDateTime.now());
+        }
 
         if (status == DeliveryStatus.DELIVERED) {
             delivery.setDeliveredAt(LocalDateTime.now());

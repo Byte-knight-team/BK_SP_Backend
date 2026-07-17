@@ -45,6 +45,9 @@ public class Delivery {
     @Column(name = "delivered_at")
     private LocalDateTime deliveredAt;
 
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
     @Column(name = "cancelled_reason", length = 255)
     private String cancelledReason;
 }

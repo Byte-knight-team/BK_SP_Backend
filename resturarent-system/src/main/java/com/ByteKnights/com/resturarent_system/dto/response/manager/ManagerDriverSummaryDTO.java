@@ -65,6 +65,7 @@ public class ManagerDriverSummaryDTO {
         private String orderId;
         private String deliveryStatus;
         private String driverName;
-        private String completedAt;
+        private String resolvedAt;
+        private String cancelledReason;
     }
 }
