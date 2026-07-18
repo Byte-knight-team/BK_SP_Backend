@@ -51,9 +51,8 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
                         .userId(s.getUser().getId())
                         .name(s.getUser().getFullName() != null && !s.getUser().getFullName().trim().isEmpty() ? s.getUser().getFullName() : s.getUser().getUsername())
                         .role(formatRole(s.getUser().getRole().getName()))
-                        .hireDate(s.getHireDate() != null ? s.getHireDate().format(dateFormatter) : "N/A")
+                        .joinedDate(s.getUser().getCreatedAt() != null ? s.getUser().getCreatedAt().format(dateFormatter) : "N/A")
                         .contactNumber(s.getUser().getPhone())
-                        .salary(s.getSalary())
                         .status(s.getEmploymentStatus() != null ? s.getEmploymentStatus().name() : "ACTIVE")
                         .build())
                 .collect(Collectors.toList());
