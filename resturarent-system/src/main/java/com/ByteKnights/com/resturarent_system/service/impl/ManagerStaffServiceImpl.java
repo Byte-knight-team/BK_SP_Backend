@@ -49,7 +49,7 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
                 })
                 .map(s -> ManagerStaffMemberDTO.builder()
                         .userId(s.getUser().getId())
-                        .name(s.getUser().getUsername())
+                        .name(s.getUser().getFullName() != null && !s.getUser().getFullName().trim().isEmpty() ? s.getUser().getFullName() : s.getUser().getUsername())
                         .role(formatRole(s.getUser().getRole().getName()))
                         .hireDate(s.getHireDate() != null ? s.getHireDate().format(dateFormatter) : "N/A")
                         .contactNumber(s.getUser().getPhone())
