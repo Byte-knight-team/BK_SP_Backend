@@ -13,7 +13,8 @@ import java.util.List;
 @AllArgsConstructor
 public class ManagerStaffSummaryDTO {
     private String branchName;
-    private int kitchenCount;
+    private int chefCount;
+    private int lineChefCount;
     private int deliveryCount;
     private int receptionistCount;
     private List<ManagerStaffMemberDTO> staffMembers;

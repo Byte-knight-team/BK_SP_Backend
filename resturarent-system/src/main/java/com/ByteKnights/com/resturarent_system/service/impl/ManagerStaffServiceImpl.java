@@ -58,9 +58,12 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
                         .build())
                 .collect(Collectors.toList());
 
-        // 3. Aggregate counts for summary cards (ACTIVE only as per design "Active Kitchen Staff")
-        int kitchenCount = (int) staffRepository.countByBranchIdAndUserRoleNameInAndEmploymentStatus(
-                finalBranchId, java.util.Arrays.asList("CHEF", "LINE_CHEF"), EmploymentStatus.ACTIVE);
+        // 3. Aggregate counts for summary cards (ACTIVE only)
+        int chefCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
+                finalBranchId, "CHEF", EmploymentStatus.ACTIVE);
+
+        int lineChefCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
+                finalBranchId, "LINE_CHEF", EmploymentStatus.ACTIVE);
         
         int deliveryCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
                 finalBranchId, "DELIVERY", EmploymentStatus.ACTIVE);
@@ -70,7 +73,8 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
 
         return ManagerStaffSummaryDTO.builder()
                 .branchName(branchName)
-                .kitchenCount(kitchenCount)
+                .chefCount(chefCount)
+                .lineChefCount(lineChefCount)
                 .deliveryCount(deliveryCount)
                 .receptionistCount(receptionistCount)
                 .staffMembers(memberDTOs)
@@ -83,8 +87,8 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
     private String formatRole(String roleName) {
         if (roleName == null) return "Unknown";
         switch (roleName.toUpperCase()) {
-            case "CHEF":
-            case "LINE_CHEF": return "Kitchen Staff";
+            case "CHEF": return "Main Chef";
+            case "LINE_CHEF": return "Line Chef";
             case "DELIVERY": return "Delivery Driver";
             case "RECEPTIONIST": return "Receptionist";
             case "MANAGER": return "Manager";
