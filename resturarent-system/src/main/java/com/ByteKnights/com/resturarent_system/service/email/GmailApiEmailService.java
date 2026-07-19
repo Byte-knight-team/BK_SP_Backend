@@ -169,6 +169,21 @@ public class GmailApiEmailService implements EmailService {
                 htmlContent);
     }
 
+    @Override
+    public void sendHtmlEmail(
+            String toEmail,
+            String subject,
+            String htmlBody) {
+        // Basic plain text fallback for email clients that don't support HTML
+        String plainText = "This email contains HTML content. Please view it in an email client that supports HTML.";
+        
+        sendEmail(
+                toEmail,
+                subject,
+                plainText,
+                htmlBody);
+    }
+
     /**
      * Creates and submits one email to Gmail.
      */

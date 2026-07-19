@@ -54,6 +54,8 @@ public class OrderServiceImpl implements OrderService {
         private final WebSocketNotificationService webSocketNotificationService;
         private final ReservationRepository reservationRepository;
         private final SystemConfigService systemConfigService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -67,7 +69,9 @@ public class OrderServiceImpl implements OrderService {
                         InventoryTransactionRepository inventoryTransactionRepository,
                         WebSocketNotificationService webSocketNotificationService,
                         ReservationRepository reservationRepository,
-                        SystemConfigService systemConfigService) {
+                        SystemConfigService systemConfigService,
+                        com.ByteKnights.com.resturarent_system.service.email.EmailService emailService,
+                        com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -86,6 +90,8 @@ public class OrderServiceImpl implements OrderService {
                 this.webSocketNotificationService = webSocketNotificationService;
                 this.reservationRepository = reservationRepository;
                 this.systemConfigService = systemConfigService;
+                this.emailService = emailService;
+                this.emailTemplateService = emailTemplateService;
         }
 
         @Override
@@ -362,6 +368,27 @@ public class OrderServiceImpl implements OrderService {
                         savedOrder.getOrderType().name(),
                         savedOrder.getId()
                 );
+
+                // 11. Send Order Placed Email (Async)
+                if (customer.getUser() != null && customer.getUser().getEmail() != null) {
+                        final String toEmail = customer.getUser().getEmail();
+                        final String orderNum = savedOrder.getOrderNumber();
+                        final String branchName = savedOrder.getBranch() != null ? savedOrder.getBranch().getName() : "Crave House";
+                        final BigDecimal finalAmount = savedOrder.getFinalAmount();
+                        final String typeStr = savedOrder.getOrderType().name();
+                        final String itemsSummary = savedOrder.getItems().stream()
+                                        .map(i -> i.getQuantity() + "x " + i.getItemName())
+                                        .collect(Collectors.joining("\n"));
+                        
+                        java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                try {
+                                        String html = emailTemplateService.buildOrderPlacedHtml(orderNum, branchName, itemsSummary, finalAmount, typeStr);
+                                        emailService.sendHtmlEmail(toEmail, "Order Confirmed — " + orderNum, html);
+                                } catch (Exception e) {
+                                        // Ignore
+                                }
+                        });
+                }
 
                 return OrderPlacementResponse.builder()
                                 .orderId(savedOrder.getId())
@@ -671,5 +698,22 @@ public class OrderServiceImpl implements OrderService {
                 order.setCancelReason(cancelReason);
                 orderRepository.save(order);
                 webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+
+                // Send Cancelled Email (Async)
+                if (customer.getUser() != null && customer.getUser().getEmail() != null) {
+                        final String toEmail = customer.getUser().getEmail();
+                        final String orderNum = order.getOrderNumber();
+                        final String branchName = order.getBranch() != null ? order.getBranch().getName() : "Crave House";
+                        final String finalReason = cancelReason != null ? cancelReason : "Cancelled by customer";
+                        
+                        java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                try {
+                                        String html = emailTemplateService.buildOrderCancelledHtml(orderNum, branchName, finalReason);
+                                        emailService.sendHtmlEmail(toEmail, "Order Cancelled — " + orderNum, html);
+                                } catch (Exception e) {
+                                        // Ignore
+                                }
+                        });
+                }
         }
 }

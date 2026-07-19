@@ -202,6 +202,44 @@ public class EmailTemplateService {
                                 "<p>" + safeBody + "</p>");
         }
 
+        /*
+         * Order Lifecycle Emails
+         */
+        public String buildOrderPlacedHtml(String orderNumber, String branchName, String itemsSummary, java.math.BigDecimal finalAmount, String orderType) {
+                String content = "<p>Hello,</p>"
+                                + "<p>We have received your order <strong>" + escapeHtml(orderNumber) + "</strong> at " + escapeHtml(branchName) + ".</p>"
+                                + "<p><strong>Order Type:</strong> " + escapeHtml(orderType) + "</p>"
+                                + "<div style=\"margin:20px 0; padding:15px; background:#f4f4f5; border-radius:6px;\">"
+                                + "<h3 style=\"margin-top:0; margin-bottom:10px; font-size:16px;\">Order Details</h3>"
+                                + "<div style=\"font-family:monospace; white-space:pre-wrap; color:#3f3f46;\">" + escapeHtml(itemsSummary) + "</div>"
+                                + "<p style=\"margin-bottom:0; margin-top:15px; font-size:16px;\"><strong>Total: Rs. " + finalAmount + "</strong></p>"
+                                + "</div>"
+                                + "<p>We will start preparing your order shortly!</p>";
+
+                return buildLayout("Order Confirmed — " + escapeHtml(orderNumber), content);
+        }
+
+        public String buildOrderCancelledHtml(String orderNumber, String branchName, String cancelReason) {
+                String content = "<p>Hello,</p>"
+                                + "<p>Your order <strong>" + escapeHtml(orderNumber) + "</strong> at " + escapeHtml(branchName) + " has been cancelled.</p>"
+                                + "<div style=\"margin:20px 0; padding:15px; background:#fef2f2; border-left:4px solid #ef4444; border-radius:4px;\">"
+                                + "<p style=\"margin:0; color:#b91c1c;\"><strong>Reason:</strong> " + escapeHtml(cancelReason) + "</p>"
+                                + "</div>"
+                                + "<p>If you have already paid, a refund will be processed according to our policy.</p>";
+
+                return buildLayout("Order Cancelled — " + escapeHtml(orderNumber), content);
+        }
+
+        public String buildOrderServedHtml(String orderNumber, String branchName, java.math.BigDecimal finalAmount) {
+                String content = "<p>Hello,</p>"
+                                + "<p>Your order <strong>" + escapeHtml(orderNumber) + "</strong> at " + escapeHtml(branchName) + " is complete!</p>"
+                                + "<p>The final total was <strong>Rs. " + finalAmount + "</strong>.</p>"
+                                + "<p>We hope you enjoyed your meal. We would love to hear your feedback on the items you ordered. You can leave a review from your past orders page.</p>"
+                                + "<p>Thank you for choosing Crave House!</p>";
+
+                return buildLayout("Order Complete — " + escapeHtml(orderNumber), content);
+        }
+
         private String buildLayout(
                         String title,
                         String content) {

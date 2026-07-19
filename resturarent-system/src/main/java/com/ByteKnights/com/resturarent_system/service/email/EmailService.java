@@ -13,4 +13,6 @@ public interface EmailService {
     void sendSimpleEmail(String toEmail, String subject, String body);
 
     void sendCustomerEmailVerification(String toEmail, String verificationLink);
+
+    void sendHtmlEmail(String toEmail, String subject, String htmlBody);
 }
