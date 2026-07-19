@@ -48,7 +48,7 @@ public class RestaurantTable {
     private Integer currentGuestCount = 0;
 
     // Number of active orders on this table calculated dynamically.
-    @Formula("(SELECT COUNT(o.id) FROM orders o WHERE o.table_id = id AND o.status NOT IN ('CANCELLED', 'REJECTED', 'ON_HOLD') AND (o.payment_status IS NULL OR o.payment_status != 'PAID'))")
+    @Formula("(SELECT COUNT(o.id) FROM orders o WHERE o.table_id = id AND o.status IN ('PLACED', 'PENDING', 'PREPARING', 'SERVED'))")
     private Integer activeOrderCount;
 
     // When the current occupancy came from seating a reservation, this holds that reservation's id
