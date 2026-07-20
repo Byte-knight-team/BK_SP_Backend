@@ -26,11 +26,19 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         long countByBranchIdAndStatus(Long branchId, OrderStatus status);
 
+        long countByStatusAndCreatedAtAfter(OrderStatus status, LocalDateTime startOfToday);
+
         long countByStatusIn(Collection<OrderStatus> statuses);
 
         long countByBranchId(Long branchId);
 
         long countByBranchIdAndStatusIn(Long branchId, Collection<OrderStatus> statuses);
+
+        long countByCreatedAtAfter(LocalDateTime startOfToday);
+
+        long countByBranchIdAndCreatedAtAfter(Long branchId, LocalDateTime startOfToday);
+
+        long countByStatusInAndCreatedAtAfter(Collection<OrderStatus> statuses, LocalDateTime startOfToday);
 
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.paymentStatus IN :paymentStatuses")
         BigDecimal sumFinalAmountByPaymentStatusIn(@Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
@@ -40,10 +48,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("branchId") Long branchId,
                         @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
 
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.paymentStatus IN :paymentStatuses AND o.createdAt >= :startOfToday")
+        BigDecimal sumFinalAmountByPaymentStatusInAndCreatedAtAfter(
+                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses, 
+                        @Param("startOfToday") LocalDateTime startOfToday);
+
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus IN :paymentStatuses AND o.createdAt >= :startOfToday")
+        BigDecimal sumFinalAmountByBranchIdAndPaymentStatusInAndCreatedAtAfter(
+                        @Param("branchId") Long branchId,
+                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
+                        @Param("startOfToday") LocalDateTime startOfToday);
+
         List<Order> findByPaymentStatusInAndCreatedAtBetween(
                         Collection<PaymentStatus> paymentStatuses,
                         LocalDateTime start,
                         LocalDateTime end);
+                        
+        @Query("SELECT o FROM Order o JOIN Payment p ON p.order = o WHERE o.status = :status AND o.paymentStatus = :paymentStatus AND p.paymentMethod = :paymentMethod AND o.createdAt < :threshold")
+        List<Order> findByStatusAndPaymentStatusAndPaymentMethodAndCreatedAtBefore(
+                        @Param("status") OrderStatus status,
+                        @Param("paymentStatus") PaymentStatus paymentStatus,
+                        @Param("paymentMethod") com.ByteKnights.com.resturarent_system.entity.PaymentMethod paymentMethod,
+                        @Param("threshold") LocalDateTime threshold);
 
         List<Order> findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
                         Long branchId,
@@ -135,7 +161,15 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         List<Order> findByBranchIdAndStatusAndStatusUpdatedAtAfter(Long branchId, OrderStatus status,
                         LocalDateTime startOfToday, Sort sort);
 
+        // Kitchen Completed tab: all orders finished today (COMPLETED + already SERVED)
+        List<Order> findByBranchIdAndStatusInAndStatusUpdatedAtAfter(Long branchId,
+                        Collection<OrderStatus> statuses, LocalDateTime startOfToday, Sort sort);
+
         long countByBranchIdAndStatusAndCreatedAtAfter(Long branchId, OrderStatus orderStatus,
+                        LocalDateTime startOfToday);
+
+        // Kitchen dashboard: all orders finished today (COMPLETED + already SERVED)
+        long countByBranchIdAndStatusInAndCreatedAtAfter(Long branchId, Collection<OrderStatus> statuses,
                         LocalDateTime startOfToday);
 
         Optional<Order> findByIdAndBranchId(Long orderId, Long branchId);
@@ -299,6 +333,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         // ───────────────────────── Customer Statistics Dashboard
         // ─────────────────────────
 
+        @Query("SELECT o.orderType, COUNT(o), COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
+                        "FROM Order o WHERE o.customer.id = :cid " +
+                        "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
+                        "com.ByteKnights.com.resturarent_system.entity.OrderStatus.REJECTED) GROUP BY o.orderType")
+        List<Object[]> findStatisticsFinancialsAndTypes(@Param("cid") Long customerId);
+
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0), COALESCE(SUM(o.discountAmount), 0) " +
                         "FROM Order o WHERE o.customer.id = :cid " +
                         "AND o.status NOT IN (com.ByteKnights.com.resturarent_system.entity.OrderStatus.CANCELLED, " +
@@ -358,6 +398,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         long countByBranchIdAndPaymentStatusAndOrderTypeAndCreatedAtBetween(
                 Long branchId, PaymentStatus paymentStatus, OrderType orderType,
                 LocalDateTime start, LocalDateTime end);
+
+        // Same as above but excludes orders in a status where money is never collected
+        // (CANCELLED/REJECTED/ON_HOLD) — those shouldn't inflate the "pending payment" KPI.
+        long countByBranchIdAndPaymentStatusAndOrderTypeAndStatusNotInAndCreatedAtBetween(
+                Long branchId, PaymentStatus paymentStatus, OrderType orderType,
+                List<OrderStatus> excludedStatuses, LocalDateTime start, LocalDateTime end);
 
         // QR orders in PENDING/PREPARING that have NO READY or SERVED items — for kitchen QR count
         @Query("SELECT COUNT(DISTINCT o) FROM Order o " +

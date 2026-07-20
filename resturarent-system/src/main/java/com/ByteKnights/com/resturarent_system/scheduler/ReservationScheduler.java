@@ -2,15 +2,19 @@ package com.ByteKnights.com.resturarent_system.scheduler;
 
 import com.ByteKnights.com.resturarent_system.entity.Reservation;
 import com.ByteKnights.com.resturarent_system.entity.ReservationStatus;
+import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.ReservationRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
+import com.ByteKnights.com.resturarent_system.service.email.EmailService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -26,10 +30,12 @@ public class ReservationScheduler {
     private final ReservationRepository reservationRepository;
     private final RestaurantTableRepository tableRepository;
     private final WebSocketNotificationService webSocketNotificationService;
+    private final EmailService emailService;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("h:mm a");
 
-    // Tracks reservations that have already been notified to prevent duplicate toasts
+    // Tracks reservations that have already been notified to prevent duplicate
+    // toasts
     private final Set<String> sentNotifications = new HashSet<>();
 
     @Scheduled(fixedRate = 60000)
@@ -49,20 +55,129 @@ public class ReservationScheduler {
         List<Reservation> all = reservationRepository.findAll();
 
         for (Reservation r : all) {
-            if (r.getStatus() != ReservationStatus.CONFIRMED) continue;
+            Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
+            Long reservationId = r.getId();
+
+            // Auto-expire unhandled reservation requests (15 minutes after start time)
+            if (r.getStatus() == ReservationStatus.REQUESTED && r.getReservationTime() != null
+                    && r.getReservationTime().plusMinutes(15).isBefore(now)) {
+                r.setStatus(ReservationStatus.EXPIRED);
+                reservationRepository.save(r);
+
+                final Long finalBranchId = branchId;
+                final Long finalReservationId = reservationId;
+                final Long userId = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getId() : null;
+                final String userEmail = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getEmail() : null;
+                final String branchName = (r.getBranch() != null) ? r.getBranch().getName() : "our restaurant";
+                final String timeStr = r.getReservationTime().format(TIME_FORMATTER);
+
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        if (finalBranchId != null) {
+                            webSocketNotificationService.broadcastReservationUpdate(finalBranchId);
+                        }
+                        if (userId != null) {
+                            webSocketNotificationService.broadcastReservationStatusToCustomer(userId,
+                                    finalReservationId, "EXPIRED");
+                            if (userEmail != null) {
+                                try {
+                                    emailService.sendSimpleEmail(userEmail, "Reservation Request Expired",
+                                            "We apologize, but your reservation request at " + branchName
+                                                    + " for " + timeStr + " has expired as we were unable to review and confirm it in time. Please try booking again or contact the restaurant directly.");
+                                } catch (Exception e) {
+                                    log.error("Failed to send expiration email for unhandled reservation request {}", finalReservationId, e);
+                                }
+                            }
+                        }
+                    }
+                });
+                log.info("Auto-expired unhandled reservation request {}", reservationId);
+                continue;
+            }
+
+            if (r.getStatus() == ReservationStatus.CONFIRMED && r.getPaymentDeadline() != null
+                    && r.getPaymentDeadline().isBefore(now)) {
+                r.setStatus(ReservationStatus.EXPIRED);
+                reservationRepository.save(r);
+
+                // Payment window closed → free any tables this booking was holding, unless
+                // another CONFIRMED/PAID booking still holds them within the 15-minute window.
+                boolean anyFreed = false;
+                for (RestaurantTable table : r.getTables()) {
+                    if (table.getState() == TableStatus.RESERVED) {
+                        boolean stillHeld = !reservationRepository
+                                .findOverlappingReservations(table.getId(), now, now.plusMinutes(15))
+                                .isEmpty();
+                        if (!stillHeld) {
+                            table.setState(TableStatus.AVAILABLE);
+                            table.setCurrentGuestCount(0);
+                            table.setStatusUpdatedAt(now);
+                            tableRepository.save(table);
+                            anyFreed = true;
+                        }
+                    }
+                }
+                final Long finalBranchId = branchId;
+                final boolean finalAnyFreed = anyFreed;
+                final Long finalReservationId = reservationId;
+                final Long userId = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getId() : null;
+                final String userEmail = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getEmail() : null;
+                final String branchName = (r.getBranch() != null) ? r.getBranch().getName() : "our restaurant";
+
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        if (finalBranchId != null) {
+                            if (finalAnyFreed) webSocketNotificationService.broadcastTableUpdate(finalBranchId);
+                            webSocketNotificationService.broadcastReservationUpdate(finalBranchId);
+                        }
+                        if (userId != null) {
+                            webSocketNotificationService.broadcastReservationStatusToCustomer(userId,
+                                    finalReservationId, "EXPIRED");
+                            if (userEmail != null) {
+                                try {
+                                    emailService.sendSimpleEmail(userEmail, "Reservation Expired",
+                                            "Your reservation at " + branchName
+                                                    + " has expired because the payment was not completed within the allowed time window.");
+                                } catch (Exception e) {
+                                    log.error("Failed to send expiration email for reservation {}", finalReservationId, e);
+                                }
+                            }
+                        }
+                    }
+                });
+                log.info("Auto-expired unpaid confirmed reservation {}", reservationId);
+                continue;
+            }
+
+            if (r.getStatus() != ReservationStatus.PAID)
+                continue;
+
+            if (branchId == null)
+                continue;
 
             LocalDateTime reservationTime = r.getReservationTime();
-            Long branchId = r.getTable().getBranch().getId();
-            Integer tableNumber = r.getTable().getTableNumber();
+
+            // NOTE: no-show is handled MANUALLY by the receptionist (they may choose to wait a
+            // while for late guests), so there is deliberately NO auto-cancel here — a PAID
+            // booking stays PAID until it is either seated or cancelled by staff.
+
+            // Representative table number for the reminder toast (lowest table number in
+            // the booking).
+            Integer tableNumber = r.getTables().stream()
+                    .map(RestaurantTable::getTableNumber)
+                    .filter(java.util.Objects::nonNull)
+                    .min(Integer::compareTo).orElse(null);
             String timeStr = reservationTime.format(TIME_FORMATTER);
-            Long reservationId = r.getId();
 
             // 1-hour reminder — fire only once
             String key1hr = reservationId + "-1HR";
             if (!sentNotifications.contains(key1hr)
                     && !reservationTime.isBefore(oneHourStart)
                     && !reservationTime.isAfter(oneHourEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_1HR", tableNumber, timeStr);
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_1HR", tableNumber,
+                        timeStr);
                 sentNotifications.add(key1hr);
                 log.info("1-hour reminder sent for table {} at {}", tableNumber, timeStr);
             }
@@ -72,7 +187,8 @@ public class ReservationScheduler {
             if (!sentNotifications.contains(key30min)
                     && !reservationTime.isBefore(thirtyMinStart)
                     && !reservationTime.isAfter(thirtyMinEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_30MIN", tableNumber, timeStr);
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_30MIN", tableNumber,
+                        timeStr);
                 sentNotifications.add(key30min);
                 log.info("30-min reminder sent for table {} at {}", tableNumber, timeStr);
             }
@@ -82,20 +198,59 @@ public class ReservationScheduler {
             if (!sentNotifications.contains(key15min)
                     && !reservationTime.isBefore(fifteenMinStart)
                     && !reservationTime.isAfter(fifteenMinEnd)) {
-                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_15MIN", tableNumber, timeStr);
+                webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_15MIN", tableNumber,
+                        timeStr);
                 sentNotifications.add(key15min);
                 log.info("15-min reminder sent for table {} at {}", tableNumber, timeStr);
 
-                // Lock the table only if currently AVAILABLE
-                var table = r.getTable();
-                if (table.getState() == TableStatus.AVAILABLE) {
-                    table.setState(TableStatus.RESERVED);
-                    table.setStatusUpdatedAt(LocalDateTime.now());
-                    tableRepository.save(table);
+                // Lock every AVAILABLE table of this booking.
+                boolean anyLocked = false;
+                for (RestaurantTable table : r.getTables()) {
+                    if (table.getState() == TableStatus.AVAILABLE) {
+                        table.setState(TableStatus.RESERVED);
+                        table.setStatusUpdatedAt(LocalDateTime.now());
+                        tableRepository.save(table);
+                        anyLocked = true;
+                    }
+                }
+                if (anyLocked) {
                     webSocketNotificationService.broadcastTableUpdate(branchId);
-                    log.info("Table {} locked as RESERVED", tableNumber);
+                    log.info("Locked tables of reservation {} as RESERVED", reservationId);
                 }
             }
+
+            // #5 GUEST LATE — the slot has started but the guest still isn't seated (still
+            // PAID;
+            // past-end no-shows were auto-cancelled above, so this window is still active).
+            // Fire once.
+            String keyLate = reservationId + "-LATE";
+            if (!sentNotifications.contains(keyLate) && reservationTime.isBefore(now)) {
+                webSocketNotificationService.broadcastReservationReminder(branchId, "GUEST_LATE", tableNumber, timeStr);
+                sentNotifications.add(keyLate);
+                log.info("Guest-late notice for table {} reservation {}", tableNumber, reservationId);
+            }
+        }
+
+        // #6 TIME'S UP — a table occupied for a reservation whose reserved window has
+        // ended. Notify once
+        // per booking (the reserved time is over — ask them to leave / clear the
+        // table).
+        for (RestaurantTable table : tableRepository.findAll()) {
+            if (table.getState() != TableStatus.OCCUPIED || table.getSeatedReservationId() == null)
+                continue;
+            Reservation sr = reservationRepository.findById(table.getSeatedReservationId()).orElse(null);
+            if (sr == null || sr.getEndTime() == null || !sr.getEndTime().isBefore(now))
+                continue;
+            String keyUp = "TIMEUP-" + sr.getId();
+            if (sentNotifications.contains(keyUp))
+                continue;
+            Long upBranchId = table.getBranch() != null ? table.getBranch().getId() : null;
+            if (upBranchId == null)
+                continue;
+            webSocketNotificationService.broadcastReservationReminder(
+                    upBranchId, "TIME_UP", table.getTableNumber(), sr.getEndTime().format(TIME_FORMATTER));
+            sentNotifications.add(keyUp);
+            log.info("Time's-up notice for table {} reservation {}", table.getTableNumber(), sr.getId());
         }
     }
 }

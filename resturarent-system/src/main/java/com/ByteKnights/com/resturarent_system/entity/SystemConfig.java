@@ -19,6 +19,16 @@ public class SystemConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /*
+     * One branch selected by SUPER_ADMIN as the system delivery branch.
+     *
+     * Nullable at database level so existing system_config rows do not break
+     * before a branch is selected through the admin configuration page.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "delivery_branch_id")
+    private Branch deliveryBranch;
+
     @Column(name = "tax_enabled", nullable = false)
     private boolean taxEnabled = false;
 
@@ -28,7 +38,12 @@ public class SystemConfig {
     @Column(name = "service_charge_enabled", nullable = false)
     private boolean serviceChargeEnabled = false;
 
-    @Column(name = "service_charge_percentage", precision = 5, scale = 2, nullable = false)
+    @Column(
+            name = "service_charge_percentage",
+            precision = 5,
+            scale = 2,
+            nullable = false
+    )
     private BigDecimal serviceChargePercentage = BigDecimal.ZERO;
 
     @Column(name = "loyalty_enabled", nullable = false)

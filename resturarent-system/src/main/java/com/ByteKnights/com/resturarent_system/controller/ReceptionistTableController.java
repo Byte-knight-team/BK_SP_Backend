@@ -14,6 +14,11 @@ import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
 
+/**
+ * REST endpoints for the receptionist's table floor (Table Management page):
+ * list tables, occupy (walk-in), update guest count, and clear.
+ * All routes are under /api/v1/receptionist/tables.
+ */
 @RestController
 @RequestMapping("/api/v1/receptionist/tables")
 @CrossOrigin
@@ -47,6 +52,22 @@ public class ReceptionistTableController {
 
         return new ResponseEntity<>(
                 new StandardResponse(200, "Table #" + id + " is now occupied", null),
+                HttpStatus.OK
+        );
+    }
+
+    // update only the guest count of an already-occupied table (does not reset the seated time)
+    @PutMapping("/{id}/guest-count")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_TABLE_UPDATE')")
+    public ResponseEntity<StandardResponse> updateGuestCount(
+            @PathVariable Long id,
+            @Valid @RequestBody TableActionRequest request,
+            Principal principal) {
+
+        receptionistTableService.updateGuestCount(id, request.getGuestCount(), principal.getName());
+
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Table #" + id + " guest count updated", null),
                 HttpStatus.OK
         );
     }

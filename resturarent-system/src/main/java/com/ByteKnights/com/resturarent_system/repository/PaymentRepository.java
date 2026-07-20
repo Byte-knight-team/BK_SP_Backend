@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.repository;
 
 import com.ByteKnights.com.resturarent_system.entity.Order;
 import com.ByteKnights.com.resturarent_system.entity.Payment;
+import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -9,14 +10,34 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByOrder(Order order);
+
+    List<Payment> findByOrderOrderByIdAsc(Order order);
+
+    // Safe read: returns the latest payment for an order, never throws on stray duplicates
+    Optional<Payment> findFirstByOrderOrderByIdDesc(Order order);
+    
+    @Query("SELECT p.order.id FROM Payment p WHERE p.transactionReference = :txnRef")
+    Optional<Long> findOrderIdByTransactionReference(@Param("txnRef") String txnRef);
+    
+    @Modifying
+    @Transactional
+    @Query("UPDATE Payment p SET p.paymentStatus = :status WHERE p.transactionReference = :txnRef")
+    int updatePaymentStatusByTransactionReference(@Param("txnRef") String txnRef, @Param("status") PaymentStatus status);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE Order o SET o.paymentStatus = :status WHERE o.id IN (SELECT p.order.id FROM Payment p WHERE p.transactionReference = :txnRef)")
+    int updateOrderPaymentStatusByTxnRef(@Param("txnRef") String txnRef, @Param("status") PaymentStatus status);
 
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.branch.id = :branchId AND p.paymentMethod = :method AND p.paymentStatus = 'PAID'")
     BigDecimal sumAmountByBranchIdAndPaymentMethod(

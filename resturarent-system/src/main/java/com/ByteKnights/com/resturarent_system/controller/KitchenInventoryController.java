@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
 import com.ByteKnights.com.resturarent_system.service.KitchenInventoryService;
 import jakarta.validation.Valid;
@@ -35,6 +36,13 @@ public class KitchenInventoryController {
     public ResponseEntity<StandardResponse> getAllInventory(Principal principal) {
         List<InventoryDetailsDTO> items = kitchenInventoryService.getAllInventoryItems(principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Success", items), HttpStatus.OK);
+    }
+
+    @GetMapping("/inventory/my-requests")
+    @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_REQUEST')")
+    public ResponseEntity<StandardResponse> getMyRequests(Principal principal) {
+        List<ChefRequestDTO> requests = kitchenInventoryService.getMyRequests(principal.getName());
+        return new ResponseEntity<>(new StandardResponse(200, "Success", requests), HttpStatus.OK);
     }
 
     @PostMapping("/inventory/request")

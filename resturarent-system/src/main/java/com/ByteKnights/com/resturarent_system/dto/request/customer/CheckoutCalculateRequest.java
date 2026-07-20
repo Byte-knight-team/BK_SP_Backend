@@ -12,6 +12,10 @@ public class CheckoutCalculateRequest {
     private String couponCode;          
     private Integer redeemLoyaltyPoints; 
 
+    // Delivery Location
+    private Double latitude;
+    private Double longitude;
+
     private List<CartItemRequest> items;
 
     @Data

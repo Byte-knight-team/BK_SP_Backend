@@ -64,7 +64,7 @@ public class InventoryController {
      * @return 200 OK with a list of InventoryItemDTOs in the response body.
      */
     @GetMapping("/items")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER', 'CHEF')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'CHEF')")
     public ResponseEntity<List<InventoryItemDTO>> getAllItemsByBranch(
             @RequestParam(required = false) Long branchId,
             @AuthenticationPrincipal JwtUserPrincipal principal) {

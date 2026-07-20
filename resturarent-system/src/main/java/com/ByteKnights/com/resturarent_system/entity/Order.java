@@ -16,6 +16,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Index;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -33,7 +34,8 @@ import java.util.List;
     @Index(name = "idx_orders_branch_payment_date", columnList = "branch_id, payment_status, created_at"),
     
     // 3. Speeds up: Recent Orders List (Top 50 by branch)
-    @Index(name = "idx_orders_branch_created", columnList = "branch_id, created_at")
+    @Index(name = "idx_orders_branch_created", columnList = "branch_id, created_at"),
+    @Index(name = "idx_orders_customer_id", columnList = "customer_id")
 })
 @Getter
 @Setter

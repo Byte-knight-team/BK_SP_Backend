@@ -39,6 +39,41 @@ public class WebSocketNotificationService {
     }
 
     /**
+     * Notify the branch that a kitchen alert/issue has been resolved (same /alerts topic).
+     * The receptionist clients toast it and refresh their active-alert count.
+     */
+    public void broadcastKitchenAlertResolved(Long branchId, String message) {
+        String destination = "/topic/branch/" + branchId + "/alerts";
+        log.info("Broadcasting kitchen alert RESOLVED to {}: {}", destination, message);
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "type", "RESOLVED",
+                "message", message
+        ));
+    }
+
+    /**
+     * Broadcast a new order notification to all receptionist clients in the branch.
+     *
+     * Topic: /topic/branch/{branchId}/new-order
+     * Subscribers: Receptionist dashboard (Notifier)
+     *
+     * @param branchId    The branch ID to scope the broadcast
+     * @param orderNumber The order number e.g. "ORD-CD5C6E"
+     * @param orderType   The order type e.g. "ONLINE_DELIVERY"
+     * @param orderId     The order ID
+     */
+    public void broadcastNewReceptionistOrder(Long branchId, String orderNumber, String orderType, Long orderId) {
+        String destination = "/topic/branch/" + branchId + "/new-order";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "orderNumber", orderNumber,
+                "orderType", orderType,
+                "orderId", String.valueOf(orderId)
+        );
+        log.info("Broadcasting new receptionist order to {}: {}", destination, orderNumber);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
+    /**
      * Broadcast a new order notification to all kitchen clients in the same branch.
      *
      * Topic: /topic/branch/{branchId}/kitchen-orders
@@ -153,6 +188,20 @@ public class WebSocketNotificationService {
         messagingTemplate.convertAndSend(destination, payload);
     }
 
+    /**
+     * Notify a chef that their menu update request has been approved.
+     *
+     * Topic: /topic/chef/{chefUserId}/menu-update-approval
+     */
+    public void broadcastMenuUpdateApprovalToChef(Long chefUserId, String message) {
+        String destination = "/topic/chef/" + chefUserId + "/menu-update-approval";
+        java.util.Map<String, String> payload = java.util.Map.of(
+                "message", message
+        );
+        log.info("Broadcasting menu update approval to chef {}: {}", chefUserId, message);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
     public void broadcastTableUpdate(Long branchId) {
         String destination = "/topic/branch/" + branchId + "/table-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
@@ -202,5 +251,88 @@ public class WebSocketNotificationService {
             // Don't let global notification failure break the main flow
             log.warn("Failed to broadcast global order update for order {}: {}", orderId, e.getMessage());
         }
+    }
+
+    /**
+     * Broadcast an order payment status update (e.g. REFUNDED)
+     */
+    public void broadcastOrderPaymentStatusUpdate(Long orderId, String newPaymentStatus) {
+        String orderDestination = "/topic/order/" + orderId + "/status";
+        log.info("Broadcasting order payment status update to {}: {}", orderDestination, newPaymentStatus);
+
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderId", String.valueOf(orderId));
+        payload.put("paymentStatus", newPaymentStatus);
+
+        messagingTemplate.convertAndSend(orderDestination, payload);
+
+        try {
+            Order order = orderRepository.findById(orderId).orElse(null);
+            if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                Long userId = order.getCustomer().getUser().getId();
+                String userDestination = "/topic/user/" + userId + "/orders";
+                java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
+                globalPayload.put("orderId", String.valueOf(orderId));
+                globalPayload.put("orderNumber", order.getOrderNumber() != null ? order.getOrderNumber() : "");
+                globalPayload.put("paymentStatus", newPaymentStatus);
+
+                messagingTemplate.convertAndSend(userDestination, globalPayload);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to broadcast global payment update for order {}: {}", orderId, e.getMessage());
+        }
+    }
+
+    /**
+     * Notify receptionist clients that reservation data has changed (created or cancelled).
+     *
+     * Topic: /topic/branch/{branchId}/reservation-update
+     * Subscribers: Receptionist dashboard (UpcomingReservationsCard)
+     */
+    public void broadcastReservationUpdate(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/reservation-update";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
+        log.info("Broadcasting reservation update to {}", destination);
+    }
+
+    /**
+     * Broadcast a new reservation request notification to receptionist.
+     * Topic: /topic/branch/{branchId}/new-reservation
+     */
+    public void broadcastNewReservationRequest(Long branchId, Long reservationId) {
+        String destination = "/topic/branch/" + branchId + "/new-reservation";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "reservationId", String.valueOf(reservationId)
+        ));
+        log.info("Broadcasting new reservation request to {}", destination);
+    }
+
+    /**
+     * Notify the branch's receptionists that a CUSTOMER acted on a reservation (e.g. paid / cancelled),
+     * so they get a toast on any page. Distinct from the generic reservation-update (which also fires
+     * on the receptionist's own actions), so only customer-driven activity is toasted here.
+     * Topic: /topic/branch/{branchId}/reservation-activity
+     */
+    public void broadcastReservationActivityToBranch(Long branchId, Long reservationId, String action, String customerName) {
+        String destination = "/topic/branch/" + branchId + "/reservation-activity";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "reservationId", String.valueOf(reservationId),
+                "action", action == null ? "" : action,
+                "customerName", customerName == null ? "" : customerName
+        ));
+        log.info("Broadcasting reservation activity [{}] to {}", action, destination);
+    }
+
+    /**
+     * Broadcast reservation status updates to the customer.
+     * Topic: /topic/user/{userId}/reservations
+     */
+    public void broadcastReservationStatusToCustomer(Long userId, Long reservationId, String newStatus) {
+        String destination = "/topic/user/" + userId + "/reservations";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of(
+                "reservationId", String.valueOf(reservationId),
+                "reservationStatus", newStatus
+        ));
+        log.info("Broadcasting global reservation update to {}: {}", destination, newStatus);
     }
 }

@@ -76,8 +76,10 @@ public class ReceptionistOrderController {
     @PreAuthorize("hasAuthority('RECEPTIONIST_PAYMENT_COLLECT')")
     public ResponseEntity<StandardResponse> collectPayment(
             @PathVariable Long id,
+            @RequestBody(required = false) java.util.Map<String, java.math.BigDecimal> body,
             Principal principal) {
-        receptionistOrderService.collectPayment(id, principal.getName());
+        java.math.BigDecimal cashReceived = body != null ? body.get("cashReceived") : null;
+        receptionistOrderService.collectPayment(id, cashReceived, principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Payment collected", null), HttpStatus.OK);
     }
 

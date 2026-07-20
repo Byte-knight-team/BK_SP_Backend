@@ -17,4 +17,5 @@ public class CustomerProfileResponse {
     private Integer loyaltyPoints;
     private String memberSince;
     private String profilePictureUrl;
+    private Boolean emailVerified;
 }

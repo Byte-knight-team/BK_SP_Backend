@@ -21,6 +21,7 @@ public class MenuItemResponse {
     private String branchName;
     private Long categoryId;
     private String categoryName;
+    private String categoryStatus;
     private String subCategory;
     private String name;
     private String description;

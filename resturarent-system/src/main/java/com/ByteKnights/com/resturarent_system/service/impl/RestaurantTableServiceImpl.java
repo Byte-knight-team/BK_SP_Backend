@@ -2,7 +2,6 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateTableRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableStatusRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.TableResponse;
 import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
 import com.ByteKnights.com.resturarent_system.entity.AuditModule;
@@ -13,7 +12,6 @@ import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
 import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
-import com.ByteKnights.com.resturarent_system.repository.QrCodeRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
@@ -42,7 +40,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
     private final RestaurantTableRepository tableRepository;
     private final BranchRepository branchRepository;
-    private final QrCodeRepository qrCodeRepository;
     private final StaffRepository staffRepository;
     private final AuditLogService auditLogService;
 
@@ -76,6 +73,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
                 .tableNumber(request.getTableNumber())
                 .capacity(request.getCapacity())
                 .state(status)
+                .isAvailable(true)
                 .build();
 
         RestaurantTable saved = tableRepository.save(table);
@@ -126,7 +124,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
     }
 
     /**
-     * Updates table number, capacity, and status when provided.
+     * Updates table number and capacity when provided
      */
     @Override
     @Transactional
@@ -136,15 +134,15 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
 
         Map<String, Object> oldValues = buildTableAuditSnapshot(table);
 
-        if (request.getTableNumber() != null) {
-            if (!table.getTableNumber().equals(request.getTableNumber())
-                    && tableRepository.existsByBranchIdAndTableNumberAndIdNot(
-                    table.getBranch().getId(), request.getTableNumber(), id)) {
+
+
+        if (request.getTableNumber() != null && !request.getTableNumber().equals(table.getTableNumber())) {
+            if (tableRepository.existsByBranchIdAndTableNumber(
+                    table.getBranch().getId(), request.getTableNumber())) {
                 throw new DuplicateResourceException(
                         "Table number " + request.getTableNumber()
                                 + " already exists in branch " + table.getBranch().getName());
             }
-
             table.setTableNumber(request.getTableNumber());
         }
 
@@ -152,8 +150,8 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
             table.setCapacity(request.getCapacity());
         }
 
-        if (request.getStatus() != null && !request.getStatus().isBlank()) {
-            table.setState(parseStatus(request.getStatus()));
+        if (request.getIsAvailable() != null) {
+            table.setIsAvailable(request.getIsAvailable());
         }
 
         RestaurantTable updated = tableRepository.save(table);
@@ -172,91 +170,6 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         );
 
         return mapToResponse(updated);
-    }
-
-    /**
-     * Updates only the state of a table.
-     */
-    @Override
-    @Transactional
-    public TableResponse updateTableStatus(Long id, UpdateTableStatusRequest request) {
-        RestaurantTable table = findTableOrThrow(id);
-        enforceAdminBranchAccess(table.getBranch().getId());
-
-        Map<String, Object> oldValues = buildTableAuditSnapshot(table);
-
-        Integer activeOrderCount = table.getActiveOrderCount() == null ? 0 : table.getActiveOrderCount();
-
-        table.setState(parseStatus(request.getStatus()));
-
-        if (table.getState() == TableStatus.AVAILABLE && activeOrderCount > 0) {
-            table.setState(TableStatus.OCCUPIED);
-        } else if (table.getState() == TableStatus.OCCUPIED && activeOrderCount == 0) {
-            table.setState(TableStatus.AVAILABLE);
-        }
-
-        RestaurantTable updated = tableRepository.save(table);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.TABLE,
-                AuditEventType.TABLE_STATUS_UPDATED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.INFO,
-                AuditTargetType.TABLE,
-                updated.getId(),
-                getTableBranchId(updated),
-                "Table status updated successfully",
-                oldValues,
-                buildTableAuditSnapshot(updated)
-        );
-
-        return mapToResponse(updated);
-    }
-
-    /**
-     * Deletes a table only when it is safe to remove.
-     */
-    @Override
-    @Transactional
-    public void deleteTable(Long id) {
-        RestaurantTable table = findTableOrThrow(id);
-        enforceAdminBranchAccess(table.getBranch().getId());
-
-        if (qrCodeRepository.existsByTableId(id)) {
-            throw new InvalidOperationException(
-                    "Cannot delete table: QR code history exists for this table. "
-                            + "Revoke and clean up QR records first.");
-        }
-
-        if (table.getActiveOrderCount() != null && table.getActiveOrderCount() > 0) {
-            throw new InvalidOperationException("Cannot delete table: active orders exist");
-        }
-
-        if (table.getState() == TableStatus.OCCUPIED) {
-            throw new InvalidOperationException("Cannot delete: The table is occupied");
-        }
-
-        if (table.getState() == TableStatus.RESERVED) {
-            throw new InvalidOperationException("Cannot delete: The table is reserved");
-        }
-
-        Map<String, Object> oldValues = buildTableAuditSnapshot(table);
-        Long branchId = getTableBranchId(table);
-
-        tableRepository.delete(table);
-
-        auditLogService.logCurrentUserAction(
-                AuditModule.TABLE,
-                AuditEventType.TABLE_DELETED,
-                AuditStatus.SUCCESS,
-                AuditSeverity.WARN,
-                AuditTargetType.TABLE,
-                id,
-                branchId,
-                "Table deleted successfully",
-                oldValues,
-                null
-        );
     }
 
     // ─────────────────────────── Helper Methods ───────────────────────────
@@ -300,6 +213,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
                 .branchName(table.getBranch().getName())
                 .currentGuestCount(table.getCurrentGuestCount())
                 .activeOrderCount(table.getActiveOrderCount())
+                .isAvailable(table.getIsAvailable())
                 .createdAt(table.getCreatedAt())
                 .build();
     }
@@ -354,6 +268,7 @@ public class RestaurantTableServiceImpl implements RestaurantTableService {
         snapshot.put("tableNumber", table.getTableNumber());
         snapshot.put("capacity", table.getCapacity());
         snapshot.put("status", table.getState() != null ? table.getState().name() : null);
+        snapshot.put("isAvailable", table.getIsAvailable());
         snapshot.put("currentGuestCount", table.getCurrentGuestCount());
         snapshot.put("activeOrderCount", table.getActiveOrderCount());
 

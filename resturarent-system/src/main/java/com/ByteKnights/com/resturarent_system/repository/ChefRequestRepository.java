@@ -15,6 +15,11 @@ public interface ChefRequestRepository extends JpaRepository<ChefRequest, Long> 
 
     // Find only pending requests for a branch, ordered newest first
     List<ChefRequest> findByBranchIdAndStatusOrderByCreatedAtDesc(Long branchId, ChefRequestStatus status);
+    // Find a specific chef's requests within a branch (newest first)
+    List<ChefRequest> findByBranchIdAndChefNameOrderByCreatedAtDesc(Long branchId, String chefName);
+
+    // Find only pending requests for a branch
+    List<ChefRequest> findByBranchIdAndStatus(Long branchId, ChefRequestStatus status);
 
     // Count pending requests for a branch
     long countByBranchIdAndStatus(Long branchId, ChefRequestStatus status);
