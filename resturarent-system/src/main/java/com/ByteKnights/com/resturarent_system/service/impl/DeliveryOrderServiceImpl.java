@@ -30,6 +30,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         private final StaffRepository staffRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
 
     @Override
     @Transactional(readOnly = true)
@@ -179,7 +181,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         oldValues.put("delivery", buildDeliveryAuditSnapshot(delivery));
         oldValues.put("order", buildDeliveryOrderAuditSnapshot(delivery.getOrder()));
 
-                delivery.setDeliveryStatus(status);
+        delivery.setDeliveryStatus(status);
 
         if (status == DeliveryStatus.DELIVERED) {
             delivery.setDeliveredAt(LocalDateTime.now());
@@ -190,6 +192,10 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
              */
             delivery.getOrder().setStatus(OrderStatus.SERVED);
             orderRepository.save(delivery.getOrder());
+            
+            webSocketNotificationService.broadcastOrderStatusUpdate(delivery.getOrder().getId(),
+                    delivery.getOrder().getStatus().name());
+            sendServedEmailAsync(delivery.getOrder());
         }
 
         Delivery savedDelivery = deliveryRepository.save(delivery);
@@ -329,5 +335,23 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                             .build();
                 })
                 .collect(Collectors.toList());
+    }
+
+    private void sendServedEmailAsync(Order order) {
+        if (order.getCustomer() != null && order.getCustomer().getUser() != null && order.getCustomer().getUser().getEmail() != null) {
+            final String toEmail = order.getCustomer().getUser().getEmail();
+            final String orderNum = order.getOrderNumber();
+            final String branchName = order.getBranch() != null ? order.getBranch().getName() : "Crave House";
+            final java.math.BigDecimal finalAmount = order.getFinalAmount();
+
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String html = emailTemplateService.buildOrderServedHtml(orderNum, branchName, finalAmount);
+                    emailService.sendHtmlEmail(toEmail, "Order Complete — " + orderNum, html);
+                } catch (Exception e) {
+                    // Ignore
+                }
+            });
+        }
     }
 }

@@ -54,6 +54,12 @@ public class SecurityConfig {
                                                                 "/swagger-ui.html",
                                                                 "/api-docs/**",
                                                                 "/v3/api-docs/**",
+                                                                "/api/v1/customer/reservations/test-confirm/**",
+                                                                "/api/v1/customer/reservations/test-reject/**",
+                                                                "/api/v1/customer/reservations/test-cancel/**",
+                                                                "/api/v1/customer/reservations/test-check-availability/**",
+                                                                "/api/v1/customer/reservations/test-complete/**",
+                                                                "/api/v1/webhooks/**",
                                                                 "/ws/**") // WebSocket handshake endpoint
                                                 .permitAll()
 

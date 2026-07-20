@@ -18,6 +18,10 @@ import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.CustomerProfileService;
 import com.ByteKnights.com.resturarent_system.service.ProfileImageStorageService;
+import com.ByteKnights.com.resturarent_system.entity.EmailVerificationToken;
+import com.ByteKnights.com.resturarent_system.repository.EmailVerificationTokenRepository;
+import com.ByteKnights.com.resturarent_system.service.email.EmailService;
+import org.springframework.beans.factory.annotation.Value;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.http.HttpStatus;
@@ -45,6 +49,11 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final LoyaltyTransactionRepository loyaltyTransactionRepository;
+    private final EmailVerificationTokenRepository emailVerificationTokenRepository;
+    private final EmailService emailService;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
 
     public CustomerProfileServiceImpl(UserRepository userRepository,
             CustomerRepository customerRepository,
@@ -52,7 +61,9 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
             ProfileImageStorageService profileImageStorageService,
             OrderRepository orderRepository,
             OrderItemRepository orderItemRepository,
-            LoyaltyTransactionRepository loyaltyTransactionRepository) {
+            LoyaltyTransactionRepository loyaltyTransactionRepository,
+            EmailVerificationTokenRepository emailVerificationTokenRepository,
+            EmailService emailService) {
         this.userRepository = userRepository;
         this.customerRepository = customerRepository;
         this.passwordEncoder = passwordEncoder;
@@ -60,6 +71,8 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.loyaltyTransactionRepository = loyaltyTransactionRepository;
+        this.emailVerificationTokenRepository = emailVerificationTokenRepository;
+        this.emailService = emailService;
     }
 
     @Override
@@ -87,6 +100,7 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
                 .loyaltyPoints(customer.getLoyaltyPoints())
                 .memberSince(formattedDate)
                 .profilePictureUrl(profileImageStorageService.createPresignedDownloadUrl(user.getProfilePictureKey()))
+                .emailVerified(customer.getEmailVerified() != null && customer.getEmailVerified())
                 .build();
     }
 
@@ -194,25 +208,33 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     @Override
     @Transactional(readOnly = true)
     public CustomerStatisticsResponse getCustomerStatistics(String identifier) {
-        User user = userRepository.findByEmail(identifier)
-                .orElseGet(() -> userRepository.findByPhone(identifier)
-                        .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found")));
-
-        Customer customer = customerRepository.findByUser(user)
+        Customer customer = customerRepository.findByUserEmailOrUserPhone(identifier)
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Customer profile not found"));
 
         Long customerId = customer.getId();
 
-        // 1. Financial totals (single query)
-        List<Object[]> financialsList = orderRepository.findLifetimeFinancials(customerId);
+        // 1. Financial totals & Order Types (Combined query)
+        List<Object[]> statsList = orderRepository.findStatisticsFinancialsAndTypes(customerId);
         BigDecimal totalSpend = BigDecimal.ZERO;
         BigDecimal totalDiscounts = BigDecimal.ZERO;
-        if (financialsList != null && !financialsList.isEmpty()) {
-            Object[] financials = financialsList.get(0);
-            totalSpend = financials != null && financials[0] != null
-                    ? new BigDecimal(financials[0].toString()) : BigDecimal.ZERO;
-            totalDiscounts = financials != null && financials.length > 1 && financials[1] != null
-                    ? new BigDecimal(financials[1].toString()) : BigDecimal.ZERO;
+        long qrCount = 0, deliveryCount = 0, pickupCount = 0;
+        
+        for (Object[] row : statsList) {
+            OrderType type = (OrderType) row[0];
+            long count = ((Number) row[1]).longValue();
+            
+            // Add to totals (these are repeated for each row, but we can just take it or sum it? 
+            // Wait, the query groups by orderType, so SUM(finalAmount) is the sum FOR THAT TYPE.
+            // We need to sum them all up to get the total!
+            totalSpend = totalSpend.add(new BigDecimal(row[2].toString()));
+            totalDiscounts = totalDiscounts.add(new BigDecimal(row[3].toString()));
+            
+            if (type == null) continue;
+            switch (type) {
+                case QR -> qrCount = count;
+                case ONLINE_DELIVERY -> deliveryCount = count;
+                case ONLINE_PICKUP -> pickupCount = count;
+            }
         }
 
         // 2. Monthly spending trend (last 6 months)
@@ -242,23 +264,19 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
                     .build());
         }
 
-        // 4. Order type breakdown
-        List<Object[]> typeCounts = orderRepository.findOrderTypeCounts(customerId);
-        long qrCount = 0, deliveryCount = 0, pickupCount = 0;
-        for (Object[] row : typeCounts) {
-            OrderType type = (OrderType) row[0];
-            long count = ((Number) row[1]).longValue();
-            if (type == null) continue;
-            switch (type) {
-                case QR -> qrCount = count;
-                case ONLINE_DELIVERY -> deliveryCount = count;
-                case ONLINE_PICKUP -> pickupCount = count;
+        // 5. Loyalty Points (Combined query)
+        List<Object[]> pointsList = loyaltyTransactionRepository.findStatisticsPoints(customerId);
+        Integer pointsEarned = 0;
+        Integer pointsRedeemed = 0;
+        for (Object[] row : pointsList) {
+            com.ByteKnights.com.resturarent_system.entity.LoyaltyTransactionType type = (com.ByteKnights.com.resturarent_system.entity.LoyaltyTransactionType) row[0];
+            Integer points = ((Number) row[1]).intValue();
+            if (type == com.ByteKnights.com.resturarent_system.entity.LoyaltyTransactionType.EARN) {
+                pointsEarned = points;
+            } else if (type == com.ByteKnights.com.resturarent_system.entity.LoyaltyTransactionType.REDEEM) {
+                pointsRedeemed = points;
             }
         }
-
-        // 5. Loyalty
-        Integer pointsEarned = loyaltyTransactionRepository.sumPointsEarned(customerId);
-        Integer pointsRedeemed = loyaltyTransactionRepository.sumPointsRedeemed(customerId);
 
         // 6. Total items ever ordered
         Long totalItems = orderItemRepository.countTotalItemsByCustomer(customerId);
@@ -274,8 +292,53 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
                 .currentLoyaltyPoints(customer.getLoyaltyPoints() != null ? customer.getLoyaltyPoints() : 0)
                 .totalPointsEarned(pointsEarned != null ? pointsEarned : 0)
                 .totalPointsRedeemed(pointsRedeemed != null ? pointsRedeemed : 0)
-                .memberSince(user.getCreatedAt())
+                .memberSince(customer.getUser().getCreatedAt())
                 .totalItemsOrdered(totalItems != null ? totalItems : 0L)
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void requestEmailVerification(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
+
+        Customer customer = customerRepository.findByUser(user)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "Customer not found"));
+
+        if (customer.getEmailVerified() != null && customer.getEmailVerified()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Email is already verified");
+        }
+
+        // Delete any existing tokens for this customer
+        emailVerificationTokenRepository.deleteByCustomer(customer);
+
+        EmailVerificationToken token = EmailVerificationToken.builder()
+                .customer(customer)
+                .expiresAt(java.time.LocalDateTime.now().plusHours(24))
+                .build();
+
+        emailVerificationTokenRepository.save(token);
+
+        String verificationLink = frontendUrl + "/verify-email?token=" + token.getToken();
+        emailService.sendCustomerEmailVerification(user.getEmail(), verificationLink);
+    }
+
+    @Override
+    @Transactional
+    public void verifyEmail(String tokenStr) {
+        EmailVerificationToken token = emailVerificationTokenRepository.findByToken(tokenStr)
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.BAD_REQUEST, "Invalid or expired verification token"));
+
+        if (token.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+            emailVerificationTokenRepository.delete(token);
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Verification token has expired");
+        }
+
+        Customer customer = token.getCustomer();
+        customer.setEmailVerified(true);
+        customerRepository.save(customer);
+
+        emailVerificationTokenRepository.delete(token);
     }
 }

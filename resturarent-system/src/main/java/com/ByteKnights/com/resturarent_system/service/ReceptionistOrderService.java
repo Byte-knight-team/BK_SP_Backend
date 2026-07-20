@@ -10,7 +10,7 @@ public interface ReceptionistOrderService {
     void sendToKitchen(Long orderId, String userEmail);
     void holdOrder(Long orderId, String reason, String userEmail);
     void cancelOrder(Long orderId, String reason, String userEmail);
-    void collectPayment(Long orderId, String userEmail);
+    void collectPayment(Long orderId, java.math.BigDecimal cashReceived, String userEmail);
     void serveOrder(Long orderId, String userEmail);
     void serveOrderItem(Long itemId, String userEmail);
 }

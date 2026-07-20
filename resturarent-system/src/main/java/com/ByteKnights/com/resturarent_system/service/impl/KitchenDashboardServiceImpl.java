@@ -41,7 +41,9 @@ public class KitchenDashboardServiceImpl implements KitchenDashboardService {
 
         long pending = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PENDING, startOfToday);
         long preparing = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.PREPARING, startOfToday);
-        long completed = orderRepository.countByBranchIdAndStatusAndCreatedAtAfter(branchId, OrderStatus.COMPLETED, startOfToday);
+        // All orders finished today: done cooking (COMPLETED) + already handed over (SERVED)
+        long completed = orderRepository.countByBranchIdAndStatusInAndCreatedAtAfter(
+                branchId, List.of(OrderStatus.COMPLETED, OrderStatus.SERVED), startOfToday);
 
         Double avgTime = orderRepository.getAveragePreparationTimeTodayByBranch(branchId, startOfToday);
 

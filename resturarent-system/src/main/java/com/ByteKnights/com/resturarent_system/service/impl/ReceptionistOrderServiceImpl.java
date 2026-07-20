@@ -36,6 +36,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final CouponUsageRepository couponUsageRepository;
     private final CouponRepository couponRepository;
     private final PaymentRepository paymentRepository;
+    private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
+    private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -158,6 +160,12 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 ? order.getFinalAmount().doubleValue()
                 : order.getTotalAmount().doubleValue();
 
+        Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order).orElse(null);
+        Double cashReceived = (payment != null && payment.getCashReceived() != null)
+                ? payment.getCashReceived().doubleValue() : null;
+        Double changeReturned = (payment != null && payment.getChangeReturned() != null)
+                ? payment.getChangeReturned().doubleValue() : null;
+
         return new ReceptionistOrderDetailDTO(
                 order.getId(),
                 order.getOrderNumber(),
@@ -179,6 +187,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 order.getDiscountAmount() != null ? order.getDiscountAmount().doubleValue() : 0,
                 order.getAppliedCouponCode(),
                 finalAmount,
+                cashReceived,
+                changeReturned,
                 order.getKitchenNotes(),
                 order.getHoldReason(),
                 order.getCancelReason()
@@ -247,6 +257,11 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         Order savedOrder = orderRepository.save(order);
 
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+
+        // QR order held → remove it from the receptionist table monitor live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            webSocketNotificationService.broadcastTableUpdate(actorBranchId);
+        }
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
@@ -344,6 +359,28 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
+        // Send Cancelled Email (Async)
+        if (savedOrder.getCustomer() != null && savedOrder.getCustomer().getUser() != null && savedOrder.getCustomer().getUser().getEmail() != null) {
+            final String toEmail = savedOrder.getCustomer().getUser().getEmail();
+            final String orderNum = savedOrder.getOrderNumber();
+            final String branchName = savedOrder.getBranch() != null ? savedOrder.getBranch().getName() : "Crave House";
+            final String finalReason = reason != null ? reason : "Cancelled by restaurant staff";
+
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String html = emailTemplateService.buildOrderCancelledHtml(orderNum, branchName, finalReason);
+                    emailService.sendHtmlEmail(toEmail, "Order Cancelled — " + orderNum, html);
+                } catch (Exception e) {
+                    // Ignore
+                }
+            });
+        }
+
+        // QR order cancelled → remove it from the receptionist table monitor live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            webSocketNotificationService.broadcastTableUpdate(actorBranchId);
+        }
+
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
                 AuditEventType.ORDER_CANCELLED,
@@ -361,7 +398,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     // ── COLLECT CASH PAYMENT ─────────────────────────────────────────────
     @Override
     @Transactional
-    public void collectPayment(Long orderId, String userEmail) {
+    public void collectPayment(Long orderId, java.math.BigDecimal cashReceived, String userEmail) {
         Long actorBranchId = getBranchId(userEmail);
 
         Order order = orderRepository.findById(orderId)
@@ -379,15 +416,30 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
                 ? savedOrder.getFinalAmount()
                 : savedOrder.getTotalAmount();
 
-        Payment payment = Payment.builder()
-                .order(savedOrder)
-                .paymentMethod(PaymentMethod.CASH)
-                .paymentStatus(PaymentStatus.PAID)
-                .amount(amount)
-                .paidAt(LocalDateTime.now())
-                .build();
+        BigDecimal changeReturned = (cashReceived != null && cashReceived.compareTo(amount) > 0)
+                ? cashReceived.subtract(amount)
+                : BigDecimal.ZERO;
+
+        // Reuse the payment row created when the order was placed (don't insert a second one).
+        // Only create a fresh row if none exists yet.
+        Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(savedOrder)
+                .orElseGet(() -> Payment.builder().order(savedOrder).build());
+        payment.setPaymentMethod(PaymentMethod.CASH);
+        payment.setPaymentStatus(PaymentStatus.PAID);
+        payment.setAmount(amount);
+        payment.setCashReceived(cashReceived);
+        payment.setChangeReturned(changeReturned);
+        payment.setPaidAt(LocalDateTime.now());
 
         paymentRepository.save(payment);
+
+        // QR order: refresh the table monitor so the payment badge flips to "Paid" live
+        if (savedOrder.getOrderType() == OrderType.QR) {
+            Long paymentBranchId = getOrderBranchId(savedOrder);
+            if (paymentBranchId != null) {
+                webSocketNotificationService.broadcastTableUpdate(paymentBranchId);
+            }
+        }
 
         auditLogService.logCurrentUserAction(
                 AuditModule.PAYMENT,
@@ -431,6 +483,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         Order savedOrder = orderRepository.save(order);
 
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+        sendServedEmailAsync(savedOrder);
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
@@ -472,8 +525,15 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         if (allServed) {
             order.updateStatus(OrderStatus.SERVED);
-            orderRepository.save(order);
-            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+            Order savedOrder = orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+            sendServedEmailAsync(savedOrder);
+        }
+
+        // Refresh the receptionist table monitor so the ready indicator updates/disappears live
+        Long tableBranchId = getOrderBranchId(order);
+        if (tableBranchId != null) {
+            webSocketNotificationService.broadcastTableUpdate(tableBranchId);
         }
 
         Map<String, Object> newValues = new LinkedHashMap<>();
@@ -590,5 +650,23 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         snapshot.put("menuItemId", item.getMenuItem() != null ? item.getMenuItem().getId() : null);
 
         return snapshot;
+    }
+
+    private void sendServedEmailAsync(Order order) {
+        if (order.getCustomer() != null && order.getCustomer().getUser() != null && order.getCustomer().getUser().getEmail() != null) {
+            final String toEmail = order.getCustomer().getUser().getEmail();
+            final String orderNum = order.getOrderNumber();
+            final String branchName = order.getBranch() != null ? order.getBranch().getName() : "Crave House";
+            final BigDecimal finalAmount = order.getFinalAmount();
+
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String html = emailTemplateService.buildOrderServedHtml(orderNum, branchName, finalAmount);
+                    emailService.sendHtmlEmail(toEmail, "Order Complete — " + orderNum, html);
+                } catch (Exception e) {
+                    // Ignore
+                }
+            });
+        }
     }
 }

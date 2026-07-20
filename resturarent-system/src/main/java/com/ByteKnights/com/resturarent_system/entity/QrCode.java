@@ -17,6 +17,19 @@ import java.time.LocalDateTime;
 @Builder
 public class QrCode {
 
+    /**
+     * Represents a QR code issued for a specific table in a branch.
+     *
+     * Key lifecycle fields:
+     * - `active` determines whether the QR is currently accepted by the system.
+     * - `lastGeneratedAt` captures when this QR was created (or regenerated).
+     * - `revokedAt` / `revokedReason` record administrative revocations.
+     *
+     * The actual QR image is not stored; instead the DB row represents the
+     * logical QR. The image is generated on demand from a URL that contains
+     * a signed token referencing this entity.
+     */
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

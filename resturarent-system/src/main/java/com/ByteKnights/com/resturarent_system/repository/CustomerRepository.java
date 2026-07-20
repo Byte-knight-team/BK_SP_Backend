@@ -12,12 +12,16 @@ import java.util.Optional;
 
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, Long> {
+    Optional<Customer> findByUserId(Long userId);
 
     Optional<Customer> findByUser(User user);
 
     Optional<Customer> findByUserPhone(String userIdentifier);
 
     Optional<Customer> findByUserEmail(String userIdentifier);
+
+    @Query("SELECT c FROM Customer c JOIN FETCH c.user u WHERE u.email = :identifier OR u.phone = :identifier")
+    Optional<Customer> findByUserEmailOrUserPhone(String identifier);
 
     /*
      * Used by SUPER_ADMIN customer management.

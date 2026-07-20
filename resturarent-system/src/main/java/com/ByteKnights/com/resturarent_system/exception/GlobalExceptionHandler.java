@@ -15,6 +15,7 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    // Used when customer authentication fails
     @ExceptionHandler(CustomerAuthException.class)
     public ResponseEntity<ApiResponse<Object>> handleCustomerAuthException(CustomerAuthException ex) {
         log.warn("Customer auth error: {}", ex.getMessage(), ex);
@@ -22,6 +23,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    // Used when QR session is not found or invalid
     @ExceptionHandler(QrSessionException.class)
     public ResponseEntity<ApiResponse<Object>> handleQrSessionException(QrSessionException ex) {
         log.warn("QR session error: {}", ex.getMessage(), ex);
@@ -60,6 +62,15 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Access Denied"));
     }
 
+    // Used when payment gateway throws an exception
+    @ExceptionHandler(PaymentGatewayException.class)
+    public ResponseEntity<ApiResponse<Object>> handlePaymentGatewayException(PaymentGatewayException ex) {
+        log.error("Payment Gateway Error: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // Used when database access fails
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ApiResponse<Object>> handleDataAccessException(DataAccessException ex) {
         log.error("Database error occurred: {}", ex.getMessage(), ex);
@@ -67,6 +78,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("An unexpected error occurred. Please try again later."));
     }
 
+    // Used when null pointer exception occurs
     @ExceptionHandler(NullPointerException.class)
     public ResponseEntity<ApiResponse<Object>> handleNullPointerException(NullPointerException ex) {
         log.error("Null pointer exception occurred", ex);
@@ -82,6 +94,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
+    // Used when generic exception occurs
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGenericException(Exception ex) {
         log.error("Unhandled exception", ex);

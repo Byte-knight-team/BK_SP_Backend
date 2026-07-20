@@ -29,6 +29,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.*;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
+
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -49,6 +52,11 @@ public class OrderServiceImpl implements OrderService {
         private final InventoryItemRepository inventoryItemRepository;
         private final InventoryTransactionRepository inventoryTransactionRepository;
         private final WebSocketNotificationService webSocketNotificationService;
+        private final ReservationRepository reservationRepository;
+        private final SystemConfigService systemConfigService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
+        private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -60,7 +68,12 @@ public class OrderServiceImpl implements OrderService {
                         MenuItemIngredientRepository menuItemIngredientRepository,
                         InventoryItemRepository inventoryItemRepository,
                         InventoryTransactionRepository inventoryTransactionRepository,
-                        WebSocketNotificationService webSocketNotificationService) {
+                        WebSocketNotificationService webSocketNotificationService,
+                        ReservationRepository reservationRepository,
+                        SystemConfigService systemConfigService,
+                        com.ByteKnights.com.resturarent_system.service.email.EmailService emailService,
+                        com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService,
+                        com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -77,6 +90,11 @@ public class OrderServiceImpl implements OrderService {
                 this.inventoryItemRepository = inventoryItemRepository;
                 this.inventoryTransactionRepository = inventoryTransactionRepository;
                 this.webSocketNotificationService = webSocketNotificationService;
+                this.reservationRepository = reservationRepository;
+                this.systemConfigService = systemConfigService;
+                this.emailService = emailService;
+                this.emailTemplateService = emailTemplateService;
+                this.stripePaymentService = stripePaymentService;
         }
 
         @Override
@@ -98,6 +116,26 @@ public class OrderServiceImpl implements OrderService {
                         throw new CheckoutException(HttpStatus.BAD_REQUEST, "This branch is currently closed and not accepting orders.");
                 }
 
+                BranchConfigCacheDto branchConfig = systemConfigService.getCachedBranchConfig(request.getBranchId());
+
+                if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
+                        if (request.getLatitude() == null || request.getLongitude() == null) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
+                        }
+                        if (branch.getLatitude() == null || branch.getLongitude() == null) {
+                                throw new CheckoutException(HttpStatus.INTERNAL_SERVER_ERROR, "Branch location is not configured properly.");
+                        }
+                        double distance = com.ByteKnights.com.resturarent_system.util.DistanceUtil.calculateDistance(
+                                branch.getLatitude(), branch.getLongitude(),
+                                request.getLatitude(), request.getLongitude()
+                        );
+                        if (distance > branchConfig.getMaxDeliveryRadiusKm()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, 
+                                        String.format("Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.", 
+                                                branchConfig.getMaxDeliveryRadiusKm(), distance));
+                        }
+                }
+
                 RestaurantTable table = null;
                 if (OrderType.QR.name().equals(request.getOrderType())) {
                         if (request.getTableId() == null)
@@ -111,17 +149,54 @@ public class OrderServiceImpl implements OrderService {
                                                 "QR session ID is required for table orders.");
                         }
                         qrSessionService.validateActiveSession(request.getQrSessionId());
+
+                        // Check if table is occupied
+                        if (table.getState() != TableStatus.OCCUPIED) {
+                                throw new CheckoutException(HttpStatus.FORBIDDEN, 
+                                        "Orders can only be placed when the table is marked as OCCUPIED. Please wait for a staff member to seat you.");
+                        }
+
+                        if (table.getSeatedReservationId() != null) {
+                                Reservation activeReservation = reservationRepository.findById(table.getSeatedReservationId())
+                                                .orElseThrow(() -> new ResourceNotFoundException("Active reservation not found"));
+                                                
+                                if (!activeReservation.getCustomer().getId().equals(customer.getId())) {
+                                        throw new CheckoutException(HttpStatus.FORBIDDEN, 
+                                                "This table is currently reserved by another customer. Only the reservation holder can place orders.");
+                                }
+                        }
                 }
+
+                // Batch-load menu items and ingredients to prevent N+1 queries
+                List<Long> requestedItemIds = request.getItems().stream()
+                        .map(PlaceOrderRequest.PlaceOrderItemRequest::getMenuItemId)
+                        .collect(Collectors.toList());
+                        
+                List<MenuItem> dbMenuItems = menuItemRepository.findAllById(requestedItemIds);
+                Map<Long, MenuItem> menuItemMap = dbMenuItems.stream()
+                        .collect(Collectors.toMap(MenuItem::getId, item -> item));
+                        
+                List<MenuItemIngredient> allIngredients = menuItemIngredientRepository.findByMenuItemIdIn(requestedItemIds);
+                Map<Long, List<MenuItemIngredient>> ingredientMap = allIngredients.stream()
+                        .collect(Collectors.groupingBy(ing -> ing.getMenuItem().getId()));
 
                 // 2.5 Pre-Order Inventory Validation & Aggregation
                 Map<Long, BigDecimal> requiredIngredients = new HashMap<>();
                 Map<Long, InventoryItem> inventoryItemCache = new HashMap<>();
                 
                 for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
-                        MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId())
-                                        .orElseThrow(() -> new ResourceNotFoundException("Menu item not found"));
+                        MenuItem dbItem = menuItemMap.get(itemReq.getMenuItemId());
+                        if (dbItem == null) {
+                            throw new ResourceNotFoundException("Menu item not found");
+                        }
+                        if (Boolean.FALSE.equals(dbItem.getIsAvailable()) || dbItem.getStatus() != MenuItemStatus.ACTIVE) {
+                            throw new CheckoutException(HttpStatus.BAD_REQUEST, dbItem.getName() + " is currently unavailable or inactive.");
+                        }
+                        if (!"ACTIVE".equals(dbItem.getCategory().getStatus())) {
+                            throw new CheckoutException(HttpStatus.BAD_REQUEST, dbItem.getName() + " belongs to an inactive category.");
+                        }
                                         
-                        List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(dbItem.getId());
+                        List<MenuItemIngredient> ingredients = ingredientMap.getOrDefault(dbItem.getId(), List.of());
                         
                         for (MenuItemIngredient ingredient : ingredients) {
                                 InventoryItem invItem = ingredient.getInventoryItem();
@@ -154,6 +229,8 @@ public class OrderServiceImpl implements OrderService {
                 calcRequest.setBranchId(request.getBranchId());
                 calcRequest.setCouponCode(request.getCouponCode());
                 calcRequest.setRedeemLoyaltyPoints(request.getRedeemLoyaltyPoints());
+                calcRequest.setLatitude(request.getLatitude());
+                calcRequest.setLongitude(request.getLongitude());
                 calcRequest.setItems(request.getItems().stream()
                                 .map(item -> {
                                         CheckoutCalculateRequest.CartItemRequest calcItem = new CheckoutCalculateRequest.CartItemRequest();
@@ -196,7 +273,7 @@ public class OrderServiceImpl implements OrderService {
 
                 // 5. Add Items to Order
                 for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
-                        MenuItem dbItem = menuItemRepository.findById(itemReq.getMenuItemId()).orElseThrow();
+                        MenuItem dbItem = menuItemMap.get(itemReq.getMenuItemId());
                         OrderItem orderItem = new OrderItem();
                         orderItem.setMenuItem(dbItem);
                         orderItem.setItemName(dbItem.getName());
@@ -288,6 +365,34 @@ public class OrderServiceImpl implements OrderService {
 
                 // 10. Map Items and Return Detailed Response
                 webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+                webSocketNotificationService.broadcastNewReceptionistOrder(
+                        savedOrder.getBranch().getId(),
+                        savedOrder.getOrderNumber(),
+                        savedOrder.getOrderType().name(),
+                        savedOrder.getId()
+                );
+
+                // 11. Send Order Placed Email (Async)
+                if (customer.getUser() != null && customer.getUser().getEmail() != null) {
+                        final String toEmail = customer.getUser().getEmail();
+                        final String orderNum = savedOrder.getOrderNumber();
+                        final String branchName = savedOrder.getBranch() != null ? savedOrder.getBranch().getName() : "Crave House";
+                        final BigDecimal finalAmount = savedOrder.getFinalAmount();
+                        final String typeStr = savedOrder.getOrderType().name();
+                        final String itemsSummary = savedOrder.getItems().stream()
+                                        .map(i -> i.getQuantity() + "x " + i.getItemName())
+                                        .collect(Collectors.joining("\n"));
+                        final String paymentMethod = request.getPaymentMethod() != null ? request.getPaymentMethod().name() : "UNKNOWN";
+                        
+                        java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                try {
+                                        String html = emailTemplateService.buildOrderPlacedHtml(orderNum, branchName, itemsSummary, finalAmount, typeStr, paymentMethod);
+                                        emailService.sendHtmlEmail(toEmail, "Order Placed — " + orderNum, html);
+                                } catch (Exception e) {
+                                        // Ignore
+                                }
+                        });
+                }
 
                 return OrderPlacementResponse.builder()
                                 .orderId(savedOrder.getId())
@@ -298,7 +403,7 @@ public class OrderServiceImpl implements OrderService {
 
         // helper method to convert order entity to response
         private OrderResponse mapToOrderResponse(Order order) {
-                Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order).orElse(null);
 
                 java.util.List<OrderResponse.OrderItemResponse> itemResponses = order.getItems().stream()
                                 .map(item -> OrderResponse.OrderItemResponse.builder()
@@ -360,44 +465,69 @@ public class OrderServiceImpl implements OrderService {
         @Override
         @Transactional
         public void updatePaymentStatus(Long orderId, PaymentUpdateRequest request) {
-                // 1. Find the Order
                 Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-                // 2. Find the Payment attached to this Order
-                Payment payment = paymentRepository.findByOrder(order)
-                                .orElseThrow(() -> new ResourceNotFoundException("Payment record not found"));
-
-                // 3. Update the fields based on the React payload
-                payment.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
-                order.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
-
-                if (request.getTransactionId() != null) {
-                        payment.setTransactionReference(request.getTransactionId());
-                }
-
-                // 4. If the payment is completed, stamp the exact time
                 if ("PAID".equalsIgnoreCase(request.getPaymentStatus())) {
-                        payment.setPaidAt(LocalDateTime.now());
+                        order.setPaymentStatus(PaymentStatus.PAID);
+                        
+                        Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order).orElse(null);
+                        if (payment == null) {
+                                payment = Payment.builder()
+                                        .order(order)
+                                        .paymentMethod(PaymentMethod.CARD)
+                                        .paymentStatus(PaymentStatus.PAID)
+                                        .transactionReference(request.getTransactionId())
+                                        .amount(order.getFinalAmount())
+                                        .paidAt(LocalDateTime.now())
+                                        .build();
+                        } else {
+                                payment.setPaymentStatus(PaymentStatus.PAID);
+                                payment.setTransactionReference(request.getTransactionId());
+                                payment.setPaidAt(LocalDateTime.now());
+                        }
+                        paymentRepository.save(payment);
+                        
+                        Customer c = order.getCustomer();
+                        if (c != null && order.getFinalAmount() != null) {
+                                BigDecimal currentSpent = c.getTotalSpent() != null ? c.getTotalSpent() : BigDecimal.ZERO;
+                                c.setTotalSpent(currentSpent.add(order.getFinalAmount()));
+                                customerRepository.save(c);
+                        }
+            
+                        if (order.getId() != null && order.getStatus() != null) {
+                    webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
                 }
-
-                // 5. Save both the payment AND the order back to the database
-                paymentRepository.save(payment);
+                        
+                        if (c != null && c.getUser() != null) {
+                                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                        try {
+                                                emailService.sendSimpleEmail(c.getUser().getEmail(), "Order Payment Successful",
+                                                        "Your payment for order " + order.getOrderNumber() + " was successful.");
+                                        } catch (Exception e) {}
+                                });
+                        }
+                } else if ("FAILED".equalsIgnoreCase(request.getPaymentStatus())) {
+                        order.setPaymentStatus(PaymentStatus.FAILED);
+                }
                 orderRepository.save(order);
         }
 
         @Override
+        @Transactional(readOnly = true)
         public List<OrderResponse> getCustomerOrders(String userIdentifier) {
                 return getCustomerOrders(userIdentifier, null, null);
         }
 
         @Override
+        @Transactional(readOnly = true)
         public List<OrderResponse> getCustomerOrders(String userIdentifier, String orderTypeFilter, Boolean isActive) {
                 return getCustomerOrdersPage(userIdentifier, orderTypeFilter, isActive, 0, Integer.MAX_VALUE)
                                 .getOrders();
         }
 
         @Override
+        @Transactional(readOnly = true)
         public CustomerOrdersPageResponse getCustomerOrdersPage(String userIdentifier, String orderTypeFilter,
                         Boolean isActive, int page, int size) {
                 Customer customer = customerRepository.findByUserPhone(userIdentifier)
@@ -447,6 +577,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         @Override
+        @Transactional(readOnly = true)
         public OrderResponse getCustomerOrderById(String userIdentifier, Long orderId) {
                 Customer customer = customerRepository.findByUserPhone(userIdentifier)
                                 .orElseGet(() -> customerRepository.findByUserEmail(userIdentifier)
@@ -477,6 +608,53 @@ public class OrderServiceImpl implements OrderService {
                                 && order.getStatus() != OrderStatus.ON_HOLD) {
                         throw new CheckoutException(HttpStatus.BAD_REQUEST,
                                         "Cannot cancel an order that is already preparing, completed, or cancelled.");
+                }
+
+                executeOrderCancellation(order, cancelReason);
+        }
+
+        @Override
+        @Transactional
+        public void expireAbandonedOrder(Long orderId) {
+                Order order = orderRepository.findById(orderId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                
+                if (order.getStatus() == OrderStatus.PLACED && order.getPaymentStatus() != PaymentStatus.PAID) {
+                        executeOrderCancellation(order, "Automated cancellation due to checkout timeout / unpaid payment.");
+                }
+        }
+
+        private void executeOrderCancellation(Order order, String cancelReason) {
+                Customer customer = order.getCustomer();
+
+                // Stripe automated refund for paid card orders
+                if (order.getPaymentStatus() == PaymentStatus.PAID || order.getPaymentStatus() == PaymentStatus.SUCCESS) {
+                        Payment payment = paymentRepository.findByOrderOrderByIdAsc(order).stream().filter(p -> p.getPaymentStatus() == PaymentStatus.PAID || p.getPaymentStatus() == PaymentStatus.SUCCESS).findFirst().orElse(null);
+                        if (payment != null && payment.getPaymentMethod() == PaymentMethod.CARD && payment.getTransactionReference() != null) {
+                                String idempotencyKey = "order-cancel-" + order.getId();
+                                java.util.Map<String, String> metadata = new java.util.HashMap<>();
+                                metadata.put("orderId", String.valueOf(order.getId()));
+                                metadata.put("cancelReason", cancelReason);
+
+                                boolean refundSuccess = stripePaymentService.refundPayment(
+                                        payment.getTransactionReference(),
+                                        null, // Full refund
+                                        idempotencyKey,
+                                        "requested_by_customer",
+                                        metadata
+                                );
+
+                                if (refundSuccess) {
+                                        payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                                        order.setPaymentStatus(PaymentStatus.REFUNDED);
+                                        webSocketNotificationService.broadcastOrderPaymentStatusUpdate(order.getId(), PaymentStatus.REFUNDED.name());
+                                } else {
+                                        payment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                                        order.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                                        webSocketNotificationService.broadcastOrderPaymentStatusUpdate(order.getId(), PaymentStatus.REFUND_FAILED.name());
+                                }
+                                paymentRepository.save(payment);
+                        }
                 }
 
                 // Rollback loyalty points
@@ -537,23 +715,38 @@ public class OrderServiceImpl implements OrderService {
 
                 // Refund inventory
                 Map<Long, BigDecimal> refundIngredients = new HashMap<>();
-                for (OrderItem item : order.getItems()) {
-                        if (item.getMenuItem() != null) {
-                                List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(item.getMenuItem().getId());
-                                for (MenuItemIngredient ingredient : ingredients) {
-                                        InventoryItem invItem = ingredient.getInventoryItem();
-                                        if (invItem.getBranch().getId().equals(order.getBranch().getId())) {
-                                                BigDecimal amountToRefund = ingredient.getQuantityRequired()
-                                                                .multiply(BigDecimal.valueOf(item.getQuantity()));
-                                                refundIngredients.merge(invItem.getId(), amountToRefund, BigDecimal::add);
+                
+                // Batch load ingredients
+                List<Long> menuItemIds = order.getItems().stream()
+                        .filter(item -> item.getMenuItem() != null)
+                        .map(item -> item.getMenuItem().getId())
+                        .collect(Collectors.toList());
+                        
+                if (!menuItemIds.isEmpty()) {
+                        List<MenuItemIngredient> allIngredients = menuItemIngredientRepository.findByMenuItemIdIn(menuItemIds);
+                        Map<Long, List<MenuItemIngredient>> ingredientMap = allIngredients.stream()
+                                .collect(Collectors.groupingBy(ing -> ing.getMenuItem().getId()));
+                        
+                        for (OrderItem item : order.getItems()) {
+                                if (item.getMenuItem() != null) {
+                                        List<MenuItemIngredient> ingredients = ingredientMap.getOrDefault(item.getMenuItem().getId(), List.of());
+                                        for (MenuItemIngredient ingredient : ingredients) {
+                                                InventoryItem invItem = ingredient.getInventoryItem();
+                                                if (invItem.getBranch().getId().equals(order.getBranch().getId())) {
+                                                        BigDecimal amountToRefund = ingredient.getQuantityRequired()
+                                                                        .multiply(BigDecimal.valueOf(item.getQuantity()));
+                                                        refundIngredients.merge(invItem.getId(), amountToRefund, BigDecimal::add);
+                                                }
                                         }
                                 }
                         }
                 }
 
-                for (Map.Entry<Long, BigDecimal> entry : refundIngredients.entrySet()) {
-                        inventoryItemRepository.findById(entry.getKey()).ifPresent(invItem -> {
-                                BigDecimal refundAmount = entry.getValue();
+                // Batch load inventory items to refund
+                if (!refundIngredients.isEmpty()) {
+                        List<InventoryItem> invItems = inventoryItemRepository.findAllById(refundIngredients.keySet());
+                        for (InventoryItem invItem : invItems) {
+                                BigDecimal refundAmount = refundIngredients.get(invItem.getId());
                                 BigDecimal oldQuantity = invItem.getQuantity();
                                 BigDecimal newQuantity = oldQuantity.add(refundAmount);
                                 
@@ -571,12 +764,29 @@ public class OrderServiceImpl implements OrderService {
                                                 .notes("Automated refund for cancelled order " + order.getOrderNumber())
                                                 .build();
                                 inventoryTransactionRepository.save(tx);
-                        });
+                        }
                 }
 
                 order.setStatus(OrderStatus.CANCELLED);
                 order.setCancelReason(cancelReason);
                 orderRepository.save(order);
                 webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+
+                // Send Cancelled Email (Async)
+                if (customer.getUser() != null && customer.getUser().getEmail() != null) {
+                        final String toEmail = customer.getUser().getEmail();
+                        final String orderNum = order.getOrderNumber();
+                        final String branchName = order.getBranch() != null ? order.getBranch().getName() : "Crave House";
+                        final String finalReason = cancelReason != null ? cancelReason : "Cancelled by customer";
+                        
+                        java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                try {
+                                        String html = emailTemplateService.buildOrderCancelledHtml(orderNum, branchName, finalReason);
+                                        emailService.sendHtmlEmail(toEmail, "Order Cancelled — " + orderNum, html);
+                                } catch (Exception e) {
+                                        // Ignore
+                                }
+                        });
+                }
         }
 }
