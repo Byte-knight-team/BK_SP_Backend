@@ -104,7 +104,33 @@ public class StripeWebhookServiceImpl implements StripeWebhookService {
             }
         } else if ("payment_intent.payment_failed".equals(event.getType())) {
             log.warn("Stripe Payment Failed for Event ID: {}", event.getId());
-            // Optional: You could update order status to FAILED here in the future
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(payload);
+                com.fasterxml.jackson.databind.JsonNode objectNode = root.path("data").path("object");
+                
+                String transactionId = objectNode.path("id").asText(null);
+                com.fasterxml.jackson.databind.JsonNode metadata = objectNode.path("metadata");
+                
+                if (transactionId != null && !metadata.isMissingNode()) {
+                    String orderIdStr = metadata.path("orderId").asText(null);
+                    
+                    if (orderIdStr != null && !orderIdStr.isBlank() && !"null".equals(orderIdStr)) {
+                        try {
+                            Long orderId = Long.parseLong(orderIdStr);
+                            com.ByteKnights.com.resturarent_system.dto.request.customer.PaymentUpdateRequest request = new com.ByteKnights.com.resturarent_system.dto.request.customer.PaymentUpdateRequest();
+                            request.setPaymentStatus("FAILED");
+                            request.setTransactionId(transactionId);
+                            orderService.updatePaymentStatus(orderId, request);
+                            log.info("Marked Order #{} payment as FAILED. Waiting for retry or automated cleanup.", orderId);
+                        } catch (Exception e) {
+                            log.error("Failed to mark Order #{} as FAILED from Webhook.", orderIdStr, e);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Failed to parse failed Stripe webhook payload", e);
+            }
         } else {
             log.debug("Unhandled Stripe webhook event type: {}", event.getType());
         }

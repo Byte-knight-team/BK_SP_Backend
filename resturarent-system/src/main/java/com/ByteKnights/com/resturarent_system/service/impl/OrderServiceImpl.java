@@ -606,6 +606,23 @@ public class OrderServiceImpl implements OrderService {
                                         "Cannot cancel an order that is already preparing, completed, or cancelled.");
                 }
 
+                executeOrderCancellation(order, cancelReason);
+        }
+
+        @Override
+        @Transactional
+        public void expireAbandonedOrder(Long orderId) {
+                Order order = orderRepository.findById(orderId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                
+                if (order.getStatus() == OrderStatus.PLACED && order.getPaymentStatus() != PaymentStatus.PAID) {
+                        executeOrderCancellation(order, "Automated cancellation due to checkout timeout / unpaid payment.");
+                }
+        }
+
+        private void executeOrderCancellation(Order order, String cancelReason) {
+                Customer customer = order.getCustomer();
+
                 // Rollback loyalty points
                 if (!loyaltyTransactionRepository.existsByOrderAndTransactionType(order,
                                 LoyaltyTransactionType.REFUND)) {
