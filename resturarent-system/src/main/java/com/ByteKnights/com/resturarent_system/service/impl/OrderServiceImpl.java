@@ -54,6 +54,9 @@ public class OrderServiceImpl implements OrderService {
         private final WebSocketNotificationService webSocketNotificationService;
         private final ReservationRepository reservationRepository;
         private final SystemConfigService systemConfigService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
+        private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
+        private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -67,7 +70,10 @@ public class OrderServiceImpl implements OrderService {
                         InventoryTransactionRepository inventoryTransactionRepository,
                         WebSocketNotificationService webSocketNotificationService,
                         ReservationRepository reservationRepository,
-                        SystemConfigService systemConfigService) {
+                        SystemConfigService systemConfigService,
+                        com.ByteKnights.com.resturarent_system.service.email.EmailService emailService,
+                        com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService,
+                        com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -86,6 +92,9 @@ public class OrderServiceImpl implements OrderService {
                 this.webSocketNotificationService = webSocketNotificationService;
                 this.reservationRepository = reservationRepository;
                 this.systemConfigService = systemConfigService;
+                this.emailService = emailService;
+                this.emailTemplateService = emailTemplateService;
+                this.stripePaymentService = stripePaymentService;
         }
 
         @Override
@@ -363,6 +372,28 @@ public class OrderServiceImpl implements OrderService {
                         savedOrder.getId()
                 );
 
+                // 11. Send Order Placed Email (Async)
+                if (customer.getUser() != null && customer.getUser().getEmail() != null) {
+                        final String toEmail = customer.getUser().getEmail();
+                        final String orderNum = savedOrder.getOrderNumber();
+                        final String branchName = savedOrder.getBranch() != null ? savedOrder.getBranch().getName() : "Crave House";
+                        final BigDecimal finalAmount = savedOrder.getFinalAmount();
+                        final String typeStr = savedOrder.getOrderType().name();
+                        final String itemsSummary = savedOrder.getItems().stream()
+                                        .map(i -> i.getQuantity() + "x " + i.getItemName())
+                                        .collect(Collectors.joining("\n"));
+                        final String paymentMethod = request.getPaymentMethod() != null ? request.getPaymentMethod().name() : "UNKNOWN";
+                        
+                        java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                try {
+                                        String html = emailTemplateService.buildOrderPlacedHtml(orderNum, branchName, itemsSummary, finalAmount, typeStr, paymentMethod);
+                                        emailService.sendHtmlEmail(toEmail, "Order Placed — " + orderNum, html);
+                                } catch (Exception e) {
+                                        // Ignore
+                                }
+                        });
+                }
+
                 return OrderPlacementResponse.builder()
                                 .orderId(savedOrder.getId())
                                 .orderNumber(savedOrder.getOrderNumber())
@@ -434,29 +465,51 @@ public class OrderServiceImpl implements OrderService {
         @Override
         @Transactional
         public void updatePaymentStatus(Long orderId, PaymentUpdateRequest request) {
-                // 1. Find the Order
                 Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-                // 2. Find the Payment attached to this Order
-                Payment payment = paymentRepository.findByOrder(order)
-                                .orElseThrow(() -> new ResourceNotFoundException("Payment record not found"));
-
-                // 3. Update the fields based on the React payload
-                payment.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
-                order.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
-
-                if (request.getTransactionId() != null) {
-                        payment.setTransactionReference(request.getTransactionId());
-                }
-
-                // 4. If the payment is completed, stamp the exact time
                 if ("PAID".equalsIgnoreCase(request.getPaymentStatus())) {
-                        payment.setPaidAt(LocalDateTime.now());
+                        order.setPaymentStatus(PaymentStatus.PAID);
+                        
+                        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                        if (payment == null) {
+                                payment = Payment.builder()
+                                        .order(order)
+                                        .paymentMethod(PaymentMethod.CARD)
+                                        .paymentStatus(PaymentStatus.PAID)
+                                        .transactionReference(request.getTransactionId())
+                                        .amount(order.getFinalAmount())
+                                        .paidAt(LocalDateTime.now())
+                                        .build();
+                        } else {
+                                payment.setPaymentStatus(PaymentStatus.PAID);
+                                payment.setTransactionReference(request.getTransactionId());
+                                payment.setPaidAt(LocalDateTime.now());
+                        }
+                        paymentRepository.save(payment);
+                        
+                        Customer c = order.getCustomer();
+                        if (c != null && order.getFinalAmount() != null) {
+                                BigDecimal currentSpent = c.getTotalSpent() != null ? c.getTotalSpent() : BigDecimal.ZERO;
+                                c.setTotalSpent(currentSpent.add(order.getFinalAmount()));
+                                customerRepository.save(c);
+                        }
+            
+                        if (order.getId() != null && order.getStatus() != null) {
+                    webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
                 }
-
-                // 5. Save both the payment AND the order back to the database
-                paymentRepository.save(payment);
+                        
+                        if (c != null && c.getUser() != null) {
+                                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                        try {
+                                                emailService.sendSimpleEmail(c.getUser().getEmail(), "Order Payment Successful",
+                                                        "Your payment for order " + order.getOrderNumber() + " was successful.");
+                                        } catch (Exception e) {}
+                                });
+                        }
+                } else if ("FAILED".equalsIgnoreCase(request.getPaymentStatus())) {
+                        order.setPaymentStatus(PaymentStatus.FAILED);
+                }
                 orderRepository.save(order);
         }
 
@@ -555,6 +608,53 @@ public class OrderServiceImpl implements OrderService {
                                 && order.getStatus() != OrderStatus.ON_HOLD) {
                         throw new CheckoutException(HttpStatus.BAD_REQUEST,
                                         "Cannot cancel an order that is already preparing, completed, or cancelled.");
+                }
+
+                executeOrderCancellation(order, cancelReason);
+        }
+
+        @Override
+        @Transactional
+        public void expireAbandonedOrder(Long orderId) {
+                Order order = orderRepository.findById(orderId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
+                
+                if (order.getStatus() == OrderStatus.PLACED && order.getPaymentStatus() != PaymentStatus.PAID) {
+                        executeOrderCancellation(order, "Automated cancellation due to checkout timeout / unpaid payment.");
+                }
+        }
+
+        private void executeOrderCancellation(Order order, String cancelReason) {
+                Customer customer = order.getCustomer();
+
+                // Stripe automated refund for paid card orders
+                if (order.getPaymentStatus() == PaymentStatus.PAID || order.getPaymentStatus() == PaymentStatus.SUCCESS) {
+                        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                        if (payment != null && payment.getPaymentMethod() == PaymentMethod.CARD && payment.getTransactionReference() != null) {
+                                String idempotencyKey = "order-cancel-" + order.getId();
+                                java.util.Map<String, String> metadata = new java.util.HashMap<>();
+                                metadata.put("orderId", String.valueOf(order.getId()));
+                                metadata.put("cancelReason", cancelReason);
+
+                                boolean refundSuccess = stripePaymentService.refundPayment(
+                                        payment.getTransactionReference(),
+                                        null, // Full refund
+                                        idempotencyKey,
+                                        "requested_by_customer",
+                                        metadata
+                                );
+
+                                if (refundSuccess) {
+                                        payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                                        order.setPaymentStatus(PaymentStatus.REFUNDED);
+                                        webSocketNotificationService.broadcastOrderPaymentStatusUpdate(order.getId(), PaymentStatus.REFUNDED.name());
+                                } else {
+                                        payment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                                        order.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                                        webSocketNotificationService.broadcastOrderPaymentStatusUpdate(order.getId(), PaymentStatus.REFUND_FAILED.name());
+                                }
+                                paymentRepository.save(payment);
+                        }
                 }
 
                 // Rollback loyalty points
@@ -671,5 +771,22 @@ public class OrderServiceImpl implements OrderService {
                 order.setCancelReason(cancelReason);
                 orderRepository.save(order);
                 webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+
+                // Send Cancelled Email (Async)
+                if (customer.getUser() != null && customer.getUser().getEmail() != null) {
+                        final String toEmail = customer.getUser().getEmail();
+                        final String orderNum = order.getOrderNumber();
+                        final String branchName = order.getBranch() != null ? order.getBranch().getName() : "Crave House";
+                        final String finalReason = cancelReason != null ? cancelReason : "Cancelled by customer";
+                        
+                        java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                try {
+                                        String html = emailTemplateService.buildOrderCancelledHtml(orderNum, branchName, finalReason);
+                                        emailService.sendHtmlEmail(toEmail, "Order Cancelled — " + orderNum, html);
+                                } catch (Exception e) {
+                                        // Ignore
+                                }
+                        });
+                }
         }
 }
