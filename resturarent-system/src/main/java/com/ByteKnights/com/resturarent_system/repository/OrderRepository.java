@@ -63,6 +63,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         Collection<PaymentStatus> paymentStatuses,
                         LocalDateTime start,
                         LocalDateTime end);
+                        
+        @Query("SELECT o FROM Order o JOIN Payment p ON p.order = o WHERE o.status = :status AND o.paymentStatus = :paymentStatus AND p.paymentMethod = :paymentMethod AND o.createdAt < :threshold")
+        List<Order> findByStatusAndPaymentStatusAndPaymentMethodAndCreatedAtBefore(
+                        @Param("status") OrderStatus status,
+                        @Param("paymentStatus") PaymentStatus paymentStatus,
+                        @Param("paymentMethod") com.ByteKnights.com.resturarent_system.entity.PaymentMethod paymentMethod,
+                        @Param("threshold") LocalDateTime threshold);
 
         List<Order> findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
                         Long branchId,

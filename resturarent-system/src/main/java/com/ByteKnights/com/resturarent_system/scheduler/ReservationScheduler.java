@@ -58,6 +58,44 @@ public class ReservationScheduler {
             Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
             Long reservationId = r.getId();
 
+            // Auto-expire unhandled reservation requests (15 minutes after start time)
+            if (r.getStatus() == ReservationStatus.REQUESTED && r.getReservationTime() != null
+                    && r.getReservationTime().plusMinutes(15).isBefore(now)) {
+                r.setStatus(ReservationStatus.EXPIRED);
+                reservationRepository.save(r);
+
+                final Long finalBranchId = branchId;
+                final Long finalReservationId = reservationId;
+                final Long userId = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getId() : null;
+                final String userEmail = (r.getCustomer() != null && r.getCustomer().getUser() != null) ? r.getCustomer().getUser().getEmail() : null;
+                final String branchName = (r.getBranch() != null) ? r.getBranch().getName() : "our restaurant";
+                final String timeStr = r.getReservationTime().format(TIME_FORMATTER);
+
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        if (finalBranchId != null) {
+                            webSocketNotificationService.broadcastReservationUpdate(finalBranchId);
+                        }
+                        if (userId != null) {
+                            webSocketNotificationService.broadcastReservationStatusToCustomer(userId,
+                                    finalReservationId, "EXPIRED");
+                            if (userEmail != null) {
+                                try {
+                                    emailService.sendSimpleEmail(userEmail, "Reservation Request Expired",
+                                            "We apologize, but your reservation request at " + branchName
+                                                    + " for " + timeStr + " has expired as we were unable to review and confirm it in time. Please try booking again or contact the restaurant directly.");
+                                } catch (Exception e) {
+                                    log.error("Failed to send expiration email for unhandled reservation request {}", finalReservationId, e);
+                                }
+                            }
+                        }
+                    }
+                });
+                log.info("Auto-expired unhandled reservation request {}", reservationId);
+                continue;
+            }
+
             if (r.getStatus() == ReservationStatus.CONFIRMED && r.getPaymentDeadline() != null
                     && r.getPaymentDeadline().isBefore(now)) {
                 r.setStatus(ReservationStatus.EXPIRED);
