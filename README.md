@@ -77,8 +77,8 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 ### Documentation & Integrations
 
 For detailed setup guides on external services, please refer to our dedicated documentation:
-- **[Stripe Payment Gateway Integration](../Stripe%20Payment%20Gateway%20Integratio.md)**
-- **[AWS S3 Cloud Infrastructure](../AWS_S3_REVIEW_IMAGES_DOCUMENTATION.md)**
+- **[Stripe Payment Gateway Integration](./docs/stripe-payment-integration.md)**
+- **[AWS S3 Cloud Infrastructure](./docs/aws-s3-integration.md)**
 
 ### API & Real-Time Communication
 
