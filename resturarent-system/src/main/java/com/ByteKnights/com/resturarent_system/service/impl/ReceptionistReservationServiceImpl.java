@@ -30,17 +30,21 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
 import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
 
-
 /**
  * Reservation logic for the receptionist. Key operations:
- *  - checkAvailability: tag every branch table FREE/OCCUPIED/BLOCKED for a slot (only a real
- *    time overlap BLOCKS; a within-1-hour gap only warns).
- *  - confirmReservation / rejectReservation: act on a customer's REQUESTED booking.
- *  - seatReservation: occupy the booking's tables and mark it COMPLETED.
- *  - cancelReservation: cancel + free tables (refund handled per the refund rules).
+ * - checkAvailability: tag every branch table FREE/OCCUPIED/BLOCKED for a slot
+ * (only a real
+ * time overlap BLOCKS; a within-1-hour gap only warns).
+ * - confirmReservation / rejectReservation: act on a customer's REQUESTED
+ * booking.
+ * - seatReservation: occupy the booking's tables and mark it COMPLETED.
+ * - cancelReservation: cancel + free tables (refund handled per the refund
+ * rules).
  */
 @Service
 @RequiredArgsConstructor
@@ -56,13 +60,14 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     private final CustomerRepository customerRepository;
     private final WebSocketNotificationService webSocketNotificationService;
     private final EmailService emailService;
+    private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
 
     // Tunable business rules
     private static final int MIN_RESERVATION_LEAD_HOURS = 0; // 0 = future-only (booking just has to be later than now)
-    private static final int GAP_HOURS = 1;                  // required gap between two reservations on the same table
+    private static final int GAP_HOURS = 1; // required gap between two reservations on the same table
 
     @Override
     public CheckAvailabilityResponse checkAvailability(CheckAvailabilityRequest request, String userEmail) {
@@ -96,15 +101,19 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                     .build();
         }
 
-        // Manual selection — no auto-allocation. Tag EVERY table in the branch for this slot.
+        // Manual selection — no auto-allocation. Tag EVERY table in the branch for this
+        // slot.
         List<RestaurantTable> tables = tableRepository.findByBranchId(branchId);
         LocalDate today = LocalDate.now();
-        // Current occupancy only matters for a TODAY booking — for a future day whoever is seated now is gone.
+        // Current occupancy only matters for a TODAY booking — for a future day whoever
+        // is seated now is gone.
         boolean bookingIsToday = start.toLocalDate().equals(today);
         List<TableAvailabilityDTO> result = new ArrayList<>();
         for (RestaurantTable t : tables) {
-            // Compare the requested slot against this table's PENDING reservations. Widen by the gap so
-            // near-but-not-overlapping bookings are found too (they only warn, they never block).
+            // Compare the requested slot against this table's PENDING reservations. Widen
+            // by the gap so
+            // near-but-not-overlapping bookings are found too (they only warn, they never
+            // block).
             List<Reservation> nearby = reservationRepository.findOverlappingReservations(
                     t.getId(), start.minusHours(GAP_HOURS), end.plusHours(GAP_HOURS));
             TableAvailabilityDTO.TableAvailabilityDTOBuilder dto = TableAvailabilityDTO.builder()
@@ -124,12 +133,15 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                         .conflictEnd(overlap.getEndTime())
                         .gapConflict(false);
             } else {
-                // No overlap → selectable. Occupied-now details are shown ONLY for a TODAY booking
-                // (for a future day whoever is seated now will be long gone, so occupancy is irrelevant).
+                // No overlap → selectable. Occupied-now details are shown ONLY for a TODAY
+                // booking
+                // (for a future day whoever is seated now will be long gone, so occupancy is
+                // irrelevant).
                 if (bookingIsToday && t.getState() == TableStatus.OCCUPIED) {
-                    // Pending = orders not yet fully served (an order is "served" once all its items are).
+                    // Pending = orders not yet fully served (an order is "served" once all its
+                    // items are).
                     long pendingOrders = orderRepository.findByTableIdAndStatusNotIn(
-                                    t.getId(), List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD))
+                            t.getId(), List.of(OrderStatus.CANCELLED, OrderStatus.REJECTED, OrderStatus.ON_HOLD))
                             .stream()
                             .filter(o -> o.getCreatedAt() != null && o.getCreatedAt().toLocalDate().equals(today))
                             .filter(o -> o.getStatus() != OrderStatus.SERVED && o.getStatus() != OrderStatus.COMPLETED)
@@ -146,7 +158,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 } else {
                     dto.status("FREE");
                 }
-                // Gap warning: a PENDING reservation within an hour (no overlap). Warn only — never blocks.
+                // Gap warning: a PENDING reservation within an hour (no overlap). Warn only —
+                // never blocks.
                 if (!nearby.isEmpty()) {
                     Reservation gapClash = nearby.get(0);
                     dto.gapConflict(true)
@@ -188,7 +201,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
 
     @Override
     public ReservationResponseDTO getTableNextReservation(Long tableId, String userEmail) {
-        return reservationRepository.findOverlappingReservations(tableId, LocalDateTime.now(), LocalDateTime.now().plusYears(1))
+        return reservationRepository
+                .findOverlappingReservations(tableId, LocalDateTime.now(), LocalDateTime.now().plusYears(1))
                 .stream()
                 .findFirst()
                 .map(this::toDTO)
@@ -204,17 +218,22 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         Long branchId = reservation.getBranch() != null ? reservation.getBranch().getId() : null;
         LocalDateTime now = LocalDateTime.now();
 
-        // Terminal states can't be cancelled: already finished (seated), or already ended.
+        // Terminal states can't be cancelled: already finished (seated), or already
+        // ended.
         ReservationStatus current = reservation.getStatus();
         if (current == ReservationStatus.COMPLETED || current == ReservationStatus.CANCELLED
                 || current == ReservationStatus.REJECTED || current == ReservationStatus.EXPIRED) {
             throw new RuntimeException("This reservation can no longer be cancelled");
         }
 
-        // ── Refund decision (receptionist-initiated cancel) ──────────────────────────────
-        // Only a PAID booking has money. When the RESTAURANT cancels BEFORE the booking starts,
-        // the customer is fully refunded (including the handling fee). After it has started
-        // (e.g. a no-show the receptionist finally cancels) nothing is refunded. Not-yet-paid
+        // ── Refund decision (receptionist-initiated cancel)
+        // ──────────────────────────────
+        // Only a PAID booking has money. When the RESTAURANT cancels BEFORE the booking
+        // starts,
+        // the customer is fully refunded (including the handling fee). After it has
+        // started
+        // (e.g. a no-show the receptionist finally cancels) nothing is refunded.
+        // Not-yet-paid
         // bookings (REQUESTED/CONFIRMED) never had money, so no refund either.
         BigDecimal refundAmount = null;
         if (current == ReservationStatus.PAID
@@ -226,12 +245,41 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         if (refundAmount != null && refundAmount.signum() > 0) {
             reservation.setRefundAmount(refundAmount);
 
+            // Fetch original payment
+            ReservationPayment originalPayment = reservationPaymentRepository.findByReservation(reservation)
+                    .orElse(null);
+            String originalTransactionRef = "UNKNOWN";
+
+            if (originalPayment != null && originalPayment.getTransactionReference() != null) {
+                originalTransactionRef = originalPayment.getTransactionReference();
+
+                String idempotencyKey = "recept-res-cancel-" + reservation.getId();
+                Map<String, String> metadata = new HashMap<>();
+                metadata.put("reservationId", String.valueOf(reservation.getId()));
+                metadata.put("cancelReason", request.getReason());
+
+                boolean refundSuccess = stripePaymentService.refundPayment(
+                        originalTransactionRef,
+                        refundAmount,
+                        idempotencyKey,
+                        "requested_by_customer",
+                        metadata);
+
+                if (!refundSuccess) {
+                    originalPayment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                    reservationPaymentRepository.save(originalPayment);
+                } else {
+                    originalPayment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    reservationPaymentRepository.save(originalPayment);
+                }
+            }
+
             // Record the refund as a negative payment against this reservation.
             ReservationPayment refund = ReservationPayment.builder()
                     .reservation(reservation)
                     .paymentMethod(PaymentMethod.CARD)
-                    .paymentStatus(PaymentStatus.SUCCESS)
-                    .transactionReference("REFUND-" + System.currentTimeMillis())
+                    .paymentStatus(PaymentStatus.REFUNDED)
+                    .transactionReference("REFUND-" + originalTransactionRef)
                     .amount(refundAmount.negate())
                     .refundAmount(refundAmount)
                     .refundedAt(now)
@@ -246,16 +294,19 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             }
         }
 
-        // One reservation = one booking, so this cancels the whole booking (all its tables) at once.
+        // One reservation = one booking, so this cancels the whole booking (all its
+        // tables) at once.
         reservation.setStatus(ReservationStatus.CANCELLED);
         reservation.setCancelReason(request.getReason());
         reservationRepository.save(reservation);
 
-        // Free each table this booking was holding. A RESERVED table is released unless another
+        // Free each table this booking was holding. A RESERVED table is released unless
+        // another
         // CONFIRMED/PAID reservation still holds it within the 15-minute window.
         boolean anyFreed = false;
         for (RestaurantTable table : reservation.getTables()) {
-            // Clear any lingering seated link to this booking (safety — a cancellable booking
+            // Clear any lingering seated link to this booking (safety — a cancellable
+            // booking
             // shouldn't be seated, but never leave a stale pointer).
             if (reservation.getId().equals(table.getSeatedReservationId())) {
                 table.setSeatedReservationId(null);
@@ -274,7 +325,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             }
         }
 
-        // Tell the customer (WS + email), and refresh the branch views — deferred until commit so
+        // Tell the customer (WS + email), and refresh the branch views — deferred until
+        // commit so
         // the pushed update is never ahead of what a follow-up read can actually see.
         boolean finalAnyFreed = anyFreed;
         BigDecimal finalRefundAmount = refundAmount;
@@ -295,7 +347,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             }
 
             if (branchId != null) {
-                if (finalAnyFreed) webSocketNotificationService.broadcastTableUpdate(branchId);
+                if (finalAnyFreed)
+                    webSocketNotificationService.broadcastTableUpdate(branchId);
                 webSocketNotificationService.broadcastReservationUpdate(branchId);
             }
         });
@@ -316,8 +369,10 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("This reservation is not active or paid");
         }
 
-        // Seat the whole party: occupy every table of the booking. The guest count is distributed
-        // greedily across the tables (each filled up to its seats), and the booking is marked completed.
+        // Seat the whole party: occupy every table of the booking. The guest count is
+        // distributed
+        // greedily across the tables (each filled up to its seats), and the booking is
+        // marked completed.
         int remaining = guestCount != null ? guestCount
                 : (r.getGuestCount() != null ? r.getGuestCount() : 0);
         LocalDateTime now = LocalDateTime.now();
@@ -373,7 +428,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             statusFilter = ReservationStatus.valueOf(status.toUpperCase());
         }
 
-        // Ordering ("upcoming first, then past") is defined in the repository query itself.
+        // Ordering ("upcoming first, then past") is defined in the repository query
+        // itself.
         Pageable pageable = PageRequest.of(page, size);
         Page<Reservation> result = reservationRepository.findFilteredByBranch(
                 branchId, tableNumber, statusFilter, dayStart, dayEnd, pageable);
@@ -411,7 +467,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("One or more selected tables were not found in your branch");
         }
 
-        // A real time overlap (with a DIFFERENT reservation) on any assigned table blocks confirmation.
+        // A real time overlap (with a DIFFERENT reservation) on any assigned table
+        // blocks confirmation.
         for (RestaurantTable t : assignedTables) {
             boolean clash = reservationRepository
                     .findOverlappingReservations(t.getId(), r.getReservationTime(), r.getEndTime())
@@ -425,7 +482,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         // Assign the tables to this booking (writes the reservation_tables rows).
         r.setTables(new HashSet<>(assignedTables));
 
-        // Lock any AVAILABLE assigned table whose slot starts within 15 min → RESERVED now.
+        // Lock any AVAILABLE assigned table whose slot starts within 15 min → RESERVED
+        // now.
         LocalDateTime now = LocalDateTime.now();
         boolean anyLocked = false;
         for (RestaurantTable t : assignedTables) {
@@ -445,7 +503,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         r.setPaymentDeadline(now.plusMinutes(config.getReservationPaymentWindowMinutes()));
         reservationRepository.save(r);
 
-        // Notify the customer (WS + email with the pay link) and refresh branch views — deferred
+        // Notify the customer (WS + email with the pay link) and refresh branch views —
+        // deferred
         // until commit so the push never arrives before the CONFIRMED row is readable.
         boolean finalAnyLocked = anyLocked;
         runAfterCommit(() -> {
@@ -461,7 +520,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 } catch (Exception ignored) {
                 }
             }
-            if (finalAnyLocked) webSocketNotificationService.broadcastTableUpdate(branchId);
+            if (finalAnyLocked)
+                webSocketNotificationService.broadcastTableUpdate(branchId);
             webSocketNotificationService.broadcastReservationUpdate(branchId);
         });
     }
@@ -517,9 +577,12 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .stream().map(this::toDTO).toList();
     }
 
-    // Defers a WS broadcast / email until the enclosing transaction actually commits, so the
-    // client never receives a "reservation changed" push before the row is visible to a follow-up
-    // read (avoids a stale re-fetch race). Runs immediately if there's no active transaction.
+    // Defers a WS broadcast / email until the enclosing transaction actually
+    // commits, so the
+    // client never receives a "reservation changed" push before the row is visible
+    // to a follow-up
+    // read (avoids a stale re-fetch race). Runs immediately if there's no active
+    // transaction.
     private void runAfterCommit(Runnable action) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -560,7 +623,8 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .createdAt(r.getCreatedAt())
                 .totalCharge(r.getTotalCharge());
 
-        // Payment/refund rows only ever exist once money has moved — skip the extra query for
+        // Payment/refund rows only ever exist once money has moved — skip the extra
+        // query for
         // REQUESTED/CONFIRMED/REJECTED/EXPIRED bookings that never reached a payment.
         if (r.getStatus() == ReservationStatus.PAID || r.getStatus() == ReservationStatus.COMPLETED
                 || r.getStatus() == ReservationStatus.CANCELLED) {
@@ -575,12 +639,14 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                             .paymentMethod(p.getPaymentMethod() != null ? p.getPaymentMethod().name() : null)
                             .transactionReference(p.getTransactionReference()));
 
-            // A negative amount row = a refund. Some callers record the refund time in paidAt
+            // A negative amount row = a refund. Some callers record the refund time in
+            // paidAt
             // instead of refundedAt, so fall back between the two.
             payments.stream()
                     .filter(p -> p.getAmount() != null && p.getAmount().signum() < 0)
                     .findFirst()
-                    .ifPresent(p -> dto.refundAmount(p.getRefundAmount() != null ? p.getRefundAmount() : p.getAmount().negate())
+                    .ifPresent(p -> dto
+                            .refundAmount(p.getRefundAmount() != null ? p.getRefundAmount() : p.getAmount().negate())
                             .refundedAt(p.getRefundedAt() != null ? p.getRefundedAt() : p.getPaidAt())
                             .refundTransactionReference(p.getTransactionReference()));
         }

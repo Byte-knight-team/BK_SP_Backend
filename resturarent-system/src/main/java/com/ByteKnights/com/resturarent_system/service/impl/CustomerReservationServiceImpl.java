@@ -35,6 +35,7 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     private final UserRepository userRepository;
     private final WebSocketNotificationService webSocketNotificationService;
     private final EmailService emailService;
+    private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.url}")
     private String frontendUrl;
@@ -146,16 +147,48 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         }
 
         if (r.getStatus() == ReservationStatus.PAID) {
-            // Process refund
+            // Process partial refund
             BigDecimal refundAmount = r.getTotalCharge().subtract(r.getHandlingFee());
             r.setRefundAmount(refundAmount);
 
-            // Dummy refund record
+            // Fetch the original payment to get the transactionReference
+            ReservationPayment originalPayment = reservationPaymentRepository.findByReservation(r).orElse(null);
+            
+            String originalTransactionRef = "UNKNOWN";
+            if (originalPayment != null && originalPayment.getTransactionReference() != null) {
+                originalTransactionRef = originalPayment.getTransactionReference();
+                
+                // Fire partial refund to Stripe
+                String idempotencyKey = "res-cancel-" + r.getId();
+                java.util.Map<String, String> metadata = new java.util.HashMap<>();
+                metadata.put("reservationId", String.valueOf(r.getId()));
+                metadata.put("cancelReason", reason);
+
+                boolean refundSuccess = stripePaymentService.refundPayment(
+                        originalTransactionRef,
+                        refundAmount,
+                        idempotencyKey,
+                        "requested_by_customer",
+                        metadata
+                );
+
+                if (!refundSuccess) {
+                    // Log but continue, admins can retry from dashboard.
+                    // We might set the original payment to REFUND_FAILED to mark it
+                    originalPayment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                    reservationPaymentRepository.save(originalPayment);
+                } else {
+                    originalPayment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    reservationPaymentRepository.save(originalPayment);
+                }
+            }
+
+            // Create refund record
             ReservationPayment refund = ReservationPayment.builder()
                     .reservation(r)
                     .paymentMethod(PaymentMethod.CARD)
-                    .paymentStatus(PaymentStatus.SUCCESS)
-                    .transactionReference("REFUND-" + System.currentTimeMillis())
+                    .paymentStatus(PaymentStatus.REFUNDED)
+                    .transactionReference("REFUND-" + originalTransactionRef)
                     .amount(refundAmount.negate())
                     .paidAt(LocalDateTime.now())
                     .build();

@@ -2,22 +2,23 @@ package com.ByteKnights.com.resturarent_system.dto.request.customer;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import java.math.BigDecimal;
 
 public class PaymentIntentRequest {
     
     @NotNull(message = "Amount is required")
     @Positive(message = "Amount must be greater than zero")
-    private Double amount;
+    private BigDecimal amount;
     
     private Long orderId;
     
     private Long reservationId;
 
-    public Double getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
-    public void setAmount(Double amount) {
+    public void setAmount(BigDecimal amount) {
         this.amount = amount;
     }
 

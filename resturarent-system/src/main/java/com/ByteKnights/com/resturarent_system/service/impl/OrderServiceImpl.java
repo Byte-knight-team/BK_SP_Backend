@@ -56,6 +56,7 @@ public class OrderServiceImpl implements OrderService {
         private final SystemConfigService systemConfigService;
         private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
         private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
+        private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -71,7 +72,8 @@ public class OrderServiceImpl implements OrderService {
                         ReservationRepository reservationRepository,
                         SystemConfigService systemConfigService,
                         com.ByteKnights.com.resturarent_system.service.email.EmailService emailService,
-                        com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService) {
+                        com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService,
+                        com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -92,6 +94,7 @@ public class OrderServiceImpl implements OrderService {
                 this.systemConfigService = systemConfigService;
                 this.emailService = emailService;
                 this.emailTemplateService = emailTemplateService;
+                this.stripePaymentService = stripePaymentService;
         }
 
         @Override
@@ -623,6 +626,36 @@ public class OrderServiceImpl implements OrderService {
 
         private void executeOrderCancellation(Order order, String cancelReason) {
                 Customer customer = order.getCustomer();
+
+                // Stripe automated refund for paid card orders
+                if (order.getPaymentStatus() == PaymentStatus.PAID || order.getPaymentStatus() == PaymentStatus.SUCCESS) {
+                        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                        if (payment != null && payment.getPaymentMethod() == PaymentMethod.CARD && payment.getTransactionReference() != null) {
+                                String idempotencyKey = "order-cancel-" + order.getId();
+                                java.util.Map<String, String> metadata = new java.util.HashMap<>();
+                                metadata.put("orderId", String.valueOf(order.getId()));
+                                metadata.put("cancelReason", cancelReason);
+
+                                boolean refundSuccess = stripePaymentService.refundPayment(
+                                        payment.getTransactionReference(),
+                                        null, // Full refund
+                                        idempotencyKey,
+                                        "requested_by_customer",
+                                        metadata
+                                );
+
+                                if (refundSuccess) {
+                                        payment.setPaymentStatus(PaymentStatus.REFUNDED);
+                                        order.setPaymentStatus(PaymentStatus.REFUNDED);
+                                        webSocketNotificationService.broadcastOrderPaymentStatusUpdate(order.getId(), PaymentStatus.REFUNDED.name());
+                                } else {
+                                        payment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                                        order.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                                        webSocketNotificationService.broadcastOrderPaymentStatusUpdate(order.getId(), PaymentStatus.REFUND_FAILED.name());
+                                }
+                                paymentRepository.save(payment);
+                        }
+                }
 
                 // Rollback loyalty points
                 if (!loyaltyTransactionRepository.existsByOrderAndTransactionType(order,
