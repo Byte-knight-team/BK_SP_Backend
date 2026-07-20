@@ -205,7 +205,7 @@ public class EmailTemplateService {
         /*
          * Order Lifecycle Emails
          */
-        public String buildOrderPlacedHtml(String orderNumber, String branchName, String itemsSummary, java.math.BigDecimal finalAmount, String orderType) {
+        public String buildOrderPlacedHtml(String orderNumber, String branchName, String itemsSummary, java.math.BigDecimal finalAmount, String orderType, String paymentMethod) {
                 String content = "<p>Hello,</p>"
                                 + "<p>We have received your order <strong>" + escapeHtml(orderNumber) + "</strong> at " + escapeHtml(branchName) + ".</p>"
                                 + "<p><strong>Order Type:</strong> " + escapeHtml(orderType) + "</p>"
@@ -213,10 +213,15 @@ public class EmailTemplateService {
                                 + "<h3 style=\"margin-top:0; margin-bottom:10px; font-size:16px;\">Order Details</h3>"
                                 + "<div style=\"font-family:monospace; white-space:pre-wrap; color:#3f3f46;\">" + escapeHtml(itemsSummary) + "</div>"
                                 + "<p style=\"margin-bottom:0; margin-top:15px; font-size:16px;\"><strong>Total: Rs. " + finalAmount + "</strong></p>"
-                                + "</div>"
-                                + "<p>We will start preparing your order shortly!</p>";
+                                + "</div>";
+                
+                if ("CARD".equalsIgnoreCase(paymentMethod)) {
+                    content += "<p><strong>Note:</strong> Since your payment method is CARD, order preparing will start after successful payment.</p>";
+                } else {
+                    content += "<p>We will start preparing your order shortly!</p>";
+                }
 
-                return buildLayout("Order Confirmed — " + escapeHtml(orderNumber), content);
+                return buildLayout("Order Placed — " + escapeHtml(orderNumber), content);
         }
 
         public String buildOrderCancelledHtml(String orderNumber, String branchName, String cancelReason) {

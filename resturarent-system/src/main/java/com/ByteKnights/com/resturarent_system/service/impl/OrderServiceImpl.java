@@ -379,11 +379,12 @@ public class OrderServiceImpl implements OrderService {
                         final String itemsSummary = savedOrder.getItems().stream()
                                         .map(i -> i.getQuantity() + "x " + i.getItemName())
                                         .collect(Collectors.joining("\n"));
+                        final String paymentMethod = request.getPaymentMethod() != null ? request.getPaymentMethod().name() : "UNKNOWN";
                         
                         java.util.concurrent.CompletableFuture.runAsync(() -> {
                                 try {
-                                        String html = emailTemplateService.buildOrderPlacedHtml(orderNum, branchName, itemsSummary, finalAmount, typeStr);
-                                        emailService.sendHtmlEmail(toEmail, "Order Confirmed — " + orderNum, html);
+                                        String html = emailTemplateService.buildOrderPlacedHtml(orderNum, branchName, itemsSummary, finalAmount, typeStr, paymentMethod);
+                                        emailService.sendHtmlEmail(toEmail, "Order Placed — " + orderNum, html);
                                 } catch (Exception e) {
                                         // Ignore
                                 }
