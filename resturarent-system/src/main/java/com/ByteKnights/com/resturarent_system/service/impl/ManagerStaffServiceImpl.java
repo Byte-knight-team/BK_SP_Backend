@@ -21,6 +21,14 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
     private final StaffRepository staffRepository;
     private final BranchRepository branchRepository;
 
+    /**
+     * Retrieves a summary of all active staff members assigned to the Manager's branch.
+     * Excludes higher-level administrative roles from the list.
+     * 
+     * @param targetBranchId Optional branch ID filter.
+     * @param userId Authenticated manager's user ID.
+     * @return DTO containing aggregate counts and a list of staff member details.
+     */
     @Override
     public ManagerStaffSummaryDTO getStaffSummary(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
@@ -41,18 +49,20 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
                 })
                 .map(s -> ManagerStaffMemberDTO.builder()
                         .userId(s.getUser().getId())
-                        .name(s.getUser().getUsername())
+                        .name(s.getUser().getFullName() != null && !s.getUser().getFullName().trim().isEmpty() ? s.getUser().getFullName() : s.getUser().getUsername())
                         .role(formatRole(s.getUser().getRole().getName()))
-                        .hireDate(s.getHireDate() != null ? s.getHireDate().format(dateFormatter) : "N/A")
+                        .joinedDate(s.getUser().getCreatedAt() != null ? s.getUser().getCreatedAt().format(dateFormatter) : "N/A")
                         .contactNumber(s.getUser().getPhone())
-                        .salary(s.getSalary())
                         .status(s.getEmploymentStatus() != null ? s.getEmploymentStatus().name() : "ACTIVE")
                         .build())
                 .collect(Collectors.toList());
 
-        // 3. Aggregate counts for summary cards (ACTIVE only as per design "Active Kitchen Staff")
-        int kitchenCount = (int) staffRepository.countByBranchIdAndUserRoleNameInAndEmploymentStatus(
-                finalBranchId, java.util.Arrays.asList("CHEF", "LINE_CHEF"), EmploymentStatus.ACTIVE);
+        // 3. Aggregate counts for summary cards (ACTIVE only)
+        int chefCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
+                finalBranchId, "CHEF", EmploymentStatus.ACTIVE);
+
+        int lineChefCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
+                finalBranchId, "LINE_CHEF", EmploymentStatus.ACTIVE);
         
         int deliveryCount = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(
                 finalBranchId, "DELIVERY", EmploymentStatus.ACTIVE);
@@ -62,18 +72,22 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
 
         return ManagerStaffSummaryDTO.builder()
                 .branchName(branchName)
-                .kitchenCount(kitchenCount)
+                .chefCount(chefCount)
+                .lineChefCount(lineChefCount)
                 .deliveryCount(deliveryCount)
                 .receptionistCount(receptionistCount)
                 .staffMembers(memberDTOs)
                 .build();
     }
 
+    /**
+     * Formats raw database role names into user-friendly display labels.
+     */
     private String formatRole(String roleName) {
         if (roleName == null) return "Unknown";
         switch (roleName.toUpperCase()) {
-            case "CHEF":
-            case "LINE_CHEF": return "Kitchen Staff";
+            case "CHEF": return "Main Chef";
+            case "LINE_CHEF": return "Line Chef";
             case "DELIVERY": return "Delivery Driver";
             case "RECEPTIONIST": return "Receptionist";
             case "MANAGER": return "Manager";
@@ -81,6 +95,9 @@ public class ManagerStaffServiceImpl implements ManagerStaffService {
         }
     }
 
+    /**
+     * Helper method to determine the correct branch context.
+     */
     private Long resolveBranchId(Long targetBranchId, Long userId) {
         if (targetBranchId != null) return targetBranchId;
         Staff staff = staffRepository.findByUserId(userId)

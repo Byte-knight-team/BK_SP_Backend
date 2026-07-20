@@ -15,7 +15,12 @@ public class DeliveryOrderDTO {
     private Long id;
     private String orderNumber;
     private String location;
+    private String deliveryAddress;
+    private String customerName;
+    private String customerPhone;
     private String paymentType;
     private BigDecimal amount;
     private String status; // e.g. "ASSIGNED", "ACCEPTED"
+    private Double latitude;  // Customer delivery location coordinates
+    private Double longitude; // Customer delivery location coordinates
 }

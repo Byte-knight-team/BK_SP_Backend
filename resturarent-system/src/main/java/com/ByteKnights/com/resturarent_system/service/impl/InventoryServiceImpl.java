@@ -69,6 +69,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final com.ByteKnights.com.resturarent_system.repository.ManagerNotificationRepository notificationRepository;
+    private final com.ByteKnights.com.resturarent_system.service.ManagerNotificationService managerNotificationService;
 
     /**
      * Helper method to securely resolve the branch ID.
@@ -124,7 +126,7 @@ public class InventoryServiceImpl implements InventoryService {
             }
         }
 
-        List<ChefRequest> pendingRequests = chefRequestRepository.findByBranchIdAndStatus(
+        List<ChefRequest> pendingRequests = chefRequestRepository.findByBranchIdAndStatusOrderByCreatedAtDesc(
                 finalBranchId,
                 ChefRequestStatus.PENDING
         );
@@ -417,6 +419,22 @@ public class InventoryServiceImpl implements InventoryService {
                 buildChefRequestAuditSnapshot(updatedRequest)
         );
 
+        // Auto-mark any corresponding notifications as read
+        List<com.ByteKnights.com.resturarent_system.entity.ManagerNotification> unreadNotifications = 
+            notificationRepository.findByReferenceIdAndTypeAndIsReadFalse(
+                updatedRequest.getId(), 
+                com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.CHEF_REQUEST
+            );
+            
+        for (com.ByteKnights.com.resturarent_system.entity.ManagerNotification notif : unreadNotifications) {
+            notif.setRead(true);
+            notificationRepository.save(notif);
+        }
+        
+        if (!unreadNotifications.isEmpty()) {
+            managerNotificationService.pingNotificationResolved(getChefRequestBranchId(updatedRequest));
+        }
+
         return toChefRequestDTO(updatedRequest);
     }
 
@@ -424,8 +442,14 @@ public class InventoryServiceImpl implements InventoryService {
     public List<InventoryLogDTO> getInventoryLogs(Long targetBranchId, Long userId) {
         Long finalBranchId = resolveBranchId(targetBranchId, userId);
 
+        List<InventoryTransactionType> allowedTypes = List.of(
+                InventoryTransactionType.RESTOCK,
+                InventoryTransactionType.WASTAGE,
+                InventoryTransactionType.CORRECTION
+        );
+
         List<InventoryTransaction> transactions = inventoryTransactionRepository
-                .findByInventoryItemBranchIdOrderByCreatedAtDesc(finalBranchId);
+                .findByInventoryItemBranchIdAndTransactionTypeInOrderByCreatedAtDesc(finalBranchId, allowedTypes);
 
         return transactions.stream()
                 .map(this::toLogDTO)
@@ -462,6 +486,11 @@ public class InventoryServiceImpl implements InventoryService {
                     : "";
         }
 
+        String notes = transaction.getNotes();
+        if (notes == null || notes.trim().isEmpty()) {
+            notes = "No notes provided.";
+        }
+
         return InventoryLogDTO.builder()
                 .id(transaction.getId())
                 .itemName(transaction.getInventoryItem().getName())
@@ -474,7 +503,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .newQuantity(transaction.getNewQuantity())
                 .unitPrice(transaction.getUnitPrice())
                 .performedBy(performedBy)
-                .notes(transaction.getNotes())
+                .notes(notes)
                 .build();
     }
 
