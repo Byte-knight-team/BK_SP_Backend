@@ -17,7 +17,7 @@ public interface CustomerReservationService {
 
     void cancelMyReservation(Long reservationId, String reason, String customerEmail);
 
-    CustomerReservationResponse payReservation(Long reservationId, String transactionRef, String customerEmail);
+    void webhookPayReservation(Long reservationId, String transactionRef);
 
     ReservationChargeBreakdown previewCharge(Long branchId, int guestCount, LocalDateTime start, LocalDateTime end);
 

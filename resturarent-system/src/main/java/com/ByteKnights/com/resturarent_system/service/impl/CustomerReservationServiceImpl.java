@@ -214,15 +214,12 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
 
     @Override
     @Transactional
-    public CustomerReservationResponse payReservation(Long reservationId, String transactionRef, String customerEmail) {
-        Reservation r = getReservationWithAuthCheck(reservationId, customerEmail);
+    public void webhookPayReservation(Long reservationId, String transactionRef) {
+        Reservation r = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new RuntimeException("Reservation not found"));
 
-        if (r.getStatus() != ReservationStatus.CONFIRMED) {
-            throw new RuntimeException("Reservation is not ready for payment");
-        }
-
-        if (r.getPaymentDeadline() != null && r.getPaymentDeadline().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Payment window has expired");
+        if (r.getStatus() != ReservationStatus.CONFIRMED && r.getStatus() != ReservationStatus.REQUESTED) {
+            return;
         }
 
         ReservationPayment payment = ReservationPayment.builder()
@@ -239,25 +236,27 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         reservationRepository.save(r);
 
         Customer c = r.getCustomer();
-        c.setTotalSpent(c.getTotalSpent().add(r.getTotalCharge()));
-        customerRepository.save(c);
+        if (c != null && r.getTotalCharge() != null) {
+            BigDecimal currentSpent = c.getTotalSpent() != null ? c.getTotalSpent() : BigDecimal.ZERO;
+            c.setTotalSpent(currentSpent.add(r.getTotalCharge()));
+            customerRepository.save(c);
+        }
 
         Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
         if (branchId != null) {
             webSocketNotificationService.broadcastReservationUpdate(branchId);
-            // Notify the branch's receptionists that the CUSTOMER paid (global toast).
             webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "PAID", r.getCustomerName());
         }
 
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
-                        "Your payment was successful and your reservation is now confirmed!");
+                if (c != null && c.getUser() != null) {
+                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
+                            "Your payment was successful and your reservation is now confirmed!");
+                }
             } catch (Exception e) {
             }
         });
-
-        return toDTO(r);
     }
 
     @Override

@@ -461,29 +461,51 @@ public class OrderServiceImpl implements OrderService {
         @Override
         @Transactional
         public void updatePaymentStatus(Long orderId, PaymentUpdateRequest request) {
-                // 1. Find the Order
                 Order order = orderRepository.findById(orderId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Order not found with id: " + orderId));
 
-                // 2. Find the Payment attached to this Order
-                Payment payment = paymentRepository.findByOrder(order)
-                                .orElseThrow(() -> new ResourceNotFoundException("Payment record not found"));
-
-                // 3. Update the fields based on the React payload
-                payment.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
-                order.setPaymentStatus(PaymentStatus.valueOf(request.getPaymentStatus().toUpperCase()));
-
-                if (request.getTransactionId() != null) {
-                        payment.setTransactionReference(request.getTransactionId());
-                }
-
-                // 4. If the payment is completed, stamp the exact time
                 if ("PAID".equalsIgnoreCase(request.getPaymentStatus())) {
-                        payment.setPaidAt(LocalDateTime.now());
+                        order.setPaymentStatus(PaymentStatus.PAID);
+                        
+                        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                        if (payment == null) {
+                                payment = Payment.builder()
+                                        .order(order)
+                                        .paymentMethod(PaymentMethod.CARD)
+                                        .paymentStatus(PaymentStatus.PAID)
+                                        .transactionReference(request.getTransactionId())
+                                        .amount(order.getFinalAmount())
+                                        .paidAt(LocalDateTime.now())
+                                        .build();
+                        } else {
+                                payment.setPaymentStatus(PaymentStatus.PAID);
+                                payment.setTransactionReference(request.getTransactionId());
+                                payment.setPaidAt(LocalDateTime.now());
+                        }
+                        paymentRepository.save(payment);
+                        
+                        Customer c = order.getCustomer();
+                        if (c != null && order.getFinalAmount() != null) {
+                                BigDecimal currentSpent = c.getTotalSpent() != null ? c.getTotalSpent() : BigDecimal.ZERO;
+                                c.setTotalSpent(currentSpent.add(order.getFinalAmount()));
+                                customerRepository.save(c);
+                        }
+            
+                        if (order.getId() != null && order.getStatus() != null) {
+                    webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
                 }
-
-                // 5. Save both the payment AND the order back to the database
-                paymentRepository.save(payment);
+                        
+                        if (c != null && c.getUser() != null) {
+                                java.util.concurrent.CompletableFuture.runAsync(() -> {
+                                        try {
+                                                emailService.sendSimpleEmail(c.getUser().getEmail(), "Order Payment Successful",
+                                                        "Your payment for order " + order.getOrderNumber() + " was successful.");
+                                        } catch (Exception e) {}
+                                });
+                        }
+                } else if ("FAILED".equalsIgnoreCase(request.getPaymentStatus())) {
+                        order.setPaymentStatus(PaymentStatus.FAILED);
+                }
                 orderRepository.save(order);
         }
 

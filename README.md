@@ -36,6 +36,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 | **Authentication** | Spring Security with JWT/Session-based auth |
 | **Testing** | JUnit 5, Spring Test Framework |
 | **Cloud Storage** | AWS S3, Cloudinary |
+| **Payments** | Stripe API (Webhooks & Intents) |
 | **Utilities** | QR Code generation, Gmail API (OAuth2), TextLK SMS |
 
 ---
@@ -63,7 +64,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Kitchen Workflow Optimization**: Assign chefs to orders (QR or online), track preparation time, prioritize orders, and mark completion.
 - **Staff Invitation System**: Invite staff members with predefined roles; track acceptance/rejection and shift assignments.
 - **AWS S3 Integration**: Securely upload, store, and retrieve dynamic media such as customer profile pictures and menu item reviews via presigned URLs.
-- **Payment Integration**:can Support for multiple payment gateways for both QR-based and online orders.
+- **Payment Integration**: Secure, automated Stripe Checkout integration with fully automated webhook listeners (`payment_intent.succeeded`) to safely verify signatures and update database payment statuses (`PAID`) asynchronously.
 - **Delivery Management**: Route optimization and real-time tracking for online delivery orders.
 - **Exception Handling**: Robust error handling with detailed audit trails for order cancellations, modifications, and disputes.
 - **Branch-Specific Reports**: Sales analytics, inventory insights, and operational reports per branch, segmented by order channel (QR vs. online).
@@ -143,6 +144,10 @@ AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
+
+# Stripe Payment Gateway
+STRIPE_API_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 Update `src/main/resources/application.properties` to reference environment variables (this is already configured in the repository, just ensure your `.env` keys match).

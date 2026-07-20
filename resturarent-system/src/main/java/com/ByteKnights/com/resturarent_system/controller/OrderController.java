@@ -2,7 +2,6 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CancelOrderRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.customer.PaymentUpdateRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.PlaceOrderRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerOrdersPageResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderResponse;
@@ -36,16 +35,6 @@ public class OrderController {
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Order placed successfully!", response));
-    }
-
-    @PutMapping("/{orderId}/payment")
-    public ResponseEntity<ApiResponse<String>> updatePayment(
-            @PathVariable Long orderId,
-            @RequestBody PaymentUpdateRequest request) {
-
-        orderService.updatePaymentStatus(orderId, request);
-
-        return ResponseEntity.ok(ApiResponse.success("Payment status updated successfully", null));
     }
 
     @GetMapping

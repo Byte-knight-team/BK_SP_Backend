@@ -59,6 +59,7 @@ public class SecurityConfig {
                                                                 "/api/v1/customer/reservations/test-cancel/**",
                                                                 "/api/v1/customer/reservations/test-check-availability/**",
                                                                 "/api/v1/customer/reservations/test-complete/**",
+                                                                "/api/v1/webhooks/**",
                                                                 "/ws/**") // WebSocket handshake endpoint
                                                 .permitAll()
 
