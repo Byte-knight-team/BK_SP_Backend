@@ -1,5 +1,9 @@
 # BK_SP_Backend
 
+![Java 17+](https://img.shields.io/badge/Java-17%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.x-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
+
 Backend services for the **BK Software Project** — a comprehensive restaurant management system.
 
 ---
@@ -43,7 +47,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 
 ## Features
 
-### core Features
+### Core Features
 
 - **QR-Based Table Ordering**  Generate unique QR codes for each table; customers scan to access branch-specific menus, place orders, request service, and pay directly from their devices. Secure session management with automatic expiration.
 - **Comprehensive Online Ordering**: Full-featured online ordering system supporting web and mobile platforms. Real-time menu availability, customizable items, multiple payment methods, and order scheduling (immediate or future delivery/pickup).
@@ -69,6 +73,17 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Exception Handling**: Robust error handling with detailed audit trails for order cancellations, modifications, and disputes.
 - **Branch-Specific Reports**: Sales analytics, inventory insights, and operational reports per branch, segmented by order channel (QR vs. online).
 - **Customer Feedback & Ratings**: Collect customer reviews and ratings for orders placed through any channel.
+
+### Documentation & Integrations
+
+For detailed setup guides on external services, please refer to our dedicated documentation:
+- **[Stripe Payment Gateway Integration](../Stripe%20Payment%20Gateway%20Integratio.md)**
+- **[AWS S3 Cloud Infrastructure](../AWS_S3_REVIEW_IMAGES_DOCUMENTATION.md)**
+
+### API & Real-Time Communication
+
+- **API Documentation**: The backend exposes RESTful endpoints. Once running, you can interact with the Swagger/OpenAPI documentation at `http://localhost:8080/swagger-ui/index.html`.
+- **WebSockets (Real-Time)**: We use **STOMP over WebSockets** (available at `/ws`) to broadcast live updates to the frontend (e.g., order status changes, instant payment refund confirmations, and new reservation alerts) without requiring client polling.
 
 ---
 
@@ -200,6 +215,14 @@ cd resturarent-system
 
 ### 5. Run the Application
 
+#### Using Docker
+
+If you prefer to run the application in a container:
+```bash
+docker build -t restaurant-backend .
+docker run -p 8080:8080 --env-file ./resturarent-system/.env restaurant-backend
+```
+
 #### Development (Quick Start)
 
 ```bash
@@ -269,7 +292,7 @@ cd resturarent-system
 resturarent-system/
 ├── src/
 │   ├── main/
-│   │   ├── java/com/bk/restaurant/
+│   │   ├── java/com/ByteKnights/com/resturarent_system/
 │   │   │   ├── controller/        # REST API endpoints
 │   │   │   ├── service/           # Business logic
 │   │   │   ├── repository/        # Data access layer
@@ -282,7 +305,7 @@ resturarent-system/
 │   │       ├── application.properties
 │   │       └── data.sql           # Initial data
 │   └── test/
-│       └── java/com/bk/restaurant/
+│       └── java/com/ByteKnights/com/resturarent_system/
 ├── pom.xml                         # Maven dependencies
 ├── mvnw / mvnw.cmd                 # Maven Wrapper
 └── .env                            # Environment variables (create manually)
@@ -358,7 +381,7 @@ For questions or issues, contact the backend team.
 
 ## License
 
-
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
 ---
 
 **Last Updated**: July 2026
