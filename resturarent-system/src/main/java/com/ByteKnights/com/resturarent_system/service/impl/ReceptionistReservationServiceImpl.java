@@ -236,6 +236,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         // Not-yet-paid
         // bookings (REQUESTED/CONFIRMED) never had money, so no refund either.
         BigDecimal refundAmount = null;
+        boolean isRefunded = false;
         if (current == ReservationStatus.PAID
                 && reservation.getReservationTime() != null
                 && now.isBefore(reservation.getReservationTime())) {
@@ -267,18 +268,18 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
 
                 if (!refundSuccess) {
                     originalPayment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
-                    reservationPaymentRepository.save(originalPayment);
                 } else {
                     originalPayment.setPaymentStatus(PaymentStatus.REFUNDED);
-                    reservationPaymentRepository.save(originalPayment);
+                    isRefunded = true;
                 }
+                reservationPaymentRepository.save(originalPayment);
             }
 
             // Record the refund as a negative payment against this reservation.
             ReservationPayment refund = ReservationPayment.builder()
                     .reservation(reservation)
                     .paymentMethod(PaymentMethod.CARD)
-                    .paymentStatus(PaymentStatus.REFUNDED)
+                    .paymentStatus(isRefunded ? PaymentStatus.REFUNDED : PaymentStatus.REFUND_FAILED)
                     .transactionReference("REFUND-" + originalTransactionRef)
                     .amount(refundAmount.negate())
                     .refundAmount(refundAmount)
@@ -288,7 +289,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
 
             // Take the refunded amount back out of the customer's lifetime spend.
             Customer c = reservation.getCustomer();
-            if (c != null && c.getTotalSpent() != null) {
+            if (isRefunded && c != null && c.getTotalSpent() != null) {
                 c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
                 customerRepository.save(c);
             }
@@ -330,14 +331,18 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         // the pushed update is never ahead of what a follow-up read can actually see.
         boolean finalAnyFreed = anyFreed;
         BigDecimal finalRefundAmount = refundAmount;
+        final boolean finalIsRefunded = isRefunded;
         runAfterCommit(() -> {
             if (reservation.getCustomer() != null && reservation.getCustomer().getUser() != null) {
                 webSocketNotificationService.broadcastReservationStatusToCustomer(
                         reservation.getCustomer().getUser().getId(), reservation.getId(), "CANCELLED");
                 try {
-                    String refundMsg = (finalRefundAmount != null && finalRefundAmount.signum() > 0)
-                            ? " A refund of Rs " + finalRefundAmount + " has been processed."
-                            : "";
+                    String refundMsg = "";
+                    if (finalRefundAmount != null && finalRefundAmount.signum() > 0) {
+                        refundMsg = finalIsRefunded 
+                                ? " A refund of Rs " + finalRefundAmount + " has been processed."
+                                : " However, the automatic refund failed. Our staff will process it manually.";
+                    }
                     emailService.sendSimpleEmail(reservation.getCustomer().getUser().getEmail(),
                             "Reservation Cancelled",
                             "Your reservation at " + reservation.getBranch().getName()

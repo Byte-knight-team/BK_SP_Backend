@@ -154,6 +154,7 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             // Fetch the original payment to get the transactionReference
             ReservationPayment originalPayment = reservationPaymentRepository.findByReservation(r).orElse(null);
             
+            boolean isRefunded = false;
             String originalTransactionRef = "UNKNOWN";
             if (originalPayment != null && originalPayment.getTransactionReference() != null) {
                 originalTransactionRef = originalPayment.getTransactionReference();
@@ -173,21 +174,19 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
                 );
 
                 if (!refundSuccess) {
-                    // Log but continue, admins can retry from dashboard.
-                    // We might set the original payment to REFUND_FAILED to mark it
                     originalPayment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
-                    reservationPaymentRepository.save(originalPayment);
                 } else {
                     originalPayment.setPaymentStatus(PaymentStatus.REFUNDED);
-                    reservationPaymentRepository.save(originalPayment);
+                    isRefunded = true;
                 }
+                reservationPaymentRepository.save(originalPayment);
             }
 
             // Create refund record
             ReservationPayment refund = ReservationPayment.builder()
                     .reservation(r)
                     .paymentMethod(PaymentMethod.CARD)
-                    .paymentStatus(PaymentStatus.REFUNDED)
+                    .paymentStatus(isRefunded ? PaymentStatus.REFUNDED : PaymentStatus.REFUND_FAILED)
                     .transactionReference("REFUND-" + originalTransactionRef)
                     .amount(refundAmount.negate())
                     .paidAt(LocalDateTime.now())
@@ -196,13 +195,18 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
 
             // Deduct from total spent
             Customer c = r.getCustomer();
-            c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
-            customerRepository.save(c);
+            if (isRefunded) {
+                c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
+                customerRepository.save(c);
+            }
 
+            final boolean finalIsRefunded = isRefunded;
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 try {
-                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
-                            "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
+                    String msg = finalIsRefunded ?
+                            "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded." :
+                            "Your reservation has been cancelled, but the automatic refund failed. Our staff will process it manually.";
+                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled", msg);
                 } catch (Exception e) {
                 }
             });
@@ -242,6 +246,11 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             webSocketNotificationService.broadcastReservationUpdate(branchId);
             // Notify the branch's receptionists that the CUSTOMER cancelled (global toast).
             webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "CANCELLED", r.getCustomerName());
+        }
+
+        // Notify the customer's active sessions (WebSockets)
+        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+            webSocketNotificationService.broadcastReservationStatusToCustomer(r.getCustomer().getUser().getId(), r.getId(), "CANCELLED");
         }
     }
 
