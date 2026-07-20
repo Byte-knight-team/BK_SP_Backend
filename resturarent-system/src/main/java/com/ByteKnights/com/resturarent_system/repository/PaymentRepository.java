@@ -21,6 +21,8 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByOrder(Order order);
 
+    List<Payment> findByOrderOrderByIdAsc(Order order);
+
     // Safe read: returns the latest payment for an order, never throws on stray duplicates
     Optional<Payment> findFirstByOrderOrderByIdDesc(Order order);
     

@@ -246,8 +246,11 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         if (refundAmount != null && refundAmount.signum() > 0) {
             reservation.setRefundAmount(refundAmount);
 
-            // Fetch original payment
-            ReservationPayment originalPayment = reservationPaymentRepository.findByReservation(reservation)
+            ReservationPayment originalPayment = reservationPaymentRepository.findByReservationIdOrderByIdAsc(reservation.getId())
+                    .stream()
+                    .filter(p -> p.getPaymentStatus() == com.ByteKnights.com.resturarent_system.entity.PaymentStatus.PAID
+                              || p.getPaymentStatus() == com.ByteKnights.com.resturarent_system.entity.PaymentStatus.SUCCESS)
+                    .findFirst()
                     .orElse(null);
             String originalTransactionRef = "UNKNOWN";
 

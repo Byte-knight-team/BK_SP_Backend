@@ -151,8 +151,12 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             BigDecimal refundAmount = r.getTotalCharge().subtract(r.getHandlingFee());
             r.setRefundAmount(refundAmount);
 
-            // Fetch the original payment to get the transactionReference
-            ReservationPayment originalPayment = reservationPaymentRepository.findByReservation(r).orElse(null);
+            ReservationPayment originalPayment = reservationPaymentRepository.findByReservationIdOrderByIdAsc(r.getId())
+                    .stream()
+                    .filter(p -> p.getPaymentStatus() == com.ByteKnights.com.resturarent_system.entity.PaymentStatus.PAID 
+                              || p.getPaymentStatus() == com.ByteKnights.com.resturarent_system.entity.PaymentStatus.SUCCESS)
+                    .findFirst()
+                    .orElse(null);
             
             boolean isRefunded = false;
             String originalTransactionRef = "UNKNOWN";
