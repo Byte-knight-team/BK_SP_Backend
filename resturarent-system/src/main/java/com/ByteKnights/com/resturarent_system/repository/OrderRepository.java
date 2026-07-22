@@ -43,7 +43,12 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.paymentStatus IN :paymentStatuses")
         BigDecimal sumFinalAmountByPaymentStatusIn(@Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses);
 
-        List<Order> findByBranchIdAndCreatedAtBetween(Long branchId, LocalDateTime start, LocalDateTime end);
+        /**
+     * Fetches all orders for a given branch within a specific date/time range.
+     * Useful for fetching orders regardless of payment status to calculate 
+     * operational metrics (like cancellations, preparation times, etc.).
+     */
+    List<Order> findByBranchIdAndCreatedAtBetween(Long branchId, LocalDateTime start, LocalDateTime end);
 
         @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus IN :paymentStatuses")
         BigDecimal sumFinalAmountByBranchIdAndPaymentStatusIn(

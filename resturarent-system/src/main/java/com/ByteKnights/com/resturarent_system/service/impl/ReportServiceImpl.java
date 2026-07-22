@@ -282,6 +282,17 @@ public class ReportServiceImpl implements ReportService {
     // REPORT IMPLEMENTATIONS — Phase 2, 3, 4 will fill these in
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Generates a Sales Report in PDF format.
+     * Calculates gross sales, refunds, net sales, taxes, fees, and discounts for a given period.
+     * Also breaks down revenue by payment method (Card/Cash) and order channel.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateSalesReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
@@ -389,6 +400,16 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    /**
+     * Generates a Revenue Trend Report in PDF format.
+     * Displays daily order volumes, revenue, and average order value across the selected date range.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateRevenueTrendReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
@@ -452,6 +473,17 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    /**
+     * Generates a Top Selling Items Report in PDF format.
+     * Aggregates all order items sold within the time frame, computes totals,
+     * and ranks them descending by revenue generated.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateTopSellingItemsReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
@@ -531,6 +563,17 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    /**
+     * Generates an Order Summary Report in PDF format.
+     * Provides high-level operational insights including completion/cancellation rates,
+     * common cancellation reasons, average preparation times, and peak ordering hours.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateOrderSummaryReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
@@ -651,18 +694,165 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    /**
+     * Generates a Delivery Performance Report in PDF format.
+     * Filters for delivery orders and evaluates overall delivery volumes,
+     * cancellations, and aggregates performance metrics per driver.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateDeliveryPerformanceReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 3
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Order> orders = orderRepository.findByBranchIdAndCreatedAtBetween(branchId, start, end).stream()
+                .filter(o -> o.getOrderType() == OrderType.ONLINE_DELIVERY)
+                .collect(Collectors.toList());
+
+        long totalDeliveries = orders.size();
+        long delivered = 0;
+        long cancelled = 0;
+
+        Map<String, Long> driverDeliveries = new HashMap<>();
+        Map<String, Long> driverCancellations = new HashMap<>();
+
+        for (Order o : orders) {
+            String driverName = "Unassigned";
+            if (o.getAssignedDelivery() != null) {
+                driverName = o.getAssignedDelivery().getFirstName() + " " + o.getAssignedDelivery().getLastName();
+            }
+
+            if (o.getStatus() == OrderStatus.ARRIVED || o.getStatus() == OrderStatus.COMPLETED || o.getStatus() == OrderStatus.SERVED) {
+                delivered++;
+                driverDeliveries.put(driverName, driverDeliveries.getOrDefault(driverName, 0L) + 1);
+            } else if (o.getStatus() == OrderStatus.CANCELLED || o.getStatus() == OrderStatus.REJECTED) {
+                cancelled++;
+                driverCancellations.put(driverName, driverCancellations.getOrDefault(driverName, 0L) + 1);
+            }
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Delivery Performance Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Overall Performance");
+            addSummaryBox(doc,
+                    new String[] { "Total Delivery Orders", "Successful Deliveries", "Cancelled Deliveries" },
+                    new String[] { fmtNum(totalDeliveries), fmtNum(delivered), fmtNum(cancelled) });
+
+            addSectionHeading(doc, "Driver Statistics");
+            PdfPTable pt = new PdfPTable(3);
+            pt.setWidthPercentage(100);
+            addTableHeader(pt, "Driver Name", "Successful Deliveries", "Cancelled");
+            boolean alt = false;
+
+            Set<String> allDrivers = new HashSet<>();
+            allDrivers.addAll(driverDeliveries.keySet());
+            allDrivers.addAll(driverCancellations.keySet());
+
+            if (allDrivers.isEmpty()) {
+                addEmptyRow(pt, 3);
+            } else {
+                for (String d : allDrivers) {
+                    long succ = driverDeliveries.getOrDefault(d, 0L);
+                    long fail = driverCancellations.getOrDefault(d, 0L);
+                    addTableRow(pt, alt, d, fmtNum(succ), fmtNum(fail));
+                    alt = !alt;
+                }
+            }
+            doc.add(pt);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Delivery Performance Report", e);
+        }
     }
 
+    /**
+     * Generates a Reservation Report in PDF format.
+     * Calculates the total reservations, guest turnout, net deposit revenue,
+     * and provides a status breakdown (e.g. COMPLETED vs CANCELLED vs NO_SHOW).
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateReservationReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 3
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Reservation> reservations = reservationRepository.findByBranchIdAndReservationTimeBetween(branchId, start, end);
+
+        long totalReservations = reservations.size();
+        long totalGuests = 0;
+        BigDecimal totalExpectedRevenue = BigDecimal.ZERO;
+        BigDecimal totalRefunds = BigDecimal.ZERO;
+
+        Map<ReservationStatus, Long> statusCount = new EnumMap<>(ReservationStatus.class);
+
+        for (Reservation r : reservations) {
+            totalGuests += r.getGuestCount() != null ? r.getGuestCount() : 0;
+            if (r.getTotalCharge() != null) {
+                totalExpectedRevenue = totalExpectedRevenue.add(r.getTotalCharge());
+            }
+            if (r.getRefundAmount() != null) {
+                totalRefunds = totalRefunds.add(r.getRefundAmount());
+            }
+
+            statusCount.put(r.getStatus(), statusCount.getOrDefault(r.getStatus(), 0L) + 1);
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Reservation Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Reservation Overview");
+            addSummaryBox(doc,
+                    new String[] { "Total Reservations", "Total Guests", "Net Deposit Revenue" },
+                    new String[] { fmtNum(totalReservations), fmtNum(totalGuests), fmt(totalExpectedRevenue.subtract(totalRefunds)) });
+
+            addSectionHeading(doc, "Status Breakdown");
+            PdfPTable pt = new PdfPTable(2);
+            pt.setWidthPercentage(100);
+            addTableHeader(pt, "Status", "Count");
+            boolean alt = false;
+
+            if (statusCount.isEmpty()) {
+                addEmptyRow(pt, 2);
+            } else {
+                for (Map.Entry<ReservationStatus, Long> e : statusCount.entrySet()) {
+                    addTableRow(pt, alt, e.getKey().name(), fmtNum(e.getValue()));
+                    alt = !alt;
+                }
+            }
+            doc.add(pt);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Reservation Report", e);
+        }
     }
 
     @Override
