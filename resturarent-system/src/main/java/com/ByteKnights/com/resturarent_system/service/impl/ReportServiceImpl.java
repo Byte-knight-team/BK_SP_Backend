@@ -285,15 +285,171 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public byte[] generateSalesReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 2
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Order> orders = orderRepository.findByBranchIdAndCreatedAtBetween(branchId, start, end);
+
+        BigDecimal grossSales = BigDecimal.ZERO;
+        BigDecimal refunds = BigDecimal.ZERO;
+        BigDecimal taxCollected = BigDecimal.ZERO;
+        BigDecimal deliveryFees = BigDecimal.ZERO;
+        BigDecimal serviceCharges = BigDecimal.ZERO;
+        BigDecimal discounts = BigDecimal.ZERO;
+
+        Map<PaymentMethod, BigDecimal> paymentMethodRevenue = new EnumMap<>(PaymentMethod.class);
+        Map<OrderType, BigDecimal> channelRevenue = new EnumMap<>(OrderType.class);
+        Map<OrderType, Long> channelCount = new EnumMap<>(OrderType.class);
+
+        for (Order o : orders) {
+            // Group by Channel
+            channelCount.put(o.getOrderType(), channelCount.getOrDefault(o.getOrderType(), 0L) + 1);
+
+            if (o.getStatus() == OrderStatus.REFUNDED) {
+                refunds = refunds.add(o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO);
+            } else if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS) {
+                BigDecimal amt = o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO;
+                grossSales = grossSales.add(amt);
+                taxCollected = taxCollected.add(o.getTaxAmount() != null ? o.getTaxAmount() : BigDecimal.ZERO);
+                deliveryFees = deliveryFees.add(o.getDeliveryFee() != null ? o.getDeliveryFee() : BigDecimal.ZERO);
+                serviceCharges = serviceCharges.add(o.getServiceCharge() != null ? o.getServiceCharge() : BigDecimal.ZERO);
+                discounts = discounts.add(o.getDiscountAmount() != null ? o.getDiscountAmount() : BigDecimal.ZERO);
+
+                channelRevenue.put(o.getOrderType(), channelRevenue.getOrDefault(o.getOrderType(), BigDecimal.ZERO).add(amt));
+
+                // Payment Method
+                Optional<Payment> paymentOpt = paymentRepository.findByOrder(o);
+                if (paymentOpt.isPresent()) {
+                    PaymentMethod method = paymentOpt.get().getPaymentMethod();
+                    paymentMethodRevenue.put(method, paymentMethodRevenue.getOrDefault(method, BigDecimal.ZERO).add(amt));
+                }
+            }
+        }
+
+        BigDecimal netSales = grossSales.subtract(refunds);
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Sales & Revenue Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Financial Summary");
+            addSummaryBox(doc,
+                    new String[] { "Gross Sales", "Refunds", "Net Sales" },
+                    new String[] { fmt(grossSales), fmt(refunds), fmt(netSales) });
+            addSummaryBox(doc,
+                    new String[] { "Tax Collected", "Delivery Fees", "Discounts Given" },
+                    new String[] { fmt(taxCollected), fmt(deliveryFees), fmt(discounts) });
+
+            addSectionHeading(doc, "Payment Method Breakdown");
+            PdfPTable pt = new PdfPTable(3);
+            pt.setWidthPercentage(100);
+            addTableHeader(pt, "Payment Method", "Revenue", "% of Gross Sales");
+            boolean alt = false;
+            if (paymentMethodRevenue.isEmpty()) {
+                addEmptyRow(pt, 3);
+            } else {
+                for (Map.Entry<PaymentMethod, BigDecimal> e : paymentMethodRevenue.entrySet()) {
+                    BigDecimal rev = e.getValue();
+                    String pct = grossSales.compareTo(BigDecimal.ZERO) == 0 ? "0%" :
+                            String.format("%.1f%%", rev.multiply(new BigDecimal(100)).divide(grossSales, 1, java.math.RoundingMode.HALF_UP));
+                    addTableRow(pt, alt, e.getKey().name(), fmt(rev), pct);
+                    alt = !alt;
+                }
+            }
+            doc.add(pt);
+
+            addSectionHeading(doc, "Order Channel Breakdown");
+            PdfPTable ct = new PdfPTable(4);
+            ct.setWidthPercentage(100);
+            addTableHeader(ct, "Channel (Type)", "Order Count", "Revenue", "% of Gross Sales");
+            alt = false;
+            if (channelCount.isEmpty()) {
+                addEmptyRow(ct, 4);
+            } else {
+                for (Map.Entry<OrderType, Long> e : channelCount.entrySet()) {
+                    OrderType type = e.getKey();
+                    BigDecimal rev = channelRevenue.getOrDefault(type, BigDecimal.ZERO);
+                    String pct = grossSales.compareTo(BigDecimal.ZERO) == 0 ? "0%" :
+                            String.format("%.1f%%", rev.multiply(new BigDecimal(100)).divide(grossSales, 1, java.math.RoundingMode.HALF_UP));
+                    addTableRow(ct, alt, type.name(), fmtNum(e.getValue()), fmt(rev), pct);
+                    alt = !alt;
+                }
+            }
+            doc.add(ct);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Sales Report", e);
+        }
     }
 
     @Override
     @Transactional(readOnly = true)
     public byte[] generateRevenueTrendReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 2
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Object[]> trendData = orderRepository.findRevenueTrendByBranchAndDates(branchId, start, end);
+
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        long totalOrders = 0;
+
+        for (Object[] row : trendData) {
+            BigDecimal rev = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
+            long count = row[2] != null ? Long.parseLong(row[2].toString()) : 0L;
+            totalRevenue = totalRevenue.add(rev);
+            totalOrders += count;
+        }
+
+        BigDecimal avgOrderValue = totalOrders == 0 ? BigDecimal.ZERO :
+                totalRevenue.divide(new BigDecimal(totalOrders), 2, java.math.RoundingMode.HALF_UP);
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Revenue Trend Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Period Summary");
+            addSummaryBox(doc,
+                    new String[] { "Total Revenue", "Total Orders", "Avg Order Value" },
+                    new String[] { fmt(totalRevenue), fmtNum(totalOrders), fmt(avgOrderValue) });
+
+            addSectionHeading(doc, "Daily Breakdown");
+            PdfPTable pt = new PdfPTable(4);
+            pt.setWidthPercentage(100);
+            addTableHeader(pt, "Date", "Orders", "Revenue", "Avg Value");
+
+            boolean alt = false;
+            if (trendData.isEmpty()) {
+                addEmptyRow(pt, 4);
+            } else {
+                for (Object[] row : trendData) {
+                    String date = row[0] != null ? row[0].toString() : "Unknown";
+                    BigDecimal rev = row[1] != null ? new BigDecimal(row[1].toString()) : BigDecimal.ZERO;
+                    long count = row[2] != null ? Long.parseLong(row[2].toString()) : 0L;
+                    BigDecimal avg = count == 0 ? BigDecimal.ZERO : rev.divide(new BigDecimal(count), 2, java.math.RoundingMode.HALF_UP);
+
+                    addTableRow(pt, alt, date, fmtNum(count), fmt(rev), fmt(avg));
+                    alt = !alt;
+                }
+            }
+            doc.add(pt);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Revenue Trend Report", e);
+        }
     }
 
     @Override
