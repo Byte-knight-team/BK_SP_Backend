@@ -954,11 +954,92 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    /**
+     * Generates a Procurement & POs Report in PDF format.
+     * Provides a summary of all purchase orders placed in a given date range,
+     * including a breakdown by PO status and order volume per vendor.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateProcurementReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 3
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<com.ByteKnights.com.resturarent_system.entity.PurchaseOrder> pos = 
+                purchaseOrderRepository.findByBranchIdAndCreatedAtBetweenOrderByCreatedAtDesc(branchId, start, end);
+
+        long totalPos = pos.size();
+        Map<com.ByteKnights.com.resturarent_system.entity.PurchaseOrderStatus, Long> statusCount = new EnumMap<>(com.ByteKnights.com.resturarent_system.entity.PurchaseOrderStatus.class);
+        Map<String, Long> vendorCount = new HashMap<>();
+
+        for (com.ByteKnights.com.resturarent_system.entity.PurchaseOrder po : pos) {
+            statusCount.put(po.getStatus(), statusCount.getOrDefault(po.getStatus(), 0L) + 1);
+
+            String vName = po.getVendor() != null ? po.getVendor().getName() : "Unknown Vendor";
+            vendorCount.put(vName, vendorCount.getOrDefault(vName, 0L) + 1);
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Procurement & POs Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Procurement Overview");
+            addSummaryBox(doc,
+                    new String[] { "Total POs Issued", "Active Vendors" },
+                    new String[] { fmtNum(totalPos), fmtNum(vendorCount.size()) });
+
+            addSectionHeading(doc, "Status Breakdown");
+            PdfPTable ptStatus = new PdfPTable(2);
+            ptStatus.setWidthPercentage(100);
+            addTableHeader(ptStatus, "PO Status", "Number of Orders");
+            boolean alt = false;
+
+            if (statusCount.isEmpty()) {
+                addEmptyRow(ptStatus, 2);
+            } else {
+                for (Map.Entry<com.ByteKnights.com.resturarent_system.entity.PurchaseOrderStatus, Long> e : statusCount.entrySet()) {
+                    addTableRow(ptStatus, alt, e.getKey().name(), fmtNum(e.getValue()));
+                    alt = !alt;
+                }
+            }
+            doc.add(ptStatus);
+
+            addSectionHeading(doc, "Vendor Order Volume");
+            PdfPTable ptVendor = new PdfPTable(2);
+            ptVendor.setWidthPercentage(100);
+            addTableHeader(ptVendor, "Vendor Name", "POs Issued");
+            alt = false;
+
+            if (vendorCount.isEmpty()) {
+                addEmptyRow(ptVendor, 2);
+            } else {
+                // Sort by count descending
+                List<Map.Entry<String, Long>> sortedVendors = new ArrayList<>(vendorCount.entrySet());
+                sortedVendors.sort((e1, e2) -> e2.getValue().compareTo(e1.getValue()));
+
+                for (Map.Entry<String, Long> e : sortedVendors) {
+                    addTableRow(ptVendor, alt, e.getKey(), fmtNum(e.getValue()));
+                    alt = !alt;
+                }
+            }
+            doc.add(ptVendor);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Procurement Report", e);
+        }
     }
 
     @Override
