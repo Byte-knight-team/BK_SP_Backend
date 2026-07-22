@@ -455,15 +455,200 @@ public class ReportServiceImpl implements ReportService {
     @Override
     @Transactional(readOnly = true)
     public byte[] generateTopSellingItemsReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 2
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Order> orders = orderRepository.findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS), start, end);
+        List<Long> orderIds = orders.stream().map(Order::getId).collect(Collectors.toList());
+
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        long totalItemsSold = 0;
+
+        Map<String, BigDecimal> itemRevenue = new HashMap<>();
+        Map<String, Long> itemQuantity = new HashMap<>();
+
+        if (!orderIds.isEmpty()) {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderIdIn(orderIds);
+            for (OrderItem oi : orderItems) {
+                String name = oi.getItemName();
+                BigDecimal subtotal = oi.getSubtotal() != null ? oi.getSubtotal() : BigDecimal.ZERO;
+                long qty = oi.getQuantity() != null ? oi.getQuantity() : 0L;
+
+                itemRevenue.put(name, itemRevenue.getOrDefault(name, BigDecimal.ZERO).add(subtotal));
+                itemQuantity.put(name, itemQuantity.getOrDefault(name, 0L) + qty);
+
+                totalRevenue = totalRevenue.add(subtotal);
+                totalItemsSold += qty;
+            }
+        }
+
+        List<Map.Entry<String, BigDecimal>> sortedItems = new ArrayList<>(itemRevenue.entrySet());
+        sortedItems.sort((a, b) -> b.getValue().compareTo(a.getValue()));
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Top Selling Items Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Period Summary");
+            addSummaryBox(doc,
+                    new String[] { "Total Items Sold", "Total Item Revenue" },
+                    new String[] { fmtNum(totalItemsSold), fmt(totalRevenue) });
+
+            addSectionHeading(doc, "Ranked Items");
+            PdfPTable pt = new PdfPTable(new float[]{1, 4, 2, 2, 2});
+            pt.setWidthPercentage(100);
+            addTableHeader(pt, "Rank", "Item Name", "Qty Sold", "Revenue", "% of Revenue");
+
+            boolean alt = false;
+            if (sortedItems.isEmpty()) {
+                addEmptyRow(pt, 5);
+            } else {
+                int rank = 1;
+                for (Map.Entry<String, BigDecimal> e : sortedItems) {
+                    String name = e.getKey();
+                    BigDecimal rev = e.getValue();
+                    long qty = itemQuantity.getOrDefault(name, 0L);
+                    String pct = totalRevenue.compareTo(BigDecimal.ZERO) == 0 ? "0%" :
+                            String.format("%.1f%%", rev.multiply(new BigDecimal(100)).divide(totalRevenue, 1, java.math.RoundingMode.HALF_UP));
+
+                    addTableRowWithBoldFirst(pt, alt, "#" + rank, name, fmtNum(qty), fmt(rev), pct);
+                    rank++;
+                    alt = !alt;
+                }
+            }
+            doc.add(pt);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Top Selling Items Report", e);
+        }
     }
 
     @Override
     @Transactional(readOnly = true)
     public byte[] generateOrderSummaryReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 2
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<Order> orders = orderRepository.findByBranchIdAndCreatedAtBetween(branchId, start, end);
+
+        long totalOrders = orders.size();
+        long completed = 0;
+        long cancelled = 0;
+
+        long totalPrepSeconds = 0;
+        long prepCount = 0;
+
+        Map<OrderStatus, Long> statusCount = new EnumMap<>(OrderStatus.class);
+        Map<String, Long> cancelReasons = new HashMap<>();
+        Map<OrderType, Long> typeCount = new EnumMap<>(OrderType.class);
+        Map<OrderType, BigDecimal> typeRevenue = new EnumMap<>(OrderType.class);
+        Map<String, Long> hourCount = new TreeMap<>();
+
+        for (Order o : orders) {
+            statusCount.put(o.getStatus(), statusCount.getOrDefault(o.getStatus(), 0L) + 1);
+            typeCount.put(o.getOrderType(), typeCount.getOrDefault(o.getOrderType(), 0L) + 1);
+
+            if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS) {
+                BigDecimal amt = o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO;
+                typeRevenue.put(o.getOrderType(), typeRevenue.getOrDefault(o.getOrderType(), BigDecimal.ZERO).add(amt));
+            }
+
+            if (o.getStatus() == OrderStatus.COMPLETED || o.getStatus() == OrderStatus.SERVED) completed++;
+            if (o.getStatus() == OrderStatus.CANCELLED || o.getStatus() == OrderStatus.REJECTED) {
+                cancelled++;
+                String reason = o.getCancelReason() != null && !o.getCancelReason().trim().isEmpty() ? 
+                        o.getCancelReason() : "No reason provided";
+                cancelReasons.put(reason, cancelReasons.getOrDefault(reason, 0L) + 1);
+            }
+
+            if (o.getCookingStartedAt() != null && o.getCookingCompletedAt() != null) {
+                long secs = java.time.Duration.between(o.getCookingStartedAt(), o.getCookingCompletedAt()).getSeconds();
+                if (secs > 0) {
+                    totalPrepSeconds += secs;
+                    prepCount++;
+                }
+            }
+
+            String hourLabel = String.format("%02d:00", o.getCreatedAt().getHour());
+            hourCount.put(hourLabel, hourCount.getOrDefault(hourLabel, 0L) + 1);
+        }
+
+        String avgPrepTime = prepCount == 0 ? "0 mins" : (totalPrepSeconds / prepCount / 60) + " mins";
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Order Summary Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Overview");
+            addSummaryBox(doc,
+                    new String[] { "Total Orders", "Completed", "Cancelled", "Avg Prep Time" },
+                    new String[] { fmtNum(totalOrders), fmtNum(completed), fmtNum(cancelled), avgPrepTime });
+
+            addSectionHeading(doc, "Order Status Breakdown");
+            PdfPTable ptStatus = new PdfPTable(3);
+            ptStatus.setWidthPercentage(100);
+            addTableHeader(ptStatus, "Status", "Order Count", "% of Total");
+            boolean alt = false;
+            for (Map.Entry<OrderStatus, Long> e : statusCount.entrySet()) {
+                String pct = totalOrders == 0 ? "0%" : String.format("%.1f%%", (e.getValue() * 100.0) / totalOrders);
+                addTableRow(ptStatus, alt, e.getKey().name(), fmtNum(e.getValue()), pct);
+                alt = !alt;
+            }
+            if (statusCount.isEmpty()) addEmptyRow(ptStatus, 3);
+            doc.add(ptStatus);
+
+            addSectionHeading(doc, "Cancellation Reasons");
+            PdfPTable ptCancel = new PdfPTable(2);
+            ptCancel.setWidthPercentage(100);
+            addTableHeader(ptCancel, "Reason", "Count");
+            alt = false;
+            if (cancelReasons.isEmpty()) {
+                PdfPCell cell = new PdfPCell(new Phrase("No cancellations found.", FONT_SMALL));
+                cell.setColspan(2);
+                cell.setPadding(10);
+                cell.setBackgroundColor(ALT_ROW_BG);
+                ptCancel.addCell(cell);
+            } else {
+                for (Map.Entry<String, Long> e : cancelReasons.entrySet()) {
+                    addTableRow(ptCancel, alt, e.getKey(), fmtNum(e.getValue()));
+                    alt = !alt;
+                }
+            }
+            doc.add(ptCancel);
+
+            addSectionHeading(doc, "Peak Ordering Hours");
+            PdfPTable ptHour = new PdfPTable(2);
+            ptHour.setWidthPercentage(100);
+            addTableHeader(ptHour, "Hour", "Order Count");
+            alt = false;
+            if (hourCount.isEmpty()) {
+                addEmptyRow(ptHour, 2);
+            } else {
+                for (Map.Entry<String, Long> e : hourCount.entrySet()) {
+                    addTableRow(ptHour, alt, e.getKey(), fmtNum(e.getValue()));
+                    alt = !alt;
+                }
+            }
+            doc.add(ptHour);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Order Summary Report", e);
+        }
     }
 
     @Override
