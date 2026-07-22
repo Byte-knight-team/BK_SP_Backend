@@ -13,6 +13,8 @@ import java.util.List;
 
 @Repository
 public interface ReviewRepository extends JpaRepository<Review, Long> {
+  List<Review> findByOrderBranchIdAndCreatedAtBetween(Long branchId, java.time.LocalDateTime start, java.time.LocalDateTime end);
+
   boolean existsByOrderAndOrderItemIsNull(Order order);
 
   boolean existsByOrderItem(OrderItem orderItem);

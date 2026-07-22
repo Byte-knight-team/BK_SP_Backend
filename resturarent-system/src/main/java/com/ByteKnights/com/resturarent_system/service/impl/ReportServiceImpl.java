@@ -1042,17 +1042,140 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+
+    /**
+     * Generates a Staff Details Report in PDF format.
+     * Lists all current staff members for the branch, along with their roles and employment status.
+     * Note: This report provides a snapshot and does not rely on a date filter.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateStaffDetailsReport(Long branchId, Long userId) {
-        // TODO: Implemented in Phase 4
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+
+        List<Staff> staffMembers = staffRepository.findByBranchIdWithUserRoleBranch(branchId);
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            // Using current date for header since this is a snapshot report
+            addReportHeader(doc, "Staff Details Report", branchName, LocalDate.now(), LocalDate.now());
+
+            addSectionHeading(doc, "Staff Overview");
+            addSummaryBox(doc,
+                    new String[] { "Total Staff Members" },
+                    new String[] { fmtNum(staffMembers.size()) });
+
+            addSectionHeading(doc, "Staff Roster");
+            PdfPTable pt = new PdfPTable(5);
+            pt.setWidthPercentage(100);
+            addTableHeader(pt, "Name", "Role", "Email", "Phone", "Hire Date");
+            boolean alt = false;
+
+            if (staffMembers.isEmpty()) {
+                addEmptyRow(pt, 5);
+            } else {
+                for (Staff s : staffMembers) {
+                    String name = (s.getFirstName() != null ? s.getFirstName() : "") + " " + 
+                                  (s.getLastName() != null ? s.getLastName() : "");
+                    String role = s.getUser() != null && s.getUser().getRole() != null ? s.getUser().getRole().getName() : "N/A";
+                    String email = s.getUser() != null && s.getUser().getEmail() != null ? s.getUser().getEmail() : "N/A";
+                    String phone = s.getUser() != null && s.getUser().getPhone() != null ? s.getUser().getPhone() : "N/A";
+                    String hireDate = s.getHireDate() != null ? s.getHireDate().toString() : "N/A";
+
+                    addTableRow(pt, alt, name.trim(), role, email, phone, hireDate);
+                    alt = !alt;
+                }
+            }
+            doc.add(pt);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Staff Details Report", e);
+        }
     }
 
+    /**
+     * Generates a Customer Reviews Report in PDF format.
+     * Aggregates recent customer feedback within the given timeframe, showing average 
+     * ratings and specific comments to gauge customer satisfaction.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range
+     * @param endDate End of the date range
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateCustomerReviewsReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 4
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        List<com.ByteKnights.com.resturarent_system.entity.Review> reviews = 
+                reviewRepository.findByOrderBranchIdAndCreatedAtBetween(branchId, start, end);
+
+        long totalReviews = reviews.size();
+        double avgRating = 0;
+        if (totalReviews > 0) {
+            avgRating = reviews.stream().mapToInt(com.ByteKnights.com.resturarent_system.entity.Review::getRating).average().orElse(0);
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Customer Reviews Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Feedback Overview");
+            addSummaryBox(doc,
+                    new String[] { "Total Reviews", "Average Rating" },
+                    new String[] { fmtNum(totalReviews), String.format("%.1f / 5", avgRating) });
+
+            addSectionHeading(doc, "Review Details");
+            // Name | Item | Rating | Comment
+            PdfPTable pt = new PdfPTable(4);
+            pt.setWidthPercentage(100);
+            pt.setWidths(new float[]{2f, 2f, 1f, 5f}); // make comment column wider
+            addTableHeader(pt, "Customer", "Item / Order", "Rating", "Comment");
+            boolean alt = false;
+
+            if (reviews.isEmpty()) {
+                addEmptyRow(pt, 4);
+            } else {
+                for (com.ByteKnights.com.resturarent_system.entity.Review r : reviews) {
+                    String custName = r.getCustomer() != null && r.getCustomer().getUser() != null 
+                            ? r.getCustomer().getUser().getFullName() : "Anonymous";
+                    
+                    String itemStr = "Full Order";
+                    if (r.getOrderItem() != null && r.getOrderItem().getMenuItem() != null) {
+                        itemStr = r.getOrderItem().getMenuItem().getName();
+                    }
+
+                    String ratingStr = r.getRating() + " Star";
+                    String comment = r.getComment() != null ? r.getComment() : "";
+
+                    addTableRow(pt, alt, custName, itemStr, ratingStr, comment);
+                    alt = !alt;
+                }
+            }
+            doc.add(pt);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Customer Reviews Report", e);
+        }
     }
 }
