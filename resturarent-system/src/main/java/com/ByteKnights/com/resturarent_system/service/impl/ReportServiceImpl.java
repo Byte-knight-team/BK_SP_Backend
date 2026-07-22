@@ -855,11 +855,103 @@ public class ReportServiceImpl implements ReportService {
         }
     }
 
+    /**
+     * Generates an Inventory Status Report in PDF format.
+     * Provides a snapshot of current stock levels, low stock alerts, and 
+     * a summary of inventory transactions (restocks, wastage, deductions) over the specified period.
+     * 
+     * @param branchId ID of the branch
+     * @param userId ID of the requesting user
+     * @param startDate Start of the date range (applies to transactions)
+     * @param endDate End of the date range (applies to transactions)
+     * @return PDF byte array
+     */
     @Override
     @Transactional(readOnly = true)
     public byte[] generateInventoryStatusReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
-        // TODO: Implemented in Phase 3
-        return new byte[0];
+        String branchName = resolveBranchName(branchId);
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(LocalTime.MAX);
+
+        // 1. Current Snapshot Data
+        List<InventoryItem> allItems = inventoryItemRepository.findByBranchId(branchId);
+        List<InventoryItem> lowStockItems = new ArrayList<>();
+        BigDecimal totalInventoryValue = BigDecimal.ZERO;
+
+        for (InventoryItem item : allItems) {
+            BigDecimal qty = item.getQuantity() != null ? item.getQuantity() : BigDecimal.ZERO;
+            BigDecimal price = item.getUnitPrice() != null ? item.getUnitPrice() : BigDecimal.ZERO;
+            totalInventoryValue = totalInventoryValue.add(qty.multiply(price));
+
+            if (item.getReorderLevel() != null && qty.compareTo(item.getReorderLevel()) <= 0) {
+                lowStockItems.add(item);
+            }
+        }
+
+        // 2. Transaction Data for Date Range
+        List<InventoryTransaction> transactions = inventoryTransactionRepository
+                .findByInventoryItemBranchIdAndCreatedAtBetweenOrderByCreatedAtDesc(branchId, start, end);
+
+        BigDecimal totalRestocked = BigDecimal.ZERO;
+        BigDecimal totalWasted = BigDecimal.ZERO;
+        BigDecimal totalDeducted = BigDecimal.ZERO;
+
+        for (InventoryTransaction t : transactions) {
+            BigDecimal change = t.getQuantityChange() != null ? t.getQuantityChange() : BigDecimal.ZERO;
+            if (t.getTransactionType() == com.ByteKnights.com.resturarent_system.entity.InventoryTransactionType.RESTOCK) {
+                totalRestocked = totalRestocked.add(change.abs());
+            } else if (t.getTransactionType() == com.ByteKnights.com.resturarent_system.entity.InventoryTransactionType.WASTAGE) {
+                totalWasted = totalWasted.add(change.abs());
+            } else if (t.getTransactionType() == com.ByteKnights.com.resturarent_system.entity.InventoryTransactionType.ORDER_DEDUCT) {
+                totalDeducted = totalDeducted.add(change.abs());
+            }
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            Document doc = createDocument();
+            PdfWriter writer = PdfWriter.getInstance(doc, baos);
+            writer.setPageEvent(new PageFooter());
+            doc.open();
+
+            addReportHeader(doc, "Inventory Status Report", branchName, startDate, endDate);
+
+            addSectionHeading(doc, "Current Inventory Overview");
+            addSummaryBox(doc,
+                    new String[] { "Total Items in Catalog", "Low Stock Alerts", "Est. Total Value" },
+                    new String[] { fmtNum(allItems.size()), fmtNum(lowStockItems.size()), fmt(totalInventoryValue) });
+
+            addSectionHeading(doc, "Transaction Summary (Selected Period)");
+            PdfPTable ptTrans = new PdfPTable(3);
+            ptTrans.setWidthPercentage(100);
+            addTableHeader(ptTrans, "Total Restocked (Units)", "Total Order Deductions", "Total Wastage");
+            addTableRow(ptTrans, false, fmtNum(totalRestocked.longValue()), fmtNum(totalDeducted.longValue()), fmtNum(totalWasted.longValue()));
+            doc.add(ptTrans);
+
+            addSectionHeading(doc, "Low Stock Alerts");
+            PdfPTable ptLow = new PdfPTable(4);
+            ptLow.setWidthPercentage(100);
+            addTableHeader(ptLow, "Item Name", "Category", "Current Qty", "Reorder Level");
+            boolean alt = false;
+
+            if (lowStockItems.isEmpty()) {
+                addEmptyRow(ptLow, 4);
+            } else {
+                for (InventoryItem item : lowStockItems) {
+                    addTableRow(ptLow, alt, 
+                            item.getName(), 
+                            item.getCategory() != null ? item.getCategory() : "N/A", 
+                            item.getQuantity() != null ? item.getQuantity().toString() + " " + item.getUnit() : "0", 
+                            item.getReorderLevel() != null ? item.getReorderLevel().toString() : "0");
+                    alt = !alt;
+                }
+            }
+            doc.add(ptLow);
+
+            doc.close();
+            return baos.toByteArray();
+        } catch (DocumentException | java.io.IOException e) {
+            throw new RuntimeException("Error generating Inventory Status Report", e);
+        }
     }
 
     @Override
