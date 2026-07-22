@@ -15,6 +15,9 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
     // Find all POs for a branch ordered newest first
     List<PurchaseOrder> findByBranchIdOrderByCreatedAtDesc(Long branchId);
 
+    // Find POs for a branch within a date range
+    List<PurchaseOrder> findByBranchIdAndCreatedAtBetweenOrderByCreatedAtDesc(Long branchId, java.time.LocalDateTime start, java.time.LocalDateTime end);
+
     // Find POs for a branch filtered by status (for the status filter tabs on the frontend)
     List<PurchaseOrder> findByBranchIdAndStatusOrderByCreatedAtDesc(Long branchId, PurchaseOrderStatus status);
 
