@@ -24,6 +24,7 @@ import java.time.format.DateTimeFormatter;
  */
 @RestController
 @RequestMapping("/api/manager/reports")
+@CrossOrigin
 @RequiredArgsConstructor
 public class ReportController {
 
@@ -39,6 +40,7 @@ public class ReportController {
         headers.setContentType(MediaType.APPLICATION_PDF);
         headers.setContentDispositionFormData("attachment", filename);
         headers.setContentLength(pdf.length);
+        headers.setAccessControlExposeHeaders(java.util.List.of("Content-Disposition"));
         return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
     }
 
