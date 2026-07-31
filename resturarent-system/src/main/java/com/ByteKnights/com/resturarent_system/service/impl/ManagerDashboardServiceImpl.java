@@ -28,6 +28,14 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
     private final StaffRepository staffRepository;
     private final InventoryItemRepository inventoryItemRepository;
 
+    /**
+     * Aggregates key metrics for the Manager's dashboard.
+     * Calculates daily revenue, active orders, pending deliveries, low stock alerts, and staff availability.
+     * 
+     * @param targetBranchId Optional branch ID to filter by.
+     * @param userId The ID of the currently authenticated manager.
+     * @return A comprehensive summary DTO containing all dashboard metrics.
+     */
     @Override
     @Transactional(readOnly = true)
     public ManagerDashboardSummaryDTO getDashboardSummary(Long targetBranchId, Long userId) {
@@ -46,38 +54,35 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         int activeOrders = (int) orderRepository.countByBranchIdAndStatusIn(finalBranchId, activeStatuses);
 
         // 3. Pending Deliveries
-        // We use countByBranchIdAndStatusIn because OrderRepository doesn't have
-        // orderType and status combined.
-        // Let's do a manual fetch or add a query if needed.
-        // For now, let's fetch orders for today with delivery statuses and filter by
-        // ONLINE
-        int pendingDeliveries = 0;
-        List<Order> deliveries = orderRepository.findByStatusAndStatusUpdatedAtAfter(OrderStatus.READY, startOfDay,
-                org.springframework.data.domain.Sort.by("createdAt"));
-        for (Order o : deliveries) {
-            if (o.getBranch().getId().equals(finalBranchId) && o.getOrderType() == OrderType.ONLINE_DELIVERY) {
-                pendingDeliveries++;
-            }
-        }
-        List<Order> outDeliveries = orderRepository.findByStatusAndStatusUpdatedAtAfter(OrderStatus.OUT_FOR_DELIVERY,
-                startOfDay, org.springframework.data.domain.Sort.by("createdAt"));
-        for (Order o : outDeliveries) {
-            if (o.getBranch().getId().equals(finalBranchId) && o.getOrderType() == OrderType.ONLINE_DELIVERY) {
-                pendingDeliveries++;
-            }
-        }
+        // Counts today's ONLINE_DELIVERY orders that are READY and waiting for driver assignment.
+        // Previously: fetched ALL orders across ALL branches into Java memory, then filtered
+        // by branchId and orderType in a for-loop. Now done entirely in SQL.
+        int pendingDeliveries = (int) orderRepository
+                .countByBranchIdAndOrderTypeAndStatusInAndStatusUpdatedAtAfter(
+                        finalBranchId,
+                        OrderType.ONLINE_DELIVERY,
+                        Arrays.asList(OrderStatus.READY),
+                        startOfDay);
+
+        // Counts today's ONLINE_DELIVERY orders actively out with a driver.
+        int fleetActiveDeliveries = (int) orderRepository
+                .countByBranchIdAndOrderTypeAndStatusInAndStatusUpdatedAtAfter(
+                        finalBranchId,
+                        OrderType.ONLINE_DELIVERY,
+                        Arrays.asList(OrderStatus.OUT_FOR_DELIVERY),
+                        startOfDay);
 
         // 4. Low Stock Alerts
         int lowStockAlerts = (int) inventoryItemRepository.countLowStockByBranchId(finalBranchId);
 
-        // 5. Sales Target (Mocked Goal for now, dynamic current)
+        // 5. Sales Target (Currently using a mocked/hardcoded goal)
         ManagerDashboardSummaryDTO.ManagerSalesTargetDTO salesTarget = ManagerDashboardSummaryDTO.ManagerSalesTargetDTO
                 .builder()
                 .current(revenue)
                 .goal(new BigDecimal("50000.00")) // Hardcoded target
                 .build();
 
-        // 6. Order Distribution
+        // 6. Order Distribution (Dine-in vs Online)
         int dineIn = (int) orderRepository.countByBranchIdAndOrderTypeAndCreatedAtBetween(finalBranchId, OrderType.QR,
                 startOfDay, endOfDay);
         int onlineDelivery = (int) orderRepository.countByBranchIdAndOrderTypeAndCreatedAtBetween(finalBranchId,
@@ -93,7 +98,7 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                 .online(online)
                 .build();
 
-        // 7. Recent Orders
+        // 7. Recent Orders List
         List<Order> topOrders = orderRepository.findTop50ByBranchIdOrderByCreatedAtDesc(finalBranchId);
         DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("MMM dd, HH:mm");
         List<ManagerDashboardSummaryDTO.ManagerRecentOrderDTO> recentOrders = topOrders.stream()
@@ -106,7 +111,7 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                         .build())
                 .collect(Collectors.toList());
 
-        // 8. Staff Availability
+        // 8. Staff Availability (Chefs and Delivery Drivers)
         int kitchenTotal = (int) staffRepository.countByBranchIdAndUserRoleName(finalBranchId, "CHEF");
         int kitchenActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
                 "CHEF", EmploymentStatus.ACTIVE);
@@ -131,11 +136,14 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                 .orderDistribution(distribution)
                 .recentOrders(recentOrders)
                 .staff(staff)
-                .fleetActiveDeliveries(
-                        (int) outDeliveries.stream().filter(o -> o.getBranch().getId().equals(finalBranchId)).count())
+                .fleetActiveDeliveries(fleetActiveDeliveries)
                 .build();
     }
 
+    /**
+     * Resolves the branch ID to use for fetching dashboard data.
+     * Validates that the requesting user is actually assigned to a branch if no explicit target is provided.
+     */
     private Long resolveBranchId(Long targetBranchId, Long userId) {
         if (targetBranchId != null) {
             return targetBranchId;

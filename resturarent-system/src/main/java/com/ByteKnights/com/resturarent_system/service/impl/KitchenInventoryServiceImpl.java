@@ -21,6 +21,8 @@ import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.KitchenInventoryService;
+import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService;
+import com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final AuditLogService auditLogService;
+    private final ManagerNotificationService managerNotificationService;
 
     @Override
     public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
@@ -148,6 +151,14 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 .build();
 
         chefRequestRepository.save(chefRequest);
+        
+        // Notify the manager
+        managerNotificationService.createNotification(
+                staff.getBranch().getId(),
+                ManagerNotificationType.CHEF_REQUEST,
+                user.getFullName() + " requested stock for: " + requestDTO.getItemName(),
+                chefRequest.getId()
+        );
     }
 
     @Override

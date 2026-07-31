@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryOrderDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHistoryDTO;
 import com.ByteKnights.com.resturarent_system.security.JwtUserPrincipal;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
 import com.ByteKnights.com.resturarent_system.entity.DeliveryStatus;
@@ -133,5 +134,22 @@ public class DeliveryOrderController {
                 
         deliveryOrderService.updateStatus(orderId, principal.getUser().getId(), status);
         return ResponseEntity.ok(ApiResponse.success("Status updated successfully", null));
+    }
+
+    /**
+     * Endpoint to fetch the historical deliveries for the logged-in driver.
+     * 
+     * Path: GET /api/delivery/orders/history
+     * 
+     * @param principal The authenticated user principal (driver).
+     * @return 200 OK with a list of DeliveryHistoryDTOs.
+     */
+    @GetMapping("/history")
+    @PreAuthorize("hasAuthority('VIEW_DELIVERY')")
+    public ResponseEntity<ApiResponse<List<DeliveryHistoryDTO>>> getDeliveryHistory(
+            @AuthenticationPrincipal JwtUserPrincipal principal) {
+        
+        List<DeliveryHistoryDTO> history = deliveryOrderService.getDeliveryHistory(principal.getUser().getId());
+        return ResponseEntity.ok(ApiResponse.success("Delivery history retrieved successfully", history));
     }
 }

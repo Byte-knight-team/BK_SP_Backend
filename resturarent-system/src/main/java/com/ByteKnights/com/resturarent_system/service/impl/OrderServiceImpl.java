@@ -403,7 +403,7 @@ public class OrderServiceImpl implements OrderService {
 
         // helper method to convert order entity to response
         private OrderResponse mapToOrderResponse(Order order) {
-                Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order).orElse(null);
 
                 java.util.List<OrderResponse.OrderItemResponse> itemResponses = order.getItems().stream()
                                 .map(item -> OrderResponse.OrderItemResponse.builder()
@@ -471,7 +471,7 @@ public class OrderServiceImpl implements OrderService {
                 if ("PAID".equalsIgnoreCase(request.getPaymentStatus())) {
                         order.setPaymentStatus(PaymentStatus.PAID);
                         
-                        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                        Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order).orElse(null);
                         if (payment == null) {
                                 payment = Payment.builder()
                                         .order(order)
@@ -629,7 +629,7 @@ public class OrderServiceImpl implements OrderService {
 
                 // Stripe automated refund for paid card orders
                 if (order.getPaymentStatus() == PaymentStatus.PAID || order.getPaymentStatus() == PaymentStatus.SUCCESS) {
-                        Payment payment = paymentRepository.findByOrder(order).orElse(null);
+                        Payment payment = paymentRepository.findByOrderOrderByIdAsc(order).stream().filter(p -> p.getPaymentStatus() == PaymentStatus.PAID || p.getPaymentStatus() == PaymentStatus.SUCCESS).findFirst().orElse(null);
                         if (payment != null && payment.getPaymentMethod() == PaymentMethod.CARD && payment.getTransactionReference() != null) {
                                 String idempotencyKey = "order-cancel-" + order.getId();
                                 java.util.Map<String, String> metadata = new java.util.HashMap<>();

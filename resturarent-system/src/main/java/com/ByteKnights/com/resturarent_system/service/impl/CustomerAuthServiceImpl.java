@@ -269,7 +269,6 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
         if (sessionId != null) {
             QrSession qrSession = qrSessionRepository.findById(sessionId).orElse(null);
-
             if (qrSession != null && qrSession.getCustomer() == null) {
                 qrSession.setCustomer(customer);
                 qrSessionRepository.save(qrSession);
