@@ -15,8 +15,7 @@ public class ManagerStaffMemberDTO {
     private Long userId;
     private String name;
     private String role;
-    private String hireDate;
+    private String joinedDate;
     private String contactNumber;
-    private BigDecimal salary;
     private String status;
 }

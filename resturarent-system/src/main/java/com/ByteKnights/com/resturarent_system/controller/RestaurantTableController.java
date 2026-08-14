@@ -2,7 +2,6 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateTableRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableRequest;
-import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateTableStatusRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.TableResponse;
 import com.ByteKnights.com.resturarent_system.service.RestaurantTableService;
 import jakarta.validation.Valid;
@@ -65,15 +64,4 @@ public class RestaurantTableController {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Updates only the table status.
-     */
-    @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-    public ResponseEntity<?> updateTableStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody UpdateTableStatusRequest request) {
-        TableResponse response = tableService.updateTableStatus(id, request);
-        return ResponseEntity.ok(response);
-    }
 }

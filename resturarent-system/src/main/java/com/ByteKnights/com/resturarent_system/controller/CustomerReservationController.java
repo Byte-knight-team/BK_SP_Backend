@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import org.springframework.data.domain.Page;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/customer/reservations")
@@ -37,7 +36,8 @@ public class CustomerReservationController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size,
             @RequestParam(defaultValue = "requests") String tab) {
-        return ResponseEntity.ok(customerReservationService.getMyReservations(authentication.getName(), page, size, tab));
+        return ResponseEntity
+                .ok(customerReservationService.getMyReservations(authentication.getName(), page, size, tab));
     }
 
     @GetMapping("/{id}")
@@ -47,16 +47,29 @@ public class CustomerReservationController {
         String email = authentication.getName();
         return ResponseEntity.ok(customerReservationService.getReservationById(id, email));
     }
+
     public static class CancelRequest {
         private String reason;
-        public String getReason() { return reason; }
-        public void setReason(String reason) { this.reason = reason; }
+
+        public String getReason() {
+            return reason;
+        }
+
+        public void setReason(String reason) {
+            this.reason = reason;
+        }
     }
 
     public static class PayRequest {
         private String transactionReference;
-        public String getTransactionReference() { return transactionReference; }
-        public void setTransactionReference(String transactionReference) { this.transactionReference = transactionReference; }
+
+        public String getTransactionReference() {
+            return transactionReference;
+        }
+
+        public void setTransactionReference(String transactionReference) {
+            this.transactionReference = transactionReference;
+        }
     }
 
     @PatchMapping("/{id}/cancel")
@@ -65,22 +78,10 @@ public class CustomerReservationController {
             @RequestBody(required = false) CancelRequest payload,
             Authentication authentication) {
         String email = authentication.getName();
-        String reason = (payload != null && payload.getReason() != null) ? payload.getReason() : "Cancelled by customer";
+        String reason = (payload != null && payload.getReason() != null) ? payload.getReason()
+                : "Cancelled by customer";
         customerReservationService.cancelMyReservation(id, reason, email);
         return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/{id}/pay")
-    public ResponseEntity<CustomerReservationResponse> payReservation(
-            @PathVariable Long id,
-            @RequestBody PayRequest payload,
-            Authentication authentication) {
-        String email = authentication.getName();
-        String transactionRef = payload != null ? payload.getTransactionReference() : null;
-        if (transactionRef == null || transactionRef.isBlank()) {
-            throw new IllegalArgumentException("Transaction reference is required");
-        }
-        return ResponseEntity.ok(customerReservationService.payReservation(id, transactionRef, email));
     }
 
     @GetMapping("/branches")

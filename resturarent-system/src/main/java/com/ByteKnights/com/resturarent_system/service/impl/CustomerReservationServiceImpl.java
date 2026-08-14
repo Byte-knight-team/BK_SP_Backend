@@ -35,6 +35,7 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
     private final UserRepository userRepository;
     private final WebSocketNotificationService webSocketNotificationService;
     private final EmailService emailService;
+    private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.url}")
     private String frontendUrl;
@@ -146,16 +147,51 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         }
 
         if (r.getStatus() == ReservationStatus.PAID) {
-            // Process refund
+            // Process partial refund
             BigDecimal refundAmount = r.getTotalCharge().subtract(r.getHandlingFee());
             r.setRefundAmount(refundAmount);
 
-            // Dummy refund record
+            ReservationPayment originalPayment = reservationPaymentRepository.findByReservationIdOrderByIdAsc(r.getId())
+                    .stream()
+                    .filter(p -> p.getPaymentStatus() == com.ByteKnights.com.resturarent_system.entity.PaymentStatus.PAID 
+                              || p.getPaymentStatus() == com.ByteKnights.com.resturarent_system.entity.PaymentStatus.SUCCESS)
+                    .findFirst()
+                    .orElse(null);
+            
+            boolean isRefunded = false;
+            String originalTransactionRef = "UNKNOWN";
+            if (originalPayment != null && originalPayment.getTransactionReference() != null) {
+                originalTransactionRef = originalPayment.getTransactionReference();
+                
+                // Fire partial refund to Stripe
+                String idempotencyKey = "res-cancel-" + r.getId();
+                java.util.Map<String, String> metadata = new java.util.HashMap<>();
+                metadata.put("reservationId", String.valueOf(r.getId()));
+                metadata.put("cancelReason", reason);
+
+                boolean refundSuccess = stripePaymentService.refundPayment(
+                        originalTransactionRef,
+                        refundAmount,
+                        idempotencyKey,
+                        "requested_by_customer",
+                        metadata
+                );
+
+                if (!refundSuccess) {
+                    originalPayment.setPaymentStatus(PaymentStatus.REFUND_FAILED);
+                } else {
+                    originalPayment.setPaymentStatus(PaymentStatus.REFUNDED);
+                    isRefunded = true;
+                }
+                reservationPaymentRepository.save(originalPayment);
+            }
+
+            // Create refund record
             ReservationPayment refund = ReservationPayment.builder()
                     .reservation(r)
                     .paymentMethod(PaymentMethod.CARD)
-                    .paymentStatus(PaymentStatus.SUCCESS)
-                    .transactionReference("REFUND-" + System.currentTimeMillis())
+                    .paymentStatus(isRefunded ? PaymentStatus.REFUNDED : PaymentStatus.REFUND_FAILED)
+                    .transactionReference("REFUND-" + originalTransactionRef)
                     .amount(refundAmount.negate())
                     .paidAt(LocalDateTime.now())
                     .build();
@@ -163,13 +199,18 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
 
             // Deduct from total spent
             Customer c = r.getCustomer();
-            c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
-            customerRepository.save(c);
+            if (isRefunded) {
+                c.setTotalSpent(c.getTotalSpent().subtract(refundAmount));
+                customerRepository.save(c);
+            }
 
+            final boolean finalIsRefunded = isRefunded;
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                 try {
-                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled & Refunded",
-                            "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded.");
+                    String msg = finalIsRefunded ?
+                            "Your reservation has been cancelled. An amount of " + refundAmount + " has been refunded." :
+                            "Your reservation has been cancelled, but the automatic refund failed. Our staff will process it manually.";
+                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Cancelled", msg);
                 } catch (Exception e) {
                 }
             });
@@ -210,19 +251,21 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
             // Notify the branch's receptionists that the CUSTOMER cancelled (global toast).
             webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "CANCELLED", r.getCustomerName());
         }
+
+        // Notify the customer's active sessions (WebSockets)
+        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+            webSocketNotificationService.broadcastReservationStatusToCustomer(r.getCustomer().getUser().getId(), r.getId(), "CANCELLED");
+        }
     }
 
     @Override
     @Transactional
-    public CustomerReservationResponse payReservation(Long reservationId, String transactionRef, String customerEmail) {
-        Reservation r = getReservationWithAuthCheck(reservationId, customerEmail);
+    public void webhookPayReservation(Long reservationId, String transactionRef) {
+        Reservation r = reservationRepository.findById(reservationId)
+                .orElseThrow(() -> new RuntimeException("Reservation not found"));
 
-        if (r.getStatus() != ReservationStatus.CONFIRMED) {
-            throw new RuntimeException("Reservation is not ready for payment");
-        }
-
-        if (r.getPaymentDeadline() != null && r.getPaymentDeadline().isBefore(LocalDateTime.now())) {
-            throw new RuntimeException("Payment window has expired");
+        if (r.getStatus() != ReservationStatus.CONFIRMED && r.getStatus() != ReservationStatus.REQUESTED) {
+            return;
         }
 
         ReservationPayment payment = ReservationPayment.builder()
@@ -239,25 +282,27 @@ public class CustomerReservationServiceImpl implements CustomerReservationServic
         reservationRepository.save(r);
 
         Customer c = r.getCustomer();
-        c.setTotalSpent(c.getTotalSpent().add(r.getTotalCharge()));
-        customerRepository.save(c);
+        if (c != null && r.getTotalCharge() != null) {
+            BigDecimal currentSpent = c.getTotalSpent() != null ? c.getTotalSpent() : BigDecimal.ZERO;
+            c.setTotalSpent(currentSpent.add(r.getTotalCharge()));
+            customerRepository.save(c);
+        }
 
         Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
         if (branchId != null) {
             webSocketNotificationService.broadcastReservationUpdate(branchId);
-            // Notify the branch's receptionists that the CUSTOMER paid (global toast).
             webSocketNotificationService.broadcastReservationActivityToBranch(branchId, r.getId(), "PAID", r.getCustomerName());
         }
 
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
-                        "Your payment was successful and your reservation is now confirmed!");
+                if (c != null && c.getUser() != null) {
+                    emailService.sendSimpleEmail(c.getUser().getEmail(), "Reservation Confirmed",
+                            "Your payment was successful and your reservation is now confirmed!");
+                }
             } catch (Exception e) {
             }
         });
-
-        return toDTO(r);
     }
 
     @Override

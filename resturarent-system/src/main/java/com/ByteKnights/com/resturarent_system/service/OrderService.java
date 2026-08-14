@@ -16,4 +16,5 @@ public interface OrderService {
     CustomerOrdersPageResponse getCustomerOrdersPage(String userIdentifier, String orderTypeFilter, Boolean isActive, int page, int size);
     OrderResponse getCustomerOrderById(String userIdentifier, Long orderId);
     void cancelCustomerOrder(String userIdentifier, Long orderId, String cancelReason);
+    void expireAbandonedOrder(Long orderId);
 }

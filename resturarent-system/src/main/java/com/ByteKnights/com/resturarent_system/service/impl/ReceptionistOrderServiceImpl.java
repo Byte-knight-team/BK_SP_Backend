@@ -36,6 +36,8 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final CouponUsageRepository couponUsageRepository;
     private final CouponRepository couponRepository;
     private final PaymentRepository paymentRepository;
+    private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
+    private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -357,6 +359,23 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
 
+        // Send Cancelled Email (Async)
+        if (savedOrder.getCustomer() != null && savedOrder.getCustomer().getUser() != null && savedOrder.getCustomer().getUser().getEmail() != null) {
+            final String toEmail = savedOrder.getCustomer().getUser().getEmail();
+            final String orderNum = savedOrder.getOrderNumber();
+            final String branchName = savedOrder.getBranch() != null ? savedOrder.getBranch().getName() : "Crave House";
+            final String finalReason = reason != null ? reason : "Cancelled by restaurant staff";
+
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String html = emailTemplateService.buildOrderCancelledHtml(orderNum, branchName, finalReason);
+                    emailService.sendHtmlEmail(toEmail, "Order Cancelled — " + orderNum, html);
+                } catch (Exception e) {
+                    // Ignore
+                }
+            });
+        }
+
         // QR order cancelled → remove it from the receptionist table monitor live
         if (savedOrder.getOrderType() == OrderType.QR) {
             webSocketNotificationService.broadcastTableUpdate(actorBranchId);
@@ -464,6 +483,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         Order savedOrder = orderRepository.save(order);
 
         webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+        sendServedEmailAsync(savedOrder);
 
         auditLogService.logCurrentUserAction(
                 AuditModule.ORDER,
@@ -505,8 +525,9 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         if (allServed) {
             order.updateStatus(OrderStatus.SERVED);
-            orderRepository.save(order);
-            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+            Order savedOrder = orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
+            sendServedEmailAsync(savedOrder);
         }
 
         // Refresh the receptionist table monitor so the ready indicator updates/disappears live
@@ -629,5 +650,23 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         snapshot.put("menuItemId", item.getMenuItem() != null ? item.getMenuItem().getId() : null);
 
         return snapshot;
+    }
+
+    private void sendServedEmailAsync(Order order) {
+        if (order.getCustomer() != null && order.getCustomer().getUser() != null && order.getCustomer().getUser().getEmail() != null) {
+            final String toEmail = order.getCustomer().getUser().getEmail();
+            final String orderNum = order.getOrderNumber();
+            final String branchName = order.getBranch() != null ? order.getBranch().getName() : "Crave House";
+            final BigDecimal finalAmount = order.getFinalAmount();
+
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    String html = emailTemplateService.buildOrderServedHtml(orderNum, branchName, finalAmount);
+                    emailService.sendHtmlEmail(toEmail, "Order Complete — " + orderNum, html);
+                } catch (Exception e) {
+                    // Ignore
+                }
+            });
+        }
     }
 }

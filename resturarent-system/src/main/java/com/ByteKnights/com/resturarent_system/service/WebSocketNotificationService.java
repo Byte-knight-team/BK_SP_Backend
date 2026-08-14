@@ -254,6 +254,36 @@ public class WebSocketNotificationService {
     }
 
     /**
+     * Broadcast an order payment status update (e.g. REFUNDED)
+     */
+    public void broadcastOrderPaymentStatusUpdate(Long orderId, String newPaymentStatus) {
+        String orderDestination = "/topic/order/" + orderId + "/status";
+        log.info("Broadcasting order payment status update to {}: {}", orderDestination, newPaymentStatus);
+
+        java.util.Map<String, String> payload = new java.util.HashMap<>();
+        payload.put("orderId", String.valueOf(orderId));
+        payload.put("paymentStatus", newPaymentStatus);
+
+        messagingTemplate.convertAndSend(orderDestination, payload);
+
+        try {
+            Order order = orderRepository.findById(orderId).orElse(null);
+            if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                Long userId = order.getCustomer().getUser().getId();
+                String userDestination = "/topic/user/" + userId + "/orders";
+                java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
+                globalPayload.put("orderId", String.valueOf(orderId));
+                globalPayload.put("orderNumber", order.getOrderNumber() != null ? order.getOrderNumber() : "");
+                globalPayload.put("paymentStatus", newPaymentStatus);
+
+                messagingTemplate.convertAndSend(userDestination, globalPayload);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to broadcast global payment update for order {}: {}", orderId, e.getMessage());
+        }
+    }
+
+    /**
      * Notify receptionist clients that reservation data has changed (created or cancelled).
      *
      * Topic: /topic/branch/{branchId}/reservation-update

@@ -15,9 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,6 +31,15 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
         private final DeliveryRepository deliveryRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
+
+        /**
+         * Compiles the data required for the Manager's Delivery Dashboard.
+         * Includes online drivers, dispatchable orders, and historical deliveries.
+         *
+         * @param targetBranchId Optional branch ID filter.
+         * @param userId         The ID of the currently authenticated manager.
+         * @return A comprehensive summary of driver activity and dispatch status.
+         */
 
         @Override
         @Transactional(readOnly = true)
@@ -44,12 +55,16 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 OrderType.ONLINE_DELIVERY,
                                 OrderStatus.COMPLETED);
 
-                // Filter out orders that already have a delivery assignment
+                // Batch-check which completed orders already have a delivery assignment.
+                // Previously, this was a per-order loop calling findByOrder() (N+1 queries).
+                // Now we fetch all assigned order IDs in a single query and filter in-memory.
+                Set<Long> alreadyAssignedOrderIds = allCompleted.isEmpty()
+                                ? Collections.emptySet()
+                                : deliveryRepository.findOrderIdsAlreadyAssigned(
+                                                allCompleted.stream().map(Order::getId).collect(Collectors.toList()));
+
                 List<Order> dispatchableOrders = allCompleted.stream()
-                                .filter(order -> {
-                                        java.util.Optional<Delivery> existing = deliveryRepository.findByOrder(order);
-                                        return existing.isEmpty();
-                                })
+                                .filter(order -> !alreadyAssignedOrderIds.contains(order.getId()))
                                 .collect(Collectors.toList());
 
                 // 3. Map Riders and calculate metrics
@@ -58,17 +73,22 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 DeliveryStatus.ACCEPTED,
                                 DeliveryStatus.OUT_FOR_DELIVERY);
 
-                int driversOnline = 0;
-                int available = 0;
-                int busy = 0;
+                // Batch-fetch all active deliveries for every rider in a single query.
+                // Previously, this called findByDeliveryStaffIdAndDeliveryStatusIn() once per rider
+                // inside the stream (N+1 queries). Now we load all active deliveries at once and
+                // group them by staffId for O(1) lookup inside the mapping stream.
+                List<Long> riderIds = riders.stream().map(Staff::getId).collect(Collectors.toList());
+                Map<Long, List<Delivery>> activeDeliveryByRider = riderIds.isEmpty()
+                                ? Collections.emptyMap()
+                                : deliveryRepository.findActiveDeliveriesForStaffBatch(riderIds, activeStatuses)
+                                                .stream()
+                                                .collect(Collectors.groupingBy(d -> d.getDeliveryStaff().getId()));
 
                 List<ManagerDriverSummaryDTO.DriverStatusDTO> driverDTOs = riders.stream()
                                 .map(rider -> {
-                                        // Find active delivery
-                                        List<Delivery> activeDeliveries = deliveryRepository
-                                                        .findByDeliveryStaffIdAndDeliveryStatusIn(
-                                                                        rider.getId(),
-                                                                        activeStatuses);
+                                        // O(1) map lookup — no extra DB query per rider
+                                        List<Delivery> activeDeliveries = activeDeliveryByRider
+                                                        .getOrDefault(rider.getId(), Collections.emptyList());
 
                                         boolean isBusy = !activeDeliveries.isEmpty();
 
@@ -110,6 +130,10 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                                         .build();
                                 })
                                 .collect(Collectors.toList());
+
+                int driversOnline = 0;
+                int available = 0;
+                int busy = 0;
 
                 // Update metrics
                 for (ManagerDriverSummaryDTO.DriverStatusDTO d : driverDTOs) {
@@ -158,16 +182,18 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                                 .deliveryStatus(d.getDeliveryStatus().name())
                                                 .driverName(d.getDeliveryStaff().getFirstName() + " "
                                                                 + d.getDeliveryStaff().getLastName())
-                                                .completedAt(d.getDeliveredAt() != null
+                                                .resolvedAt(d.getDeliveredAt() != null
                                                                 ? d.getDeliveredAt().format(historyFormatter)
-                                                                : "N/A")
+                                                                : d.getCancelledAt() != null
+                                                                        ? d.getCancelledAt().format(historyFormatter)
+                                                                        : "N/A")
+                                                .cancelledReason(d.getCancelledReason())
                                                 .build())
                                 .collect(Collectors.toList());
 
                 return ManagerDriverSummaryDTO.builder()
-                                .driversOnline(driversOnline)
                                 .available(available)
-                                .busy(busy)
+                                .activeDeliveries(busy)
                                 .pendingDispatch(orderDTOs.size())
                                 .dispatchOrders(orderDTOs)
                                 .drivers(driverDTOs)
@@ -175,6 +201,13 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                 .build();
         }
 
+        /**
+         * Manual assignment of a delivery task to a specific driver by the Manager.
+         * Generates the Delivery record and updates the core Order status.
+         *
+         * @param orderId  ID of the order being assigned.
+         * @param driverId ID of the driver receiving the assignment.
+         */
         @Override
         @Transactional
         public void assignDriver(Long orderId, Long driverId) {
@@ -280,29 +313,16 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 Staff driver = delivery.getDeliveryStaff();
 
                 snapshot.put("deliveryId", delivery.getId());
-
                 snapshot.put("orderId", order != null ? order.getId() : null);
                 snapshot.put("orderNumber", order != null ? order.getOrderNumber() : null);
                 snapshot.put("branchId", order != null && order.getBranch() != null ? order.getBranch().getId() : null);
-
-                snapshot.put("deliveryStatus",
-                                delivery.getDeliveryStatus() != null
-                                                ? delivery.getDeliveryStatus().name()
-                                                : null);
-
+                snapshot.put("deliveryStatus", delivery.getDeliveryStatus() != null ? delivery.getDeliveryStatus().name() : null);
                 snapshot.put("assignedAt", delivery.getAssignedAt());
                 snapshot.put("deliveredAt", delivery.getDeliveredAt());
                 snapshot.put("cancelledReason", delivery.getCancelledReason());
-
                 snapshot.put("driverStaffId", driver != null ? driver.getId() : null);
-                snapshot.put("driverUserId",
-                                driver != null && driver.getUser() != null
-                                                ? driver.getUser().getId()
-                                                : null);
-                snapshot.put("driverName",
-                                driver != null && driver.getUser() != null
-                                                ? driver.getUser().getFullName()
-                                                : null);
+                snapshot.put("driverUserId", driver != null && driver.getUser() != null ? driver.getUser().getId() : null);
+                snapshot.put("driverName", driver != null && driver.getUser() != null ? driver.getUser().getFullName() : null);
 
                 return snapshot;
         }
@@ -321,17 +341,13 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 snapshot.put("orderNumber", order.getOrderNumber());
                 snapshot.put("branchId", getOrderBranchId(order));
                 snapshot.put("branchName", order.getBranch() != null ? order.getBranch().getName() : null);
-
                 snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
                 snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
-                snapshot.put("paymentStatus",
-                                order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
-
+                snapshot.put("paymentStatus", order.getPaymentStatus() != null ? order.getPaymentStatus().name() : null);
                 snapshot.put("contactName", order.getContactName());
                 snapshot.put("contactPhone", order.getContactPhone());
                 snapshot.put("deliveryAddress", order.getDeliveryAddress());
                 snapshot.put("finalAmount", order.getFinalAmount());
-
                 snapshot.put("createdAt", order.getCreatedAt());
                 snapshot.put("statusUpdatedAt", order.getStatusUpdatedAt());
 
@@ -349,23 +365,11 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 }
 
                 snapshot.put("driverStaffId", driver.getId());
-                snapshot.put("driverUserId",
-                                driver.getUser() != null ? driver.getUser().getId() : null);
-                snapshot.put("driverName",
-                                driver.getUser() != null ? driver.getUser().getFullName() : null);
-                snapshot.put("driverEmail",
-                                driver.getUser() != null ? driver.getUser().getEmail() : null);
-
-                snapshot.put("role",
-                                driver.getUser() != null && driver.getUser().getRole() != null
-                                                ? driver.getUser().getRole().getName()
-                                                : null);
-
-                snapshot.put("employmentStatus",
-                                driver.getEmploymentStatus() != null
-                                                ? driver.getEmploymentStatus().name()
-                                                : null);
-
+                snapshot.put("driverUserId", driver.getUser() != null ? driver.getUser().getId() : null);
+                snapshot.put("driverName", driver.getUser() != null ? driver.getUser().getFullName() : null);
+                snapshot.put("driverEmail", driver.getUser() != null ? driver.getUser().getEmail() : null);
+                snapshot.put("role", driver.getUser() != null && driver.getUser().getRole() != null ? driver.getUser().getRole().getName() : null);
+                snapshot.put("employmentStatus", driver.getEmploymentStatus() != null ? driver.getEmploymentStatus().name() : null);
                 snapshot.put("online", driver.isOnline());
                 snapshot.put("branchId", getStaffBranchId(driver));
                 snapshot.put("branchName", driver.getBranch() != null ? driver.getBranch().getName() : null);
@@ -380,7 +384,6 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 if (order == null || order.getBranch() == null) {
                         return null;
                 }
-
                 return order.getBranch().getId();
         }
 
@@ -391,7 +394,6 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 if (staff == null || staff.getBranch() == null) {
                         return null;
                 }
-
                 return staff.getBranch().getId();
         }
 }

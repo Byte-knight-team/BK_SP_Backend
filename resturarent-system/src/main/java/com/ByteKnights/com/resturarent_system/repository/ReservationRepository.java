@@ -15,6 +15,12 @@ import java.util.List;
 @Repository
 public interface ReservationRepository extends JpaRepository<Reservation, Long> {
 
+    /**
+     * Fetches all reservations for a given branch within a specific date/time range.
+     * Used primarily for report generation to analyze reservation volumes and statuses.
+     */
+    List<Reservation> findByBranchIdAndReservationTimeBetween(Long branchId, LocalDateTime start, LocalDateTime end);
+
     //------------------------receptionist query START---------------------
 
     // All confirmed bookings for a branch within a date range (soonest first). A CONFIRMED (awaiting

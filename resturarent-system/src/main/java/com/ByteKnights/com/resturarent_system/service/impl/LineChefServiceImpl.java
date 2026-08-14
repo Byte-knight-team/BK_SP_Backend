@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefItemD
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.LineChefService;
+import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,7 @@ public class LineChefServiceImpl implements LineChefService {
     private final StaffRepository staffRepository;
     private final ChefAttendanceRepository chefAttendanceRepository;
     private final WebSocketNotificationService webSocketNotificationService;
+    private final ManagerNotificationService managerNotificationService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
@@ -147,6 +149,19 @@ public class LineChefServiceImpl implements LineChefService {
         if (allFinished) {
             order.updateStatus(OrderStatus.COMPLETED);
             orderRepository.save(order);
+            
+            // Trigger manager notification for completed online delivery
+            if (order.getOrderType() == OrderType.ONLINE_DELIVERY) {
+                Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
+                if (branchId != null) {
+                    managerNotificationService.createNotification(
+                            branchId,
+                            ManagerNotificationType.NEW_DELIVERY,
+                            "Order " + order.getOrderNumber() + " is COMPLETED and ready for dispatch!",
+                            order.getId()
+                    );
+                }
+            }
         }
 
         Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;

@@ -104,12 +104,17 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege viewReports = createPrivilege("VIEW_REPORTS");
                 Privilege viewOwnProfile = createPrivilege("VIEW_OWN_PROFILE");
 
-                // Manager Dashboard & Modules
+                // Manager Dashboard & Modules / Procurement
                 Privilege viewDashboard = createPrivilege("VIEW_DASHBOARD");
                 Privilege viewAnalytics = createPrivilege("VIEW_ANALYTICS");
                 Privilege viewSales = createPrivilege("VIEW_SALES");
                 Privilege viewStaff = createPrivilege("VIEW_STAFF");
                 Privilege manageDrivers = createPrivilege("MANAGE_DRIVERS");
+
+                Privilege procurementView = createPrivilege("PROCUREMENT_VIEW");
+                Privilege procurementManageVendors = createPrivilege("PROCUREMENT_MANAGE_VENDORS");
+                Privilege procurementManagePo = createPrivilege("PROCUREMENT_MANAGE_PO");
+                Privilege procurementManageGrn = createPrivilege("PROCUREMENT_MANAGE_GRN");
 
                 // QR & restaurant table permissions
                 Privilege createQrcode = createPrivilege("CREATE_QRCODE");
@@ -225,7 +230,11 @@ public class DataSeeder implements CommandLineRunner {
                                 receptionistOrderUpdate,
                                 receptionistPaymentCollect,
                                 lineChefOrderView,
-                                lineChefOrderUpdate
+                                lineChefOrderUpdate,
+                                procurementView,
+                                procurementManageVendors,
+                                procurementManagePo,
+                                procurementManageGrn
                 );
 
                 /*
@@ -276,7 +285,11 @@ public class DataSeeder implements CommandLineRunner {
                                 viewAnalytics,
                                 viewSales,
                                 viewStaff,
-                                manageDrivers));
+                                manageDrivers,
+                                procurementView,
+                                procurementManageVendors,
+                                procurementManagePo,
+                                procurementManageGrn));
 
                 createRoleWithDefaultPermissions("CHEF", Set.of(
                                 manageMenu,

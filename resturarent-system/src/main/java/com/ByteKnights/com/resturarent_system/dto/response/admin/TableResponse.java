@@ -21,5 +21,6 @@ public class TableResponse {
     private String branchName;
     private Integer currentGuestCount;
     private Integer activeOrderCount;
+    private Boolean isAvailable;
     private LocalDateTime createdAt;
 }

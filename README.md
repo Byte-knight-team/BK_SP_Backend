@@ -1,5 +1,9 @@
 # BK_SP_Backend
 
+![Java 17+](https://img.shields.io/badge/Java-17%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.x-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)
+
 Backend services for the **BK Software Project** — a comprehensive restaurant management system.
 
 ---
@@ -19,6 +23,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Kitchen Operations**: Real-time kitchen dashboard with order tracking and chef assignments for both QR-based and online orders.
 - **Audit & Compliance**: Comprehensive audit logging for all system transactions, staff actions, and order modifications.
 - **Customer Portal**: Customer authentication, profile management, order history, QR-code session access, and online order management.
+- **Reservation & Table Management**: Smart table booking with capacity checking, automated payment deadlines, receptionist approval workflows, and real-time table occupancy tracking.
 - **Admin Dashboard**: Centralized admin panel for business metrics, QR code management, online order analytics, and system management.
 
 ---
@@ -34,13 +39,15 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 | **Build Tool** | Maven (via Maven Wrapper) |
 | **Authentication** | Spring Security with JWT/Session-based auth |
 | **Testing** | JUnit 5, Spring Test Framework |
-| **Utilities** | QR Code generation, Email notifications, TextLK SMS |
+| **Cloud Storage** | AWS S3, Cloudinary |
+| **Payments** | Stripe API (Webhooks & Intents) |
+| **Utilities** | QR Code generation, Gmail API (OAuth2), TextLK SMS |
 
 ---
 
 ## Features
 
-### core Features
+### Core Features
 
 - **QR-Based Table Ordering**  Generate unique QR codes for each table; customers scan to access branch-specific menus, place orders, request service, and pay directly from their devices. Secure session management with automatic expiration.
 - **Comprehensive Online Ordering**: Full-featured online ordering system supporting web and mobile platforms. Real-time menu availability, customizable items, multiple payment methods, and order scheduling (immediate or future delivery/pickup).
@@ -49,6 +56,7 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **RBAC (Role-Based Access Control)**: Granular permissions for Admin, Manager, Chef, Staff, Receptionist, Delivery, and Customer roles.
 - **Real-time Order Tracking**: Live updates on order status from placement through kitchen to delivery/pickup for all order channels.
 - **Inventory Management**: Dynamic stock tracking with real-time availability sync to QR menus and online platform.
+- **Reservation System**: Customer self-service table booking with configurable lead times, guest limits, automated payment windows, and refund processing.
 - **Audit Logging**: Track all critical operations, staff actions, order modifications, and system changes for compliance.
 - **Multi-language Support**: Foundation for internationalization (i18n) across all order channels.
 - **API Rate Limiting**: Protect endpoints from abuse and ensure service reliability.
@@ -60,11 +68,22 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Kitchen Workflow Optimization**: Assign chefs to orders (QR or online), track preparation time, prioritize orders, and mark completion.
 - **Staff Invitation System**: Invite staff members with predefined roles; track acceptance/rejection and shift assignments.
 - **AWS S3 Integration**: Securely upload, store, and retrieve dynamic media such as customer profile pictures and menu item reviews via presigned URLs.
-- **Payment Integration**:can Support for multiple payment gateways for both QR-based and online orders.
+- **Payment Integration**: Secure, automated Stripe Checkout integration with fully automated webhook listeners (`payment_intent.succeeded`) to safely verify signatures and update database payment statuses (`PAID`) asynchronously.
 - **Delivery Management**: Route optimization and real-time tracking for online delivery orders.
 - **Exception Handling**: Robust error handling with detailed audit trails for order cancellations, modifications, and disputes.
 - **Branch-Specific Reports**: Sales analytics, inventory insights, and operational reports per branch, segmented by order channel (QR vs. online).
 - **Customer Feedback & Ratings**: Collect customer reviews and ratings for orders placed through any channel.
+
+### Documentation & Integrations
+
+For detailed setup guides on external services, please refer to our dedicated documentation:
+- **[Stripe Payment Gateway Integration](./docs/stripe-payment-integration.md)**
+- **[AWS S3 Cloud Infrastructure](./docs/aws-s3-integration.md)**
+
+### API & Real-Time Communication
+
+- **API Documentation**: The backend exposes RESTful endpoints. Once running, you can interact with the Swagger/OpenAPI documentation at `http://localhost:8080/swagger-ui/index.html`.
+- **WebSockets (Real-Time)**: We use **STOMP over WebSockets** (available at `/ws`) to broadcast live updates to the frontend (e.g., order status changes, instant payment refund confirmations, and new reservation alerts) without requiring client polling.
 
 ---
 
@@ -116,9 +135,12 @@ JWT_EXPIRATION_MS=28800000
 # SMS Integration (TextLK)
 SMS_TEXTLK_TOKEN=your-textlk-token
 
-# Email Configuration
-MAIL_USERNAME=your-email@gmail.com
-MAIL_PASSWORD=your-app-password
+# Gmail API (OAuth2) Configuration
+GMAIL_CLIENT_ID=your-google-oauth-client-id
+GMAIL_CLIENT_SECRET=your-google-oauth-client-secret
+GMAIL_REFRESH_TOKEN=your-google-oauth-refresh-token
+GMAIL_SENDER_EMAIL=your-email@gmail.com
+GMAIL_SENDER_NAME=Your App Name
 
 # Frontend URLs & CORS
 FRONTEND_ALLOWED_ORIGINS=http://localhost:5173,https://your-domain.com
@@ -137,6 +159,10 @@ AWS_SECRET_ACCESS_KEY=your-aws-secret-key
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=
+
+# Stripe Payment Gateway
+STRIPE_API_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
 ```
 
 Update `src/main/resources/application.properties` to reference environment variables (this is already configured in the repository, just ensure your `.env` keys match).
@@ -188,6 +214,14 @@ cd resturarent-system
 ```
 
 ### 5. Run the Application
+
+#### Using Docker
+
+If you prefer to run the application in a container:
+```bash
+docker build -t restaurant-backend .
+docker run -p 8080:8080 --env-file ./resturarent-system/.env restaurant-backend
+```
 
 #### Development (Quick Start)
 
@@ -258,7 +292,7 @@ cd resturarent-system
 resturarent-system/
 ├── src/
 │   ├── main/
-│   │   ├── java/com/bk/restaurant/
+│   │   ├── java/com/ByteKnights/com/resturarent_system/
 │   │   │   ├── controller/        # REST API endpoints
 │   │   │   ├── service/           # Business logic
 │   │   │   ├── repository/        # Data access layer
@@ -271,7 +305,7 @@ resturarent-system/
 │   │       ├── application.properties
 │   │       └── data.sql           # Initial data
 │   └── test/
-│       └── java/com/bk/restaurant/
+│       └── java/com/ByteKnights/com/resturarent_system/
 ├── pom.xml                         # Maven dependencies
 ├── mvnw / mvnw.cmd                 # Maven Wrapper
 └── .env                            # Environment variables (create manually)
@@ -347,7 +381,7 @@ For questions or issues, contact the backend team.
 
 ## License
 
-
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
 ---
 
 **Last Updated**: July 2026
