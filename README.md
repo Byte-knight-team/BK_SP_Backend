@@ -58,8 +58,8 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **Inventory Management**: Dynamic stock tracking with real-time availability sync to QR menus and online platform.
 - **Reservation System**: Customer self-service table booking with configurable lead times, guest limits, automated payment windows, and refund processing.
 - **Audit Logging**: Track all critical operations, staff actions, order modifications, and system changes for compliance.
-- **Multi-language Support**: Foundation for internationalization (i18n) across all order channels.
-- **API Rate Limiting**: Protect endpoints from abuse and ensure service reliability.
+
+
 
 ### Advanced Features
 
