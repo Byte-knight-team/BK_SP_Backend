@@ -21,11 +21,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class QrSessionServiceImpl implements QrSessionService {
@@ -33,6 +35,7 @@ public class QrSessionServiceImpl implements QrSessionService {
     private final QrSessionRepository qrSessionRepository;
     private final BranchRepository branchRepository;
     private final RestaurantTableRepository restaurantTableRepository;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
@@ -42,10 +45,12 @@ public class QrSessionServiceImpl implements QrSessionService {
 
     public QrSessionServiceImpl(QrSessionRepository qrSessionRepository,
                                 BranchRepository branchRepository,
-                                RestaurantTableRepository restaurantTableRepository) {
+                                RestaurantTableRepository restaurantTableRepository,
+                                StringRedisTemplate stringRedisTemplate) {
         this.qrSessionRepository = qrSessionRepository;
         this.branchRepository = branchRepository;
         this.restaurantTableRepository = restaurantTableRepository;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     @Override
@@ -83,6 +88,9 @@ public class QrSessionServiceImpl implements QrSessionService {
     Instant expiry = Instant.now().plusMillis(sessionExpirationMs);
     String sessionToken = generateSessionToken(qrSession.getId(), branchId, tableId, table.getTableNumber(), qrId, expiry);
 
+        // Save session validity to Redis
+        stringRedisTemplate.opsForValue().set("qrsession:" + qrSession.getId(), QrSessionStatus.ACTIVE.name(), sessionExpirationMs, TimeUnit.MILLISECONDS);
+
         return QrSessionStartResponseData.builder()
                 .sessionToken(sessionToken)
                 .build();
@@ -101,14 +109,26 @@ public class QrSessionServiceImpl implements QrSessionService {
         session.setStatus(QrSessionStatus.ENDED);
         session.setEndedAt(java.time.LocalDateTime.now());
         qrSessionRepository.save(session);
+        stringRedisTemplate.delete("qrsession:" + sessionId);
     }
 
     @Override
     public void validateActiveSession(Long sessionId) {
-        QrSession session = qrSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new QrSessionException(HttpStatus.NOT_FOUND, "QR session not found."));
+        String cachedStatus = stringRedisTemplate.opsForValue().get("qrsession:" + sessionId);
+        
+        if (cachedStatus == null) {
+            // Fallback to database check in case Redis wiped or key expired naturally
+            QrSession session = qrSessionRepository.findById(sessionId)
+                    .orElseThrow(() -> new QrSessionException(HttpStatus.NOT_FOUND, "QR session not found."));
 
-        if (session.getStatus() != QrSessionStatus.ACTIVE) {
+            if (session.getStatus() != QrSessionStatus.ACTIVE) {
+                throw new QrSessionException(HttpStatus.GONE,
+                        "Your table session has ended. Please close this tab and rescan the QR code.");
+            }
+            
+            // Re-cache it if it was still active in DB but missing in Redis
+            stringRedisTemplate.opsForValue().set("qrsession:" + sessionId, QrSessionStatus.ACTIVE.name(), sessionExpirationMs, TimeUnit.MILLISECONDS);
+        } else if (!QrSessionStatus.ACTIVE.name().equals(cachedStatus)) {
             throw new QrSessionException(HttpStatus.GONE,
                     "Your table session has ended. Please close this tab and rescan the QR code.");
         }
