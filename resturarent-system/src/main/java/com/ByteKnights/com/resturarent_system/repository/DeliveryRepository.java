@@ -70,7 +70,7 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
      * in ManagerDriverServiceImpl.getDriverSummary() when filtering dispatchable orders.
      * Before: 1 query per completed order. After: 1 query total.
      */
-    @Query("SELECT d.order.id FROM Delivery d WHERE d.order.id IN :orderIds")
+    @Query("SELECT d.order.id FROM Delivery d WHERE d.order.id IN :orderIds AND d.deliveryStatus <> 'CANCELLED'")
     Set<Long> findOrderIdsAlreadyAssigned(@Param("orderIds") Collection<Long> orderIds);
 
     /**

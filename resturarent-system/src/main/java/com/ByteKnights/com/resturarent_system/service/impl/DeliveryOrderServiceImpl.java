@@ -8,6 +8,7 @@ import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
+import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         private final StaffRepository staffRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
+        private final ManagerNotificationService managerNotificationService;
         private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
         private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
 
@@ -154,6 +156,30 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         Delivery savedDelivery = deliveryRepository.save(delivery);
 
+        /*
+         * Revert the parent Order back to COMPLETED so it re-appears in the Dispatch Hub.
+         * Without this, the order would remain stranded at OUT_FOR_DELIVERY forever.
+         * A DELIVERY_ALERT is fired so the manager knows to re-assign it.
+         */
+        Order order = savedDelivery.getOrder();
+        order.setStatus(OrderStatus.COMPLETED);
+        orderRepository.save(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), OrderStatus.COMPLETED.name());
+
+        Long branchId = getDeliveryBranchId(savedDelivery);
+        if (branchId != null) {
+            String driverName = staff.getFirstName() + " " + staff.getLastName();
+            String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
+            String alertMsg = "Driver " + driverName + " rejected order " + orderNum
+                    + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
+            managerNotificationService.createNotification(
+                    branchId,
+                    com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
+                    alertMsg,
+                    savedDelivery.getId()
+            );
+        }
+
         auditLogService.logCurrentUserAction(
                 AuditModule.DELIVERY,
                 AuditEventType.DELIVERY_REJECTED,
@@ -161,8 +187,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 AuditSeverity.WARN,
                 AuditTargetType.DELIVERY,
                 savedDelivery.getId(),
-                getDeliveryBranchId(savedDelivery),
-                "Delivery order rejected successfully",
+                branchId,
+                "Delivery order rejected/cancelled — order reverted to dispatchable state",
                 oldValues,
                 buildDeliveryAuditSnapshot(savedDelivery)
         );
@@ -170,7 +196,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
     @Override
     @Transactional
-    public void updateStatus(Long orderId, Long userId, DeliveryStatus status) {
+    public void updateStatus(Long orderId, Long userId, DeliveryStatus status, String reason) {
         Staff staff = staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Staff member not found for user ID: " + userId
@@ -183,15 +209,41 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         /*
          * Manual audit is used because this method may update both delivery status
-         * and the parent order status when the delivery is completed.
+         * and the parent order status when the delivery is completed or cancelled.
          */
         Map<String, Object> oldValues = new LinkedHashMap<>();
         oldValues.put("delivery", buildDeliveryAuditSnapshot(delivery));
         oldValues.put("order", buildDeliveryOrderAuditSnapshot(delivery.getOrder()));
 
         delivery.setDeliveryStatus(status);
+
         if (status == DeliveryStatus.CANCELLED) {
             delivery.setCancelledAt(LocalDateTime.now());
+            delivery.setCancelledReason(reason);
+
+            /*
+             * Revert the parent Order back to COMPLETED so it re-appears in the Dispatch Hub.
+             * The driver has aborted a mid-route delivery — the manager must re-assign it.
+             * A DELIVERY_ALERT notification fires to the manager in real-time.
+             */
+            Order order = delivery.getOrder();
+            order.setStatus(OrderStatus.COMPLETED);
+            orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), OrderStatus.COMPLETED.name());
+
+            Long branchId = getDeliveryBranchId(delivery);
+            if (branchId != null) {
+                String driverName = staff.getFirstName() + " " + staff.getLastName();
+                String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
+                String alertMsg = "Driver " + driverName + " aborted delivery of order " + orderNum
+                        + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
+                managerNotificationService.createNotification(
+                        branchId,
+                        com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
+                        alertMsg,
+                        delivery.getId()
+                );
+            }
         }
 
         if (status == DeliveryStatus.DELIVERED) {
@@ -219,11 +271,11 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 AuditModule.DELIVERY,
                 AuditEventType.DELIVERY_STATUS_UPDATED,
                 AuditStatus.SUCCESS,
-                status == DeliveryStatus.DELIVERED ? AuditSeverity.INFO : AuditSeverity.INFO,
+                AuditSeverity.INFO,
                 AuditTargetType.DELIVERY,
                 savedDelivery.getId(),
                 getDeliveryBranchId(savedDelivery),
-                "Delivery status updated successfully",
+                "Delivery status updated to " + status.name(),
                 oldValues,
                 newValues
         );
