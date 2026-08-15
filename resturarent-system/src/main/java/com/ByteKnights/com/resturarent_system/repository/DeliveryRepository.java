@@ -37,9 +37,10 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
 
     /**
      * Ensures that a specific order is actually assigned to a specific driver.
-     * Returns an Optional that will be empty if the order belongs to someone else.
+     * Returns the most recent assignment (OrderByIdDesc) to prevent NonUniqueResultException
+     * if the same driver was assigned, cancelled, and re-assigned to the exact same order.
      */
-    Optional<Delivery> findByOrderIdAndDeliveryStaffId(Long orderId, Long staffId);
+    Optional<Delivery> findFirstByOrderIdAndDeliveryStaffIdOrderByIdDesc(Long orderId, Long staffId);
 
     /**
      * Custom JPQL query used by the Manager module.
@@ -106,4 +107,28 @@ public interface DeliveryRepository extends JpaRepository<Delivery, Long> {
             @Param("staffId") Long staffId,
             @Param("statuses") Collection<DeliveryStatus> statuses,
             Pageable pageable);
+
+    /**
+     * Returns open delivery alerts for the manager dashboard:
+     * deliveries that were CANCELLED while the parent order has since been reverted
+     * to COMPLETED (awaiting re-assignment by the manager).
+     * JOIN FETCH eagerly loads the associated Order and Staff to prevent N+1 queries.
+     */
+    @Query("SELECT d FROM Delivery d " +
+           "JOIN FETCH d.order o " +
+           "JOIN FETCH d.deliveryStaff s " +
+           "JOIN FETCH o.branch b " +
+           "WHERE o.branch.id = :branchId " +
+           "AND d.deliveryStatus = 'CANCELLED' " +
+           "AND o.status = 'COMPLETED' " +
+           "AND d.cancelledAt IS NOT NULL " +
+           "ORDER BY d.cancelledAt DESC")
+    List<Delivery> findOpenDeliveryAlertsByBranchId(@Param("branchId") Long branchId);
+
+    /**
+     * Checks whether a prior CANCELLED delivery exists for the given order.
+     * Used by ManagerDriverServiceImpl.assignDriver() to mark a new delivery as a
+     * re-dispatch when the order was previously abandoned mid-route.
+     */
+    boolean existsByOrderIdAndDeliveryStatus(Long orderId, DeliveryStatus status);
 }

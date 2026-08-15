@@ -76,20 +76,25 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     }
 
     private DeliveryOrderDTO mapToDTO(Delivery d) {
+        Branch branch = d.getOrder().getBranch();
         return DeliveryOrderDTO.builder()
                 .id(d.getOrder().getId())
                 .orderNumber(d.getOrder().getOrderNumber() != null
                         ? d.getOrder().getOrderNumber()
                         : "ORD-" + d.getOrder().getId())
                 .location(d.getOrder().getDeliveryAddress())
-                                .deliveryAddress(d.getOrder().getDeliveryAddress())
-                                .customerName(d.getOrder().getContactName())
-                                .customerPhone(d.getOrder().getContactPhone())
+                .deliveryAddress(d.getOrder().getDeliveryAddress())
+                .customerName(d.getOrder().getContactName())
+                .customerPhone(d.getOrder().getContactPhone())
                 .paymentType("CASH ON DELIVERY")
                 .amount(d.getOrder().getFinalAmount())
                 .status(d.getDeliveryStatus().name())
-                                .latitude(d.getOrder().getLatitude())
-                                .longitude(d.getOrder().getLongitude())
+                .latitude(d.getOrder().getLatitude())
+                .longitude(d.getOrder().getLongitude())
+                .branchLatitude(branch != null ? branch.getLatitude() : null)
+                .branchLongitude(branch != null ? branch.getLongitude() : null)
+                .branchName(branch != null ? branch.getName() : null)
+                .isRedispatch(d.isRedispatch())
                 .build();
     }
 
@@ -102,7 +107,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         "Staff member not found for user ID: " + userId
                 ));
 
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+        Delivery delivery = deliveryRepository.findFirstByOrderIdAndDeliveryStaffIdOrderByIdDesc(orderId, staff.getId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Assignment not found for order ID: " + orderId
                 ));
@@ -139,7 +144,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         "Staff member not found for user ID: " + userId
                 ));
 
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+        Delivery delivery = deliveryRepository.findFirstByOrderIdAndDeliveryStaffIdOrderByIdDesc(orderId, staff.getId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Assignment not found for order ID: " + orderId
                 ));
@@ -168,16 +173,23 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         Long branchId = getDeliveryBranchId(savedDelivery);
         if (branchId != null) {
-            String driverName = staff.getFirstName() + " " + staff.getLastName();
-            String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
-            String alertMsg = "Driver " + driverName + " rejected order " + orderNum
-                    + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
-            managerNotificationService.createNotification(
-                    branchId,
-                    com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
-                    alertMsg,
-                    savedDelivery.getId()
-            );
+            try {
+                String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
+                        + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
+                String alertMsg = "Driver " + driverName.trim() + " rejected order " + orderNum
+                        + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
+                managerNotificationService.createNotification(
+                        branchId,
+                        com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
+                        alertMsg,
+                        savedDelivery.getId()
+                );
+            } catch (Exception ex) {
+                // Notification failure must not roll back the delivery cancellation
+                org.slf4j.LoggerFactory.getLogger(getClass())
+                        .error("[DeliveryOrderServiceImpl] Failed to create DELIVERY_ALERT notification: {}", ex.getMessage(), ex);
+            }
         }
 
         auditLogService.logCurrentUserAction(
@@ -202,7 +214,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         "Staff member not found for user ID: " + userId
                 ));
 
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+        Delivery delivery = deliveryRepository.findFirstByOrderIdAndDeliveryStaffIdOrderByIdDesc(orderId, staff.getId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Assignment not found for order ID: " + orderId
                 ));
@@ -233,16 +245,23 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
             Long branchId = getDeliveryBranchId(delivery);
             if (branchId != null) {
-                String driverName = staff.getFirstName() + " " + staff.getLastName();
-                String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
-                String alertMsg = "Driver " + driverName + " aborted delivery of order " + orderNum
-                        + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
-                managerNotificationService.createNotification(
-                        branchId,
-                        com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
-                        alertMsg,
-                        delivery.getId()
-                );
+                try {
+                    String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
+                            + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                    String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
+                    String alertMsg = "Driver " + driverName.trim() + " aborted delivery of order " + orderNum
+                            + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
+                    managerNotificationService.createNotification(
+                            branchId,
+                            com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
+                            alertMsg,
+                            delivery.getId()
+                    );
+                } catch (Exception ex) {
+                    // Notification failure must not roll back the delivery cancellation
+                    org.slf4j.LoggerFactory.getLogger(getClass())
+                            .error("[DeliveryOrderServiceImpl] Failed to create DELIVERY_ALERT notification: {}", ex.getMessage(), ex);
+                }
             }
         }
 

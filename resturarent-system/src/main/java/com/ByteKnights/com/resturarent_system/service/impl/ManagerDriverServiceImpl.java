@@ -191,13 +191,48 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                                 .build())
                                 .collect(Collectors.toList());
 
+                // 6. Open Delivery Alerts — CANCELLED deliveries whose parent order
+                //    has been reverted to COMPLETED, awaiting manager re-assignment.
+                List<Delivery> openAlerts = deliveryRepository.findOpenDeliveryAlertsByBranchId(finalBranchId);
+
+                List<ManagerDriverSummaryDTO.DeliveryAlertDTO> alertDTOs = openAlerts.stream()
+                                .map(d -> {
+                                        Order alertOrder = d.getOrder();
+                                        Branch alertBranch = alertOrder.getBranch();
+                                        Staff alertDriver = d.getDeliveryStaff();
+                                        return ManagerDriverSummaryDTO.DeliveryAlertDTO.builder()
+                                                        .deliveryId(d.getId())
+                                                        .orderId(alertOrder.getId())
+                                                        .orderNumber(alertOrder.getOrderNumber() != null
+                                                                        ? alertOrder.getOrderNumber()
+                                                                        : "ORD-" + alertOrder.getId())
+                                                        .customerName(alertOrder.getContactName() != null
+                                                                        ? alertOrder.getContactName()
+                                                                        : "Customer")
+                                                        .deliveryAddress(alertOrder.getDeliveryAddress())
+                                                        .customerLatitude(alertOrder.getLatitude())
+                                                        .customerLongitude(alertOrder.getLongitude())
+                                                        .branchLatitude(alertBranch != null ? alertBranch.getLatitude() : null)
+                                                        .branchLongitude(alertBranch != null ? alertBranch.getLongitude() : null)
+                                                        .branchName(alertBranch != null ? alertBranch.getName() : null)
+                                                        .cancelledDriverName(alertDriver.getFirstName() + " " + alertDriver.getLastName())
+                                                        .cancelledReason(d.getCancelledReason())
+                                                        .cancelledAt(d.getCancelledAt() != null
+                                                                        ? d.getCancelledAt().format(historyFormatter)
+                                                                        : "N/A")
+                                                        .build();
+                                })
+                                .collect(Collectors.toList());
+
                 return ManagerDriverSummaryDTO.builder()
                                 .available(available)
                                 .activeDeliveries(busy)
                                 .pendingDispatch(orderDTOs.size())
+                                .deliveryAlerts(alertDTOs.size())
                                 .dispatchOrders(orderDTOs)
                                 .drivers(driverDTOs)
                                 .deliveryHistory(historyDTOs)
+                                .deliveryAlertList(alertDTOs)
                                 .build();
         }
 
@@ -248,11 +283,17 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                 oldValues.put("delivery", null);
 
                 // Create Delivery record
+                // Check if there is a prior CANCELLED delivery for this order.
+                // If yes, this is a re-dispatch — mark it so the mobile app can display the badge.
+                boolean isRedispatch = deliveryRepository.existsByOrderIdAndDeliveryStatus(
+                                orderId, DeliveryStatus.CANCELLED);
+
                 Delivery delivery = Delivery.builder()
                                 .order(order)
                                 .deliveryStaff(rider)
                                 .deliveryStatus(DeliveryStatus.ASSIGNED)
                                 .assignedAt(LocalDateTime.now())
+                                .isRedispatch(isRedispatch)
                                 .build();
 
                 Delivery savedDelivery = deliveryRepository.save(delivery);
