@@ -331,12 +331,16 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         return history.stream()
                 .map(d -> {
                     Order order = d.getOrder();
-                    String customerName = null;
-                    String customerPhone = null;
-                    if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                    String customerName = order != null ? order.getContactName() : null;
+                    String customerPhone = order != null ? order.getContactPhone() : null;
+                    
+                    if (customerName == null && order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
                         customerName = order.getCustomer().getUser().getFullName();
+                    }
+                    if (customerPhone == null && order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
                         customerPhone = order.getCustomer().getUser().getPhone();
                     }
+
                     return DeliveryHistoryDTO.builder()
                             .id(d.getId())
                             .orderId(order != null ? order.getId() : null)
@@ -346,7 +350,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                             .deliveryAddress(order != null ? order.getDeliveryAddress() : null)
                             .amount(order != null ? order.getFinalAmount() : null)
                             .status(d.getDeliveryStatus() != null ? d.getDeliveryStatus().name() : null)
-                            .completedAt(d.getDeliveredAt())
+                            .completedAt(d.getDeliveryStatus() == DeliveryStatus.DELIVERED ? d.getDeliveredAt() : d.getCancelledAt())
                             .cancelledReason(d.getCancelledReason())
                             .build();
                 })
