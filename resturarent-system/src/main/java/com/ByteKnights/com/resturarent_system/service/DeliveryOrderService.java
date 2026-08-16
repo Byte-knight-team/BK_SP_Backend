@@ -35,7 +35,7 @@ public interface DeliveryOrderService {
 
     void rejectOrder(Long orderId, Long userId, String reason);
 
-    void updateStatus(Long orderId, Long userId, DeliveryStatus status);
+    void updateStatus(Long orderId, Long userId, DeliveryStatus status, String reason);
 
     /**
      * Retrieves historical deliveries (DELIVERED or CANCELLED) for a specific driver.

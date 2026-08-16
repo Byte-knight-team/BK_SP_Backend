@@ -22,6 +22,7 @@ import com.ByteKnights.com.resturarent_system.service.email.EmailService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 @Service
@@ -48,6 +50,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private final ProfileImageStorageService profileImageStorageService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+    private final StringRedisTemplate stringRedisTemplate;
 
     @Value("${app.frontend.customer-forgot-password-url:http://localhost:5173/reset-password}")
     private String customerForgotPasswordUrl;
@@ -61,7 +64,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             SmsService smsService,
             ProfileImageStorageService profileImageStorageService,
             PasswordResetTokenRepository passwordResetTokenRepository,
-            EmailService emailService) {
+            EmailService emailService,
+            StringRedisTemplate stringRedisTemplate) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.customerRepository = customerRepository;
@@ -72,6 +76,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.profileImageStorageService = profileImageStorageService;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.emailService = emailService;
+        this.stringRedisTemplate = stringRedisTemplate;
     }
 
     @Override
@@ -227,12 +232,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                             "Customer profile missing"));
         }
 
-        customer.setOtpCode(otpCode);
-        customer.setOtpExpiry(expiry);
-        customerRepository.save(customer);
-
-        // smsService.sendOtpSms(phone, otpCode);
-        System.out.println(otpCode);
+        stringRedisTemplate.opsForValue().set("otp:" + phone.trim(), otpCode, 5, TimeUnit.MINUTES);
+        smsService.sendOtpSms(phone, otpCode);
+        // System.out.println(otpCode);
     }
 
     @Override
@@ -254,17 +256,14 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Customer profile missing"));
 
-        if (customer.getOtpCode() == null || !customer.getOtpCode().equals(code.trim())) {
-            throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "Invalid OTP code");
+        String cachedOtp = stringRedisTemplate.opsForValue().get("otp:" + phone.trim());
+        if (cachedOtp == null || !cachedOtp.equals(code.trim())) {
+            throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "OTP code has expired or is invalid");
         }
 
-        if (customer.getOtpExpiry().isBefore(LocalDateTime.now())) {
-            throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "OTP code has expired");
-        }
+        stringRedisTemplate.delete("otp:" + phone.trim());
 
         customer.setPhoneVerified(true);
-        customer.setOtpCode(null);
-        customer.setOtpExpiry(null);
         customerRepository.save(customer);
 
         if (sessionId != null) {

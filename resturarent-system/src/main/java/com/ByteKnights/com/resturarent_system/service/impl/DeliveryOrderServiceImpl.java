@@ -8,6 +8,7 @@ import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
+import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         private final StaffRepository staffRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
+        private final ManagerNotificationService managerNotificationService;
         private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
         private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
 
@@ -74,20 +76,25 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
     }
 
     private DeliveryOrderDTO mapToDTO(Delivery d) {
+        Branch branch = d.getOrder().getBranch();
         return DeliveryOrderDTO.builder()
                 .id(d.getOrder().getId())
                 .orderNumber(d.getOrder().getOrderNumber() != null
                         ? d.getOrder().getOrderNumber()
                         : "ORD-" + d.getOrder().getId())
                 .location(d.getOrder().getDeliveryAddress())
-                                .deliveryAddress(d.getOrder().getDeliveryAddress())
-                                .customerName(d.getOrder().getContactName())
-                                .customerPhone(d.getOrder().getContactPhone())
+                .deliveryAddress(d.getOrder().getDeliveryAddress())
+                .customerName(d.getOrder().getContactName())
+                .customerPhone(d.getOrder().getContactPhone())
                 .paymentType("CASH ON DELIVERY")
                 .amount(d.getOrder().getFinalAmount())
                 .status(d.getDeliveryStatus().name())
-                                .latitude(d.getOrder().getLatitude())
-                                .longitude(d.getOrder().getLongitude())
+                .latitude(d.getOrder().getLatitude())
+                .longitude(d.getOrder().getLongitude())
+                .branchLatitude(branch != null ? branch.getLatitude() : null)
+                .branchLongitude(branch != null ? branch.getLongitude() : null)
+                .branchName(branch != null ? branch.getName() : null)
+                .isRedispatch(d.isRedispatch())
                 .build();
     }
 
@@ -100,7 +107,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         "Staff member not found for user ID: " + userId
                 ));
 
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+        Delivery delivery = deliveryRepository.findFirstByOrderIdAndDeliveryStaffIdOrderByIdDesc(orderId, staff.getId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Assignment not found for order ID: " + orderId
                 ));
@@ -137,7 +144,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                         "Staff member not found for user ID: " + userId
                 ));
 
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+        Delivery delivery = deliveryRepository.findFirstByOrderIdAndDeliveryStaffIdOrderByIdDesc(orderId, staff.getId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Assignment not found for order ID: " + orderId
                 ));
@@ -154,6 +161,37 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         Delivery savedDelivery = deliveryRepository.save(delivery);
 
+        /*
+         * Revert the parent Order back to COMPLETED so it re-appears in the Dispatch Hub.
+         * Without this, the order would remain stranded at OUT_FOR_DELIVERY forever.
+         * A DELIVERY_ALERT is fired so the manager knows to re-assign it.
+         */
+        Order order = savedDelivery.getOrder();
+        order.setStatus(OrderStatus.COMPLETED);
+        orderRepository.save(order);
+        webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), OrderStatus.COMPLETED.name());
+
+        Long branchId = getDeliveryBranchId(savedDelivery);
+        if (branchId != null) {
+            try {
+                String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
+                        + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
+                String alertMsg = "Driver " + driverName.trim() + " rejected order " + orderNum
+                        + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
+                managerNotificationService.createNotification(
+                        branchId,
+                        com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
+                        alertMsg,
+                        savedDelivery.getId()
+                );
+            } catch (Exception ex) {
+                // Notification failure must not roll back the delivery cancellation
+                org.slf4j.LoggerFactory.getLogger(getClass())
+                        .error("[DeliveryOrderServiceImpl] Failed to create DELIVERY_ALERT notification: {}", ex.getMessage(), ex);
+            }
+        }
+
         auditLogService.logCurrentUserAction(
                 AuditModule.DELIVERY,
                 AuditEventType.DELIVERY_REJECTED,
@@ -161,8 +199,8 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 AuditSeverity.WARN,
                 AuditTargetType.DELIVERY,
                 savedDelivery.getId(),
-                getDeliveryBranchId(savedDelivery),
-                "Delivery order rejected successfully",
+                branchId,
+                "Delivery order rejected/cancelled — order reverted to dispatchable state",
                 oldValues,
                 buildDeliveryAuditSnapshot(savedDelivery)
         );
@@ -170,28 +208,61 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
     @Override
     @Transactional
-    public void updateStatus(Long orderId, Long userId, DeliveryStatus status) {
+    public void updateStatus(Long orderId, Long userId, DeliveryStatus status, String reason) {
         Staff staff = staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Staff member not found for user ID: " + userId
                 ));
 
-        Delivery delivery = deliveryRepository.findByOrderIdAndDeliveryStaffId(orderId, staff.getId())
+        Delivery delivery = deliveryRepository.findFirstByOrderIdAndDeliveryStaffIdOrderByIdDesc(orderId, staff.getId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Assignment not found for order ID: " + orderId
                 ));
 
         /*
          * Manual audit is used because this method may update both delivery status
-         * and the parent order status when the delivery is completed.
+         * and the parent order status when the delivery is completed or cancelled.
          */
         Map<String, Object> oldValues = new LinkedHashMap<>();
         oldValues.put("delivery", buildDeliveryAuditSnapshot(delivery));
         oldValues.put("order", buildDeliveryOrderAuditSnapshot(delivery.getOrder()));
 
         delivery.setDeliveryStatus(status);
+
         if (status == DeliveryStatus.CANCELLED) {
             delivery.setCancelledAt(LocalDateTime.now());
+            delivery.setCancelledReason(reason);
+
+            /*
+             * Revert the parent Order back to COMPLETED so it re-appears in the Dispatch Hub.
+             * The driver has aborted a mid-route delivery — the manager must re-assign it.
+             * A DELIVERY_ALERT notification fires to the manager in real-time.
+             */
+            Order order = delivery.getOrder();
+            order.setStatus(OrderStatus.COMPLETED);
+            orderRepository.save(order);
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), OrderStatus.COMPLETED.name());
+
+            Long branchId = getDeliveryBranchId(delivery);
+            if (branchId != null) {
+                try {
+                    String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
+                            + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                    String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
+                    String alertMsg = "Driver " + driverName.trim() + " aborted delivery of order " + orderNum
+                            + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
+                    managerNotificationService.createNotification(
+                            branchId,
+                            com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType.DELIVERY_ALERT,
+                            alertMsg,
+                            delivery.getId()
+                    );
+                } catch (Exception ex) {
+                    // Notification failure must not roll back the delivery cancellation
+                    org.slf4j.LoggerFactory.getLogger(getClass())
+                            .error("[DeliveryOrderServiceImpl] Failed to create DELIVERY_ALERT notification: {}", ex.getMessage(), ex);
+                }
+            }
         }
 
         if (status == DeliveryStatus.DELIVERED) {
@@ -219,11 +290,11 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 AuditModule.DELIVERY,
                 AuditEventType.DELIVERY_STATUS_UPDATED,
                 AuditStatus.SUCCESS,
-                status == DeliveryStatus.DELIVERED ? AuditSeverity.INFO : AuditSeverity.INFO,
+                AuditSeverity.INFO,
                 AuditTargetType.DELIVERY,
                 savedDelivery.getId(),
                 getDeliveryBranchId(savedDelivery),
-                "Delivery status updated successfully",
+                "Delivery status updated to " + status.name(),
                 oldValues,
                 newValues
         );
@@ -331,12 +402,16 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         return history.stream()
                 .map(d -> {
                     Order order = d.getOrder();
-                    String customerName = null;
-                    String customerPhone = null;
-                    if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                    String customerName = order != null ? order.getContactName() : null;
+                    String customerPhone = order != null ? order.getContactPhone() : null;
+                    
+                    if (customerName == null && order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
                         customerName = order.getCustomer().getUser().getFullName();
+                    }
+                    if (customerPhone == null && order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
                         customerPhone = order.getCustomer().getUser().getPhone();
                     }
+
                     return DeliveryHistoryDTO.builder()
                             .id(d.getId())
                             .orderId(order != null ? order.getId() : null)
@@ -346,7 +421,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                             .deliveryAddress(order != null ? order.getDeliveryAddress() : null)
                             .amount(order != null ? order.getFinalAmount() : null)
                             .status(d.getDeliveryStatus() != null ? d.getDeliveryStatus().name() : null)
-                            .completedAt(d.getDeliveredAt())
+                            .completedAt(d.getDeliveryStatus() == DeliveryStatus.DELIVERED ? d.getDeliveredAt() : d.getCancelledAt())
                             .cancelledReason(d.getCancelledReason())
                             .build();
                 })
