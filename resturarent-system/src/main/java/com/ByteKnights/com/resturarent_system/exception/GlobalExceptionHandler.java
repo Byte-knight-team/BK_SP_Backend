@@ -62,6 +62,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error("Access Denied"));
     }
 
+    // Used during checkout validation rules
+    @ExceptionHandler(CheckoutException.class)
+    public ResponseEntity<ApiResponse<Object>> handleCheckoutException(CheckoutException ex) {
+        log.warn("Checkout validation failed: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(ex.getStatus())
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
     // Used when payment gateway throws an exception
     @ExceptionHandler(PaymentGatewayException.class)
     public ResponseEntity<ApiResponse<Object>> handlePaymentGatewayException(PaymentGatewayException ex) {
