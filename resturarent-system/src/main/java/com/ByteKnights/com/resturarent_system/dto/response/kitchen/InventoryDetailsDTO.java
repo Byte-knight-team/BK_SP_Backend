@@ -12,7 +12,7 @@ public class InventoryDetailsDTO {
     private Long id;
     private String name;
     private double percentage;
-    private double maxStock; //initial count
+    private double dailyRequiredStock; // minimum needed on hand for a full day of kitchen operations
     private double quantity; //available count
     private String unit;
     private String warningLevel; // LOW or CRITICAL

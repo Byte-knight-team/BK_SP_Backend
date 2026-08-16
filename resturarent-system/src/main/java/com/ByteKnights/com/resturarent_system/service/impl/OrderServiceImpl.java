@@ -57,6 +57,7 @@ public class OrderServiceImpl implements OrderService {
         private final com.ByteKnights.com.resturarent_system.service.email.EmailService emailService;
         private final com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService;
         private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
+        private final com.ByteKnights.com.resturarent_system.service.KitchenInventoryService kitchenInventoryService;
 
         public OrderServiceImpl(CheckoutService checkoutService, QrSessionService qrSessionService,
                         OrderRepository orderRepository,
@@ -73,7 +74,8 @@ public class OrderServiceImpl implements OrderService {
                         SystemConfigService systemConfigService,
                         com.ByteKnights.com.resturarent_system.service.email.EmailService emailService,
                         com.ByteKnights.com.resturarent_system.service.email.EmailTemplateService emailTemplateService,
-                        com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService) {
+                        com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService,
+                        com.ByteKnights.com.resturarent_system.service.KitchenInventoryService kitchenInventoryService) {
                 this.checkoutService = checkoutService;
                 this.qrSessionService = qrSessionService;
                 this.orderRepository = orderRepository;
@@ -95,6 +97,7 @@ public class OrderServiceImpl implements OrderService {
                 this.emailService = emailService;
                 this.emailTemplateService = emailTemplateService;
                 this.stripePaymentService = stripePaymentService;
+                this.kitchenInventoryService = kitchenInventoryService;
         }
 
         @Override
@@ -300,7 +303,8 @@ public class OrderServiceImpl implements OrderService {
                         
                         invItem.setQuantity(newQuantity);
                         inventoryItemRepository.save(invItem);
-                        
+                        kitchenInventoryService.checkAndNotifyStockLevel(invItem);
+
                         InventoryTransaction tx = InventoryTransaction.builder()
                                         .inventoryItem(invItem)
                                         .staff(null) // Automated system action

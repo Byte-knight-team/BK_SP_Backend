@@ -37,8 +37,10 @@ public class InventoryItem {
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
 
-    @Column(name = "max_stock", precision = 10, scale = 2)
-    private BigDecimal maxStock;
+    // The minimum quantity that must be kept on hand to run a full day of kitchen operations
+    // (a "par level" — the target amount stock gets restocked back up to).
+    @Column(name = "daily_required_stock", precision = 10, scale = 2)
+    private BigDecimal dailyRequiredStock;
 
     @Column(length = 50)
     private String category;
@@ -46,9 +48,30 @@ public class InventoryItem {
     @Column(name = "unit_price", precision = 10, scale = 2)
     private BigDecimal unitPrice;
 
+    // Tracks whether a LOW/CRITICAL alert has already been broadcast for the current dip, so
+    // repeated deductions while stock stays below reorder level don't spam a toast every time.
+    // Reset to false once stock is restocked back above reorder level.
+    @Column(name = "low_stock_alerted")
+    @Builder.Default
+    private boolean lowStockAlerted = false;
+
     @PrePersist
     @PreUpdate
     protected void onUpdate() {
         this.lastUpdated = LocalDateTime.now();
+    }
+
+    /**
+     * Same threshold logic used across inventory alert screens: at/below reorder level is LOW,
+     * at/below half the reorder level is CRITICAL, otherwise OK.
+     */
+    public String computeStockLevel() {
+        if (quantity == null || reorderLevel == null) return "OK";
+        double current = quantity.doubleValue();
+        double reorder = reorderLevel.doubleValue();
+        if (current <= reorder) {
+            return (current <= reorder / 2) ? "CRITICAL" : "LOW";
+        }
+        return "OK";
     }
 }

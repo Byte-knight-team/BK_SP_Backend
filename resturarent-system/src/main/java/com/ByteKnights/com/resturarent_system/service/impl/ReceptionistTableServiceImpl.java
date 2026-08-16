@@ -96,6 +96,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                             .customerPhone(r.getCustomerPhone())
                             .reservationTime(r.getReservationTime())
                             .endTime(r.getEndTime())
+                            .status(r.getStatus().name())
                             .build())
                     .toList();
 
@@ -109,6 +110,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                                 .customerPhone(r.getCustomerPhone())
                                 .reservationTime(r.getReservationTime())
                                 .endTime(r.getEndTime())
+                                .status(r.getStatus().name())
                                 .build())
                         .orElse(null);
             }
