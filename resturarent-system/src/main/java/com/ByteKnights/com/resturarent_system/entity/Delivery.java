@@ -50,4 +50,10 @@ public class Delivery {
 
     @Column(name = "cancelled_reason", length = 255)
     private String cancelledReason;
+
+    // True when this delivery assignment was created after a prior CANCELLED delivery
+    // for the same order — indicates a re-dispatch scenario.
+    @Builder.Default
+    @Column(name = "is_redispatch", nullable = false)
+    private boolean isRedispatch = false;
 }

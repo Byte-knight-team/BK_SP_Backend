@@ -15,10 +15,16 @@ public class ManagerDriverSummaryDTO {
     private int available;
     private int activeDeliveries;
     private int pendingDispatch;
-    
+
+    // Count of open delivery alerts (orders needing re-assignment after driver cancellation)
+    private int deliveryAlerts;
+
     private List<DispatchOrderDTO> dispatchOrders;
     private List<DriverStatusDTO> drivers;
     private List<DeliveryHistoryDTO> deliveryHistory;
+
+    // Orders whose driver cancelled — awaiting manager re-assignment
+    private List<DeliveryAlertDTO> deliveryAlertList;
 
     @Data
     @Builder
@@ -66,5 +72,36 @@ public class ManagerDriverSummaryDTO {
         private String driverName;
         private String resolvedAt;
         private String cancelledReason;
+    }
+
+    /**
+     * Represents a single open delivery alert: a delivery that was cancelled
+     * by a driver and whose parent order has been reverted to COMPLETED,
+     * ready for the manager to re-assign to another driver.
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeliveryAlertDTO {
+        private Long deliveryId;
+        private Long orderId;
+        private String orderNumber;
+        private String customerName;
+        private String deliveryAddress;
+
+        // Customer drop-off coordinates (for manager's location display)
+        private Double customerLatitude;
+        private Double customerLongitude;
+
+        // Restaurant pickup coordinates (new driver must go here first)
+        private Double branchLatitude;
+        private Double branchLongitude;
+        private String branchName;
+
+        // Driver who cancelled
+        private String cancelledDriverName;
+        private String cancelledReason;
+        private String cancelledAt;
     }
 }

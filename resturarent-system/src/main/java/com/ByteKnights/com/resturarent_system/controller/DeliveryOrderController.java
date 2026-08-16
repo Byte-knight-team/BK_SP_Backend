@@ -131,8 +131,9 @@ public class DeliveryOrderController {
             @AuthenticationPrincipal JwtUserPrincipal principal) {
         
         DeliveryStatus status = DeliveryStatus.valueOf(request.get("status"));
+        String reason = request.getOrDefault("reason", null);
                 
-        deliveryOrderService.updateStatus(orderId, principal.getUser().getId(), status);
+        deliveryOrderService.updateStatus(orderId, principal.getUser().getId(), status, reason);
         return ResponseEntity.ok(ApiResponse.success("Status updated successfully", null));
     }
 
