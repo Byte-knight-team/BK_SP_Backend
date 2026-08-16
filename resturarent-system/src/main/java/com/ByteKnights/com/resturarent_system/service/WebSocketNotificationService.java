@@ -204,6 +204,25 @@ public class WebSocketNotificationService {
         messagingTemplate.convertAndSend(destination, payload);
     }
 
+    /**
+     * Notify the kitchen (chief chef) that an ingredient just dropped into LOW or CRITICAL stock.
+     * Fired once per dip (see InventoryItem.lowStockAlerted), not on every deduction while it stays low.
+     *
+     * Topic: /topic/branch/{branchId}/inventory-alert
+     * Subscribers: Kitchen area (KitchenNotifier) — fires on any kitchen page
+     */
+    public void broadcastLowStockAlert(Long branchId, Long itemId, String itemName, String level, double quantity, String unit) {
+        String destination = "/topic/branch/" + branchId + "/inventory-alert";
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("itemId", itemId);
+        payload.put("itemName", itemName);
+        payload.put("level", level);
+        payload.put("quantity", quantity);
+        payload.put("unit", unit);
+        log.info("Broadcasting low-stock alert to {}: {} is {} ({} {})", destination, itemName, level, quantity, unit);
+        messagingTemplate.convertAndSend(destination, payload);
+    }
+
     public void broadcastTableUpdate(Long branchId) {
         String destination = "/topic/branch/" + branchId + "/table-update";
         messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
