@@ -2,6 +2,8 @@ package com.ByteKnights.com.resturarent_system.repository;
 
 import com.ByteKnights.com.resturarent_system.entity.OrderItem;
 import com.ByteKnights.com.resturarent_system.entity.OrderItemStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -52,7 +54,26 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, Long> {
     // find all items assigned to a specific line chef with given statuses
     List<OrderItem> findByAssignedLineChefIdAndStatusIn(Long lineChefId, List<OrderItemStatus> statuses);
 
+    // paged cooking history for a line chef (every item they've finished cooking), most recent
+    // first — optional status filter and optional single-day date filter, mirrors
+    // ReservationRepository.findFilteredByBranch's null-safe filter pattern
+    @Query("SELECT oi FROM OrderItem oi WHERE oi.assignedLineChef.id = :lineChefId " +
+            "AND oi.cookingCompletedAt IS NOT NULL " +
+            "AND (:status IS NULL OR oi.status = :status) " +
+            "AND (:dayStart IS NULL OR (oi.cookingCompletedAt >= :dayStart AND oi.cookingCompletedAt < :dayEnd)) " +
+            "ORDER BY oi.cookingCompletedAt DESC")
+    Page<OrderItem> findHistoryByLineChef(
+            @Param("lineChefId") Long lineChefId,
+            @Param("status") OrderItemStatus status,
+            @Param("dayStart") LocalDateTime dayStart,
+            @Param("dayEnd") LocalDateTime dayEnd,
+            Pageable pageable);
 
+    // total number of items a line chef has ever finished cooking — Cooking History KPI
+    long countByAssignedLineChefIdAndCookingCompletedAtIsNotNull(Long lineChefId);
+
+    // number of items a line chef finished cooking within a time window (e.g. today) — Cooking History KPI
+    long countByAssignedLineChefIdAndCookingCompletedAtBetween(Long lineChefId, LocalDateTime start, LocalDateTime end);
 
     // --- Kitchen Queries END ---
 
