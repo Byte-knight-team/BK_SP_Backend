@@ -21,6 +21,18 @@ public class DeliveryOrderDTO {
     private String paymentType;
     private BigDecimal amount;
     private String status; // e.g. "ASSIGNED", "ACCEPTED"
-    private Double latitude;  // Customer delivery location coordinates
-    private Double longitude; // Customer delivery location coordinates
+
+    // Customer delivery destination coordinates
+    private Double latitude;
+    private Double longitude;
+
+    // Restaurant / branch pickup coordinates (populated for all orders; used as the
+    // pickup pin on the mobile map, especially for RE-DISPATCH orders)
+    private Double branchLatitude;
+    private Double branchLongitude;
+    private String branchName;
+
+    // True when this delivery assignment was created after a prior CANCELLED delivery
+    // for the same order — triggers the RE-DISPATCH badge and dual-pin map on mobile
+    private boolean isRedispatch;
 }
