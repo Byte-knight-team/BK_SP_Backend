@@ -37,10 +37,4 @@ public class Customer {
     @Column(name = "phone_verified")
     @Builder.Default
     private Boolean phoneVerified = false;
-
-    @Column(name = "otp_code", length = 6)
-    private String otpCode;
-
-    @Column(name = "otp_expiry")
-    private LocalDateTime otpExpiry;
 }
