@@ -12,6 +12,8 @@ import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.QrSessionRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
 import com.ByteKnights.com.resturarent_system.service.QrSessionService;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -59,6 +61,7 @@ public class QrSessionServiceImpl implements QrSessionService {
     private final BranchRepository branchRepository;
     private final RestaurantTableRepository restaurantTableRepository;
     private final StringRedisTemplate stringRedisTemplate;
+    private final SystemConfigService systemConfigService;
 
     @Value("${app.jwt.secret}")
     private String jwtSecret;
@@ -69,11 +72,13 @@ public class QrSessionServiceImpl implements QrSessionService {
     public QrSessionServiceImpl(QrSessionRepository qrSessionRepository,
             BranchRepository branchRepository,
             RestaurantTableRepository restaurantTableRepository,
-            StringRedisTemplate stringRedisTemplate) {
+            StringRedisTemplate stringRedisTemplate,
+            SystemConfigService systemConfigService) {
         this.qrSessionRepository = qrSessionRepository;
         this.branchRepository = branchRepository;
         this.restaurantTableRepository = restaurantTableRepository;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.systemConfigService = systemConfigService;
     }
 
     @Override
@@ -93,6 +98,16 @@ public class QrSessionServiceImpl implements QrSessionService {
 
         if (branch.getStatus() != BranchStatus.ACTIVE) {
             throw new QrSessionException(HttpStatus.CONFLICT, "Branch is not active.");
+        }
+
+        BranchConfigCacheDto branchConfig = systemConfigService.getCachedBranchConfig(branchId);
+        if (branchConfig != null) {
+            if (!branchConfig.isBranchActiveForOrders()) {
+                throw new QrSessionException(HttpStatus.CONFLICT, "This branch is currently not accepting orders.");
+            }
+            if (!branchConfig.isDineInEnabled()) {
+                throw new QrSessionException(HttpStatus.CONFLICT, "Dine-in service is currently disabled for this branch.");
+            }
         }
 
         // 3. Validate table-branch integrity
