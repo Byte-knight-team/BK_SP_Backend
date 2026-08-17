@@ -126,7 +126,7 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege procurementManagePo = createPrivilege("PROCUREMENT_MANAGE_PO");
                 Privilege procurementManageGrn = createPrivilege("PROCUREMENT_MANAGE_GRN");
 
-                // QR & restaurant table permissions
+                // QR permissions
                 Privilege createQrcode = createPrivilege("CREATE_QR_CODE");
                 Privilege regenerateQrcode = createPrivilege("REGENERATE_QR_CODE");
                 Privilege revokeQrcode = createPrivilege("REVOKE_QR_CODE");
