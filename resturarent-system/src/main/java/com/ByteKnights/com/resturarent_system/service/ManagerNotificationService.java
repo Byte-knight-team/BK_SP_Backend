@@ -9,5 +9,6 @@ public interface ManagerNotificationService {
     void createNotification(Long branchId, ManagerNotificationType type, String message, Long referenceId);
     List<ManagerNotificationDTO> getUnreadNotifications(Long branchId);
     void markAsRead(Long notificationId);
+    void markAsReadByReference(Long referenceId, ManagerNotificationType type);
     void pingNotificationResolved(Long branchId);
 }

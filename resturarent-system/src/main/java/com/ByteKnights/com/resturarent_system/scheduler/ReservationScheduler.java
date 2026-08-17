@@ -193,6 +193,7 @@ public class ReservationScheduler {
                 log.info("30-min reminder sent for table {} at {}", tableNumber, timeStr);
             }
 
+
             // 15-minute reminder + lock table — fire only once
             String key15min = reservationId + "-15MIN";
             if (!sentNotifications.contains(key15min)

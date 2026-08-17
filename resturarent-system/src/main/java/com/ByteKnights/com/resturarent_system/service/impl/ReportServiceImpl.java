@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.ReportService;
@@ -294,6 +295,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Sales report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateSalesReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -317,9 +325,11 @@ public class ReportServiceImpl implements ReportService {
             // Group by Channel
             channelCount.put(o.getOrderType(), channelCount.getOrDefault(o.getOrderType(), 0L) + 1);
 
-            if (o.getStatus() == OrderStatus.REFUNDED) {
+            if (o.getPaymentStatus() == PaymentStatus.REFUNDED) {
                 refunds = refunds.add(o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO);
-            } else if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS) {
+            } 
+            
+            if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS || o.getPaymentStatus() == PaymentStatus.REFUNDED) {
                 BigDecimal amt = o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO;
                 grossSales = grossSales.add(amt);
                 taxCollected = taxCollected.add(o.getTaxAmount() != null ? o.getTaxAmount() : BigDecimal.ZERO);
@@ -411,6 +421,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Revenue trend report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateRevenueTrendReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -485,6 +502,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Top selling items report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateTopSellingItemsReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -575,6 +599,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Order summary report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateOrderSummaryReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -706,6 +737,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Delivery performance report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateDeliveryPerformanceReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -726,7 +764,7 @@ public class ReportServiceImpl implements ReportService {
         for (Order o : orders) {
             String driverName = "Unassigned";
             if (o.getAssignedDelivery() != null) {
-                driverName = o.getAssignedDelivery().getFirstName() + " " + o.getAssignedDelivery().getLastName();
+                driverName = o.getAssignedDelivery().getDisplayName();
             }
 
             if (o.getStatus() == OrderStatus.ARRIVED || o.getStatus() == OrderStatus.COMPLETED || o.getStatus() == OrderStatus.SERVED) {
@@ -792,6 +830,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Reservation report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateReservationReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -867,6 +912,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Inventory status report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateInventoryStatusReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -966,6 +1018,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Procurement report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateProcurementReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);
@@ -1053,6 +1112,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Staff details report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateStaffDetailsReport(Long branchId, Long userId) {
         String branchName = resolveBranchName(branchId);
@@ -1078,13 +1144,11 @@ public class ReportServiceImpl implements ReportService {
             pt.setWidthPercentage(100);
             addTableHeader(pt, "Name", "Role", "Email", "Phone", "Hire Date");
             boolean alt = false;
-
             if (staffMembers.isEmpty()) {
                 addEmptyRow(pt, 5);
             } else {
                 for (Staff s : staffMembers) {
-                    String name = (s.getFirstName() != null ? s.getFirstName() : "") + " " + 
-                                  (s.getLastName() != null ? s.getLastName() : "");
+                    String name = s.getDisplayName();
                     String role = s.getUser() != null && s.getUser().getRole() != null ? s.getUser().getRole().getName() : "N/A";
                     String email = s.getUser() != null && s.getUser().getEmail() != null ? s.getUser().getEmail() : "N/A";
                     String phone = s.getUser() != null && s.getUser().getPhone() != null ? s.getUser().getPhone() : "N/A";
@@ -1115,6 +1179,13 @@ public class ReportServiceImpl implements ReportService {
      * @return PDF byte array
      */
     @Override
+    @Auditable(
+            module = AuditModule.REPORT,
+            eventType = AuditEventType.REPORT_GENERATED,
+            targetType = AuditTargetType.REPORT,
+            description = "Customer reviews report PDF generated",
+            captureResultAsNewValue = false
+    )
     @Transactional(readOnly = true)
     public byte[] generateCustomerReviewsReport(Long branchId, Long userId, LocalDate startDate, LocalDate endDate) {
         String branchName = resolveBranchName(branchId);

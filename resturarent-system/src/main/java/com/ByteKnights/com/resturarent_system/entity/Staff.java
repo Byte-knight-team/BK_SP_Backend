@@ -58,6 +58,22 @@ public class Staff {
         return isOnline != null && isOnline;
     }
 
+    public String getDisplayName() {
+        if (firstName != null && !firstName.isBlank() && lastName != null && !lastName.isBlank()) {
+            return firstName + " " + lastName;
+        }
+        if (firstName != null && !firstName.isBlank()) {
+            return firstName;
+        }
+        if (user != null && user.getFullName() != null && !user.getFullName().isBlank()) {
+            return user.getFullName();
+        }
+        if (user != null && user.getUsername() != null) {
+            return user.getUsername();
+        }
+        return "Unknown Staff";
+    }
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 

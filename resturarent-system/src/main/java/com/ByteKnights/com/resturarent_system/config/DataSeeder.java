@@ -49,8 +49,8 @@ public class DataSeeder implements CommandLineRunner {
         public void run(String... args) throws Exception {
 
                 /*
-                   Privileges are system-level permission names.
-                */
+                 * Privileges are system-level permission names.
+                 */
 
                 // Staff & RBAC
                 Privilege createStaff = createPrivilege("CREATE_STAFF");
@@ -77,7 +77,6 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege viewCategoryById = createPrivilege("VIEW_CATEGORY_BY_ID");
                 Privilege createCategory = createPrivilege("CREATE_CATEGORY");
                 Privilege updateCategory = createPrivilege("UPDATE_CATEGORY");
-                Privilege deleteCategory = createPrivilege("DELETE_CATEGORY");
                 Privilege viewPendingItems = createPrivilege("VIEW_PENDING_ITEMS");
                 Privilege viewCategoryCount = createPrivilege("VIEW_CATEGORY_COUNT");
                 Privilege viewSubCategory = createPrivilege("VIEW_SUBCATEGORY_COUNT");
@@ -90,9 +89,20 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege rejectPendingItem = createPrivilege("REJECT_PENDING_ITEM");
                 Privilege approvePendingItem = createPrivilege("APPROVE_PENDING_ITEM");
                 Privilege toggleItemAvailability = createPrivilege("TOGGLE_ITEM_AVAILABILITY");
-                Privilege deleteItem = createPrivilege("DELETE_ITEM");
                 Privilege viewAllSubcategories = createPrivilege("VIEW_ALL_SUBCATEGORIES");
 
+                Privilege createCoupon = createPrivilege("CREATE_COUPON");
+                Privilege viewCoupons = createPrivilege("VIEW_COUPONS");
+                Privilege viewCoupon = createPrivilege("VIEW_COUPON");
+                Privilege updateCoupon = createPrivilege("UPDATE_COUPON");
+                Privilege updateCouponStatus = createPrivilege("UPDATE_COUPON_STATUS");
+
+                Privilege saveIngredients = createPrivilege("SAVE_INGREDIENTS");
+                Privilege viewIngredients = createPrivilege("VIEW_INGREDIENTS");
+
+                Privilege createMenuItemRequest = createPrivilege("CREATE_MENU_ITEM_REQUEST");
+                Privilege viewMenuItemRequests = createPrivilege("VIEW_MENU_ITEM_REQUESTS");
+                Privilege decideMenuItemRequest = createPrivilege("DECIDE_MENU_ITEM_REQUEST");
 
                 // Delivery
                 Privilege updateDeliveryStatus = createPrivilege("UPDATE_DELIVERY_STATUS");
@@ -116,19 +126,20 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege procurementManagePo = createPrivilege("PROCUREMENT_MANAGE_PO");
                 Privilege procurementManageGrn = createPrivilege("PROCUREMENT_MANAGE_GRN");
 
-                // QR & restaurant table permissions
-                Privilege createQrcode = createPrivilege("CREATE_QRCODE");
-                Privilege regenerateQrcode = createPrivilege("REGENERATE_QRCODE");
-                Privilege revokeQrcode = createPrivilege("REVOKE_QRCODE");
-               
-                //Restaurant table permissions
-                Privilege createRestaurantTable = createPrivilege("CREATE_RESTAURANT_TABLE");
-                Privilege viewRestaurantTable = createPrivilege("VIEW_RESTAURANT_TABLE");
-                Privilege viewRestaurantTableById = createPrivilege("VIEW_RESTAURANT_TABLE_BY_ID");
-                Privilege updateRestaurantTable = createPrivilege("UPDATE_RESTAURANT_TABLE");
-                Privilege deleteRestaurantTable = createPrivilege("DELETE_RESTAURANT_TABLE");
+                // QR permissions
+                Privilege createQrcode = createPrivilege("CREATE_QR_CODE");
+                Privilege regenerateQrcode = createPrivilege("REGENERATE_QR_CODE");
+                Privilege revokeQrcode = createPrivilege("REVOKE_QR_CODE");
+                Privilege viewActiveQrCode = createPrivilege("VIEW_ACTIVE_QR_CODE");
+                Privilege downloadQrCode = createPrivilege("DOWNLOAD_QR_CODE");
 
-                //Kitchen permissions
+                // Restaurant table permissions
+                Privilege createRestaurantTable = createPrivilege("CREATE_TABLE");
+                Privilege viewRestaurantTable = createPrivilege("VIEW_TABLE");
+                Privilege viewRestaurantTableById = createPrivilege("VIEW_TABLE_BY_ID");
+                Privilege updateRestaurantTable = createPrivilege("UPDATE_TABLE");
+
+                // Kitchen permissions
                 Privilege kitchenViewStats = createPrivilege("KITCHEN_VIEW_STATS");
                 Privilege kitchenOrderView = createPrivilege("KITCHEN_ORDER_VIEW");
                 Privilege kitchenOrderUpdate = createPrivilege("KITCHEN_ORDER_UPDATE");
@@ -154,6 +165,11 @@ public class DataSeeder implements CommandLineRunner {
                 Privilege receptionistOrderUpdate = createPrivilege("RECEPTIONIST_ORDER_UPDATE");
                 Privilege receptionistPaymentCollect = createPrivilege("RECEPTIONIST_PAYMENT_COLLECT");
 
+                // ADMIN
+                Privilege viewSummary = createPrivilege("VIEW_SUMMARY");
+                Privilege viewOrderFlow = createPrivilege("VIEW_ORDER_FLOW");
+                Privilege viewRevenueTrend = createPrivilege("VIEW_REVENUE_TREND");
+                Privilege viewBranchRevenue = createPrivilege("VIEW_BRANCH_REVENUE");
 
                 /*
                  * All known system privileges.
@@ -187,29 +203,28 @@ public class DataSeeder implements CommandLineRunner {
                                 createQrcode,
                                 regenerateQrcode,
                                 revokeQrcode,
+                                viewActiveQrCode,
+                                downloadQrCode,
                                 createRestaurantTable,
                                 viewRestaurantTable,
                                 viewRestaurantTableById,
                                 updateRestaurantTable,
-                                deleteRestaurantTable,
                                 viewCatergories,
                                 viewCategoryById,
                                 createCategory,
                                 updateCategory,
-                                deleteCategory,
-                                viewPendingItems, 
-                                viewCategoryCount,            
+                                viewPendingItems,
+                                viewCategoryCount,
                                 viewSubCategory,
                                 viewItemsCount,
-                                viewAvailbleItemsCount, 
+                                viewAvailbleItemsCount,
                                 viewAllItems,
                                 viewItemById,
                                 createItem,
-                                updateItem, 
-                                rejectPendingItem, 
+                                updateItem,
+                                rejectPendingItem,
                                 approvePendingItem,
-                                toggleItemAvailability, 
-                                deleteItem, 
+                                toggleItemAvailability,
                                 viewAllSubcategories,
                                 kitchenViewStats,
                                 kitchenOrderView,
@@ -234,47 +249,69 @@ public class DataSeeder implements CommandLineRunner {
                                 procurementView,
                                 procurementManageVendors,
                                 procurementManagePo,
-                                procurementManageGrn
-                );
+                                procurementManageGrn,
+                                createCoupon,
+                                viewCoupons,
+                                viewCoupon,
+                                updateCoupon,
+                                updateCouponStatus,
+                                viewSummary,
+                                viewOrderFlow,
+                                viewRevenueTrend,
+                                viewBranchRevenue,
+                                saveIngredients,
+                                viewIngredients,
+                                createMenuItemRequest,
+                                viewMenuItemRequests,
+                                decideMenuItemRequest);
 
                 /*
-                 * For normal roles, default permissions are added ONLY when the role is first created.
-                 * This prevents the DataSeeder from overwriting changes made from the Roles & Permissions page.
+                 * For normal roles, default permissions are added ONLY when the role is first
+                 * created.
+                 * This prevents the DataSeeder from overwriting changes made from the Roles &
+                 * Permissions page.
                  */
                 Role superAdminRole = createRoleWithDefaultPermissions("SUPER_ADMIN", allPrivileges);
 
                 /*
-                    SUPER_ADMIN is the owner role,  gets all currently known system privileges
-                */
+                 * SUPER_ADMIN is the owner role, gets all currently known system privileges
+                 */
                 addMissingPermissions(superAdminRole, allPrivileges);
 
                 createRoleWithDefaultPermissions("ADMIN", Set.of(
                                 createStaff,
                                 viewCatergories,
                                 viewCategoryById,
-                                viewPendingItems, 
-                                viewCategoryCount,            
+                                viewPendingItems,
+                                viewCategoryCount,
                                 viewSubCategory,
                                 viewItemsCount,
-                                viewAvailbleItemsCount, 
+                                viewAvailbleItemsCount,
                                 viewAllItems,
                                 viewItemById,
                                 createItem,
-                                updateItem, 
-                                rejectPendingItem, 
+                                updateItem,
+                                rejectPendingItem,
                                 approvePendingItem,
-                                toggleItemAvailability, 
-                                deleteItem, 
+                                toggleItemAvailability,
                                 viewAllSubcategories,
                                 createQrcode,
                                 regenerateQrcode,
                                 revokeQrcode,
+                                viewActiveQrCode,
+                                downloadQrCode,
                                 createRestaurantTable,
-                                deleteRestaurantTable,
                                 updateRestaurantTable,
                                 viewRestaurantTable,
-                                viewRestaurantTableById
-                        ));
+                                viewRestaurantTableById,
+                                viewSummary,
+                                viewOrderFlow,
+                                viewRevenueTrend,
+                                viewBranchRevenue,
+                                saveIngredients,
+                                viewIngredients,
+                                viewMenuItemRequests,
+                                decideMenuItemRequest));
 
                 createRoleWithDefaultPermissions("MANAGER", Set.of(
                                 viewBranch,
@@ -292,6 +329,7 @@ public class DataSeeder implements CommandLineRunner {
                                 procurementManageGrn));
 
                 createRoleWithDefaultPermissions("CHEF", Set.of(
+                                viewCatergories,
                                 manageMenu,
                                 kitchenViewStats,
                                 kitchenOrderView,
@@ -303,7 +341,10 @@ public class DataSeeder implements CommandLineRunner {
                                 kitchenChefManage,
                                 kitchenAlertCreate,
                                 kitchenAlertView,
-                                kitchenAlertResolve));
+                                kitchenAlertResolve,
+                                saveIngredients,
+                                viewIngredients,
+                                createMenuItemRequest));
 
                 createRoleWithDefaultPermissions("RECEPTIONIST", Set.of(
                                 viewCustomer,
@@ -345,7 +386,8 @@ public class DataSeeder implements CommandLineRunner {
         }
 
         /*
-         * Creates a role with default permissions only if the role does not already exist.
+         * Creates a role with default permissions only if the role does not already
+         * exist.
          */
         private Role createRoleWithDefaultPermissions(String name, Set<Privilege> defaultPermissions) {
                 Role existingRole = roleRepository.findByName(name).orElse(null);
@@ -364,7 +406,8 @@ public class DataSeeder implements CommandLineRunner {
 
         /*
          * Adds missing permissions without removing existing permissions.
-         * We use this only for SUPER_ADMIN so that the system owner role always receives new system privileges added later.
+         * We use this only for SUPER_ADMIN so that the system owner role always
+         * receives new system privileges added later.
          */
         private void addMissingPermissions(Role role, Set<Privilege> permissionsToAdd) {
                 if (role == null) {

@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenMenuCa
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenMenuEditRequestResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenMenuItemResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.MenuItemIngredientResponseDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 
 import java.util.List;
 
@@ -53,6 +54,7 @@ public interface KitchenMenuService {
     // belongs to a different branch.
     void createEditRequest(MenuItemUpdateRequestDto request, String userEmail);
 
-    // The caller's own edit requests (any status), newest first.
-    List<KitchenMenuEditRequestResponse> getMyEditRequests(String userEmail);
+    // The caller's own edit requests (any status), newest first — paged, with optional date/status filters.
+    PagedResponse<KitchenMenuEditRequestResponse> getMyEditRequests(
+            String userEmail, int page, int size, String date, String status);
 }

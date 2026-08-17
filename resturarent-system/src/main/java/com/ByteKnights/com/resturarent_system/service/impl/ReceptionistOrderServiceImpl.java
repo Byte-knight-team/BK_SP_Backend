@@ -7,6 +7,9 @@ import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistOrderService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,9 +18,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +34,7 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
     private final StaffRepository staffRepository;
     private final MenuItemIngredientRepository menuItemIngredientRepository;
     private final InventoryItemRepository inventoryItemRepository;
+    private final InventoryTransactionRepository inventoryTransactionRepository;
     private final AuditLogService auditLogService;
     private final WebSocketNotificationService webSocketNotificationService;
     private final CustomerRepository customerRepository;
@@ -129,6 +135,80 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         }
 
         return result;
+    }
+
+    // ── GET paged + filtered order history ───────────────────────────────
+    @Override
+    public PagedResponse<ReceptionistOrderHistoryDTO> getOrderHistory(
+            String userEmail, int page, int size, String date, String status, String orderType, String paymentStatus) {
+        Long branchId = getBranchId(userEmail);
+
+        LocalDateTime dayStart = null;
+        LocalDateTime dayEnd = null;
+        if (date != null && !date.isBlank()) {
+            LocalDate day = LocalDate.parse(date);
+            dayStart = day.atStartOfDay();
+            dayEnd = dayStart.plusDays(1);
+        }
+
+        OrderStatus statusFilter = (status != null && !status.isBlank())
+                ? OrderStatus.valueOf(status.toUpperCase()) : null;
+        OrderType orderTypeFilter = (orderType != null && !orderType.isBlank())
+                ? OrderType.valueOf(orderType.toUpperCase()) : null;
+        PaymentStatus paymentStatusFilter = (paymentStatus != null && !paymentStatus.isBlank())
+                ? PaymentStatus.valueOf(paymentStatus.toUpperCase()) : null;
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Order> result = orderRepository.findHistoryByBranch(
+                branchId, statusFilter, orderTypeFilter, paymentStatusFilter, dayStart, dayEnd, pageable);
+
+        List<ReceptionistOrderHistoryDTO> content = result.getContent().stream().map(order -> {
+            String customerName = (order.getContactName() != null && !order.getContactName().isBlank())
+                    ? order.getContactName()
+                    : (order.getCustomer().getUser().getFullName() != null
+                    ? order.getCustomer().getUser().getFullName()
+                    : "Guest");
+
+            String customerPhone = (order.getContactPhone() != null && !order.getContactPhone().isBlank())
+                    ? order.getContactPhone()
+                    : order.getCustomer().getUser().getPhone();
+
+            double finalAmount = order.getFinalAmount() != null
+                    ? order.getFinalAmount().doubleValue()
+                    : order.getTotalAmount().doubleValue();
+
+            List<ReceptionistOrderItemDTO> items = order.getItems().stream().map(item ->
+                    new ReceptionistOrderItemDTO(
+                            item.getId(),
+                            item.getItemName(),
+                            item.getQuantity(),
+                            item.getUnitPrice() != null ? item.getUnitPrice().doubleValue() : 0,
+                            item.getSubtotal() != null ? item.getSubtotal().doubleValue() : 0,
+                            item.getStatus().name(),
+                            item.getKitchenNotes()
+                    )).toList();
+
+            return new ReceptionistOrderHistoryDTO(
+                    order.getId(),
+                    order.getOrderNumber(),
+                    customerName,
+                    customerPhone,
+                    order.getOrderType().name(),
+                    order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
+                    order.getStatus().name(),
+                    order.getPaymentStatus().name(),
+                    finalAmount,
+                    items
+            );
+        }).toList();
+
+        return PagedResponse.<ReceptionistOrderHistoryDTO>builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
     }
 
     // ── GET full order detail ────────────────────────────────────────────
@@ -351,6 +431,62 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         customerRepository.save(customer);
 
+        // Refund inventory — same logic as the customer's own cancel flow
+        // (OrderServiceImpl.executeOrderCancellation), copied here because that
+        // method is private to OrderServiceImpl and this service can't call it.
+        Map<Long, BigDecimal> refundIngredients = new HashMap<>();
+
+        // Batch load ingredients
+        List<Long> menuItemIds = order.getItems().stream()
+                .filter(item -> item.getMenuItem() != null)
+                .map(item -> item.getMenuItem().getId())
+                .collect(Collectors.toList());
+
+        if (!menuItemIds.isEmpty()) {
+            List<MenuItemIngredient> allIngredients = menuItemIngredientRepository.findByMenuItemIdIn(menuItemIds);
+            Map<Long, List<MenuItemIngredient>> ingredientMap = allIngredients.stream()
+                    .collect(Collectors.groupingBy(ing -> ing.getMenuItem().getId()));
+
+            for (OrderItem item : order.getItems()) {
+                if (item.getMenuItem() != null) {
+                    List<MenuItemIngredient> ingredients = ingredientMap.getOrDefault(item.getMenuItem().getId(), List.of());
+                    for (MenuItemIngredient ingredient : ingredients) {
+                        InventoryItem invItem = ingredient.getInventoryItem();
+                        if (invItem.getBranch().getId().equals(order.getBranch().getId())) {
+                            BigDecimal amountToRefund = ingredient.getQuantityRequired()
+                                    .multiply(BigDecimal.valueOf(item.getQuantity()));
+                            refundIngredients.merge(invItem.getId(), amountToRefund, BigDecimal::add);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Batch load inventory items to refund
+        if (!refundIngredients.isEmpty()) {
+            List<InventoryItem> invItems = inventoryItemRepository.findAllById(refundIngredients.keySet());
+            for (InventoryItem invItem : invItems) {
+                BigDecimal refundAmount = refundIngredients.get(invItem.getId());
+                BigDecimal oldQuantity = invItem.getQuantity();
+                BigDecimal newQuantity = oldQuantity.add(refundAmount);
+
+                invItem.setQuantity(newQuantity);
+                inventoryItemRepository.save(invItem);
+
+                InventoryTransaction tx = InventoryTransaction.builder()
+                        .inventoryItem(invItem)
+                        .staff(null)
+                        .transactionType(InventoryTransactionType.ORDER_REFUND)
+                        .quantityChange(refundAmount)
+                        .previousQuantity(oldQuantity)
+                        .newQuantity(newQuantity)
+                        .unitPrice(invItem.getUnitPrice())
+                        .notes("Automated refund for cancelled order " + order.getOrderNumber())
+                        .build();
+                inventoryTransactionRepository.save(tx);
+            }
+        }
+
         order.setStatus(OrderStatus.CANCELLED);
         order.setCancelReason(reason);
         order.setStatusUpdatedAt(LocalDateTime.now());
@@ -520,14 +656,19 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
 
         OrderItem savedItem = orderItemRepository.save(item);
 
-        boolean allServed = order.getItems().stream()
-                .allMatch(i -> i.getStatus() == OrderItemStatus.SERVED);
+        // Atomic check-and-set at the DB level — see OrderRepository.markServedIfAllItemsServed
+        // for why this can't be a plain in-memory "are all items served?" check.
+        int updated = orderRepository.markServedIfAllItemsServed(order.getId());
 
-        if (allServed) {
-            order.updateStatus(OrderStatus.SERVED);
-            Order savedOrder = orderRepository.save(order);
-            webSocketNotificationService.broadcastOrderStatusUpdate(savedOrder.getId(), savedOrder.getStatus().name());
-            sendServedEmailAsync(savedOrder);
+        if (updated > 0) {
+            // Re-point `order` at a fresh read so everything below (branch lookup, the audit
+            // snapshot) reflects the just-applied SERVED status instead of the stale in-memory
+            // copy — the native update above bypassed this entity, so its old .status is still
+            // sitting in memory as whatever it was before this call.
+            order = orderRepository.findById(order.getId())
+                    .orElseThrow(() -> new RuntimeException("Order not found"));
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
+            sendServedEmailAsync(order);
         }
 
         // Refresh the receptionist table monitor so the ready indicator updates/disappears live

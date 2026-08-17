@@ -94,6 +94,16 @@ public class ManagerNotificationServiceImpl implements ManagerNotificationServic
     }
     
     @Override
+    @Transactional
+    public void markAsReadByReference(Long referenceId, ManagerNotificationType type) {
+        List<ManagerNotification> notifications = notificationRepository.findByReferenceIdAndTypeAndIsReadFalse(referenceId, type);
+        for (ManagerNotification notification : notifications) {
+            notification.setRead(true);
+        }
+        notificationRepository.saveAll(notifications);
+    }
+    
+    @Override
     public void pingNotificationResolved(Long branchId) {
         String destination = "/topic/branch/" + branchId + "/manager-notifications";
         messagingTemplate.convertAndSend(destination, java.util.Map.of("message", "NOTIFICATION_RESOLVED"));

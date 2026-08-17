@@ -50,13 +50,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     // The optional tableNumber filter uses an EXISTS subquery over the reservation's tables so the
     // outer query stays one-row-per-reservation (clean pagination, no DISTINCT needed).
     // Ordering ("what's happening next" first): upcoming reservations first, soonest at the top;
-    // past reservations after, most-recent first. CURRENT_TIMESTAMP splits upcoming vs. past.
+    // past reservations after, most-recent first. Splits on a Java-computed :now (NOT SQL
+    // CURRENT_TIMESTAMP — that evaluates against the DB server's own clock, which runs UTC while
+    // reservationTime is stored in local wall-clock time, so it wrongly bucketed already-past
+    // reservations as "upcoming" whenever the DB server's UTC clock lagged local time).
     @Query(value = "SELECT r FROM Reservation r WHERE r.branch.id = :branchId " +
            "AND (:tableNumber IS NULL OR EXISTS (SELECT t FROM Reservation r2 JOIN r2.tables t WHERE r2.id = r.id AND t.tableNumber = :tableNumber)) " +
            "AND (:status IS NULL OR r.status = :status) " +
            "AND (:dayStart IS NULL OR (r.reservationTime >= :dayStart AND r.reservationTime < :dayEnd)) " +
-           "ORDER BY CASE WHEN r.reservationTime >= CURRENT_TIMESTAMP THEN 0 ELSE 1 END ASC, " +
-           "CASE WHEN r.reservationTime >= CURRENT_TIMESTAMP THEN r.reservationTime END ASC, " +
+           "ORDER BY CASE WHEN r.reservationTime >= :now THEN 0 ELSE 1 END ASC, " +
+           "CASE WHEN r.reservationTime >= :now THEN r.reservationTime END ASC, " +
            "r.reservationTime DESC",
            countQuery = "SELECT COUNT(r) FROM Reservation r WHERE r.branch.id = :branchId " +
            "AND (:tableNumber IS NULL OR EXISTS (SELECT t FROM Reservation r2 JOIN r2.tables t WHERE r2.id = r.id AND t.tableNumber = :tableNumber)) " +
@@ -68,6 +71,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
             @Param("status") ReservationStatus status,
             @Param("dayStart") LocalDateTime dayStart,
             @Param("dayEnd") LocalDateTime dayEnd,
+            @Param("now") LocalDateTime now,
             Pageable pageable);
 
     // Requested queue for the Table Management page — oldest request first (first-come-first-serve).

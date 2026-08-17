@@ -11,6 +11,8 @@ import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.SystemConfigCacheDto;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.BranchService;
 
@@ -43,6 +45,9 @@ class BranchServiceTest {
     @Mock
     private AuditLogService auditLogService;
 
+    @Mock
+    private SystemConfigService systemConfigService;
+
     @InjectMocks
     private BranchService branchService;
 
@@ -54,6 +59,8 @@ class BranchServiceTest {
         request.setAddress("123 Food Street");
         request.setContactNumber("0771234567");
         request.setEmail("main@cravehouse.com");
+        request.setLatitude(6.9271);
+        request.setLongitude(79.8612);
 
         when(branchRepository.existsByNameIgnoreCase("Main Branch")).thenReturn(false);
 
@@ -111,6 +118,8 @@ class BranchServiceTest {
         request.setAddress("123 Food Street");
         request.setContactNumber("0771234567");
         request.setEmail("main@cravehouse.com");
+        request.setLatitude(6.9271);
+        request.setLongitude(79.8612);
 
         when(branchRepository.existsByNameIgnoreCase("Main Branch")).thenReturn(true);
 
@@ -217,6 +226,7 @@ class BranchServiceTest {
                 .build();
 
         when(branchRepository.findById(1L)).thenReturn(Optional.of(branch));
+        when(systemConfigService.getCachedGlobalConfig()).thenReturn(new SystemConfigCacheDto());
         when(branchRepository.save(any(Branch.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
