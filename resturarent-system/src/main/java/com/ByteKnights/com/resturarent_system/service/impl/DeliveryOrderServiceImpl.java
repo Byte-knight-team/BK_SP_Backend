@@ -176,8 +176,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         Long branchId = getDeliveryBranchId(savedDelivery);
         if (branchId != null) {
             try {
-                String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
-                        + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                String driverName = staff.getDisplayName();
                 String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
                 String alertMsg = "Driver " + driverName.trim() + " rejected order " + orderNum
                         + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
@@ -248,8 +247,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
             Long branchId = getDeliveryBranchId(delivery);
             if (branchId != null) {
                 try {
-                    String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
-                            + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                    String driverName = staff.getDisplayName();
                     String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
                     String alertMsg = "Driver " + driverName.trim() + " aborted delivery of order " + orderNum
                             + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");

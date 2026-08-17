@@ -728,7 +728,7 @@ public class ReportServiceImpl implements ReportService {
         for (Order o : orders) {
             String driverName = "Unassigned";
             if (o.getAssignedDelivery() != null) {
-                driverName = o.getAssignedDelivery().getFirstName() + " " + o.getAssignedDelivery().getLastName();
+                driverName = o.getAssignedDelivery().getDisplayName();
             }
 
             if (o.getStatus() == OrderStatus.ARRIVED || o.getStatus() == OrderStatus.COMPLETED || o.getStatus() == OrderStatus.SERVED) {
@@ -1080,13 +1080,11 @@ public class ReportServiceImpl implements ReportService {
             pt.setWidthPercentage(100);
             addTableHeader(pt, "Name", "Role", "Email", "Phone", "Hire Date");
             boolean alt = false;
-
             if (staffMembers.isEmpty()) {
                 addEmptyRow(pt, 5);
             } else {
                 for (Staff s : staffMembers) {
-                    String name = (s.getFirstName() != null ? s.getFirstName() : "") + " " + 
-                                  (s.getLastName() != null ? s.getLastName() : "");
+                    String name = s.getDisplayName();
                     String role = s.getUser() != null && s.getUser().getRole() != null ? s.getUser().getRole().getName() : "N/A";
                     String email = s.getUser() != null && s.getUser().getEmail() != null ? s.getUser().getEmail() : "N/A";
                     String phone = s.getUser() != null && s.getUser().getPhone() != null ? s.getUser().getPhone() : "N/A";

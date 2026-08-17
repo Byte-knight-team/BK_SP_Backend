@@ -448,7 +448,7 @@ public class ProcurementServiceImpl implements ProcurementService {
                             .poNumber(log.getPurchaseOrder().getPoNumber())
                             .vendorName(log.getPurchaseOrder().getVendor().getName())
                             .status(log.getStatus())
-                            .actionByName(log.getActionBy().getFirstName() + " " + log.getActionBy().getLastName())
+                            .actionByName(log.getActionBy().getDisplayName())
                             .items(itemNames.isEmpty() ? "N/A" : itemNames)
                             .createdAt(log.getCreatedAt())
                             .build();
