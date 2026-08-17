@@ -66,6 +66,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
                         @Param("startOfToday") LocalDateTime startOfToday);
 
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus IN :paymentStatuses AND o.createdAt BETWEEN :start AND :end")
+        BigDecimal sumFinalAmountByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+                        @Param("branchId") Long branchId,
+                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
         List<Order> findByPaymentStatusInAndCreatedAtBetween(
                         Collection<PaymentStatus> paymentStatuses,
                         LocalDateTime start,
@@ -235,6 +242,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
         Double getAveragePreparationTimeTodayByBranch(
                         @Param("branchId") Long branchId,
                         @Param("startOfToday") LocalDateTime startOfToday);
+
+        @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
+                        "FROM orders WHERE branch_id = :branchId " +
+                        "AND status = 'COMPLETED' " +
+                        "AND created_at BETWEEN :start AND :end " +
+                        "AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL", nativeQuery = true)
+        Double getAveragePreparationTimeByBranchAndDates(
+                        @Param("branchId") Long branchId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
 
         // Peak hours graph data based on order approval time
 

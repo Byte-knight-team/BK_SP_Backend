@@ -37,16 +37,16 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                                                 branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS),
                                                 start, end);
 
-                // 1. Calculate Net Revenue (Everything that is PAID or SUCCESS)
-                BigDecimal netRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(
-                                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
+                // 1. Calculate Net Revenue (Everything that is PAID or SUCCESS within dates)
+                BigDecimal netRevenue = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+                                branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS), start, end);
 
                 // 2. Calculate Order Count (Everything that is PAID or SUCCESS)
                 long orderCount = orderRepository.findByBranchIdAndPaymentStatusInAndCreatedAtBetween(
                                 branchId, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS), start, end).size();
 
-                // 3. Average Prep Time (Step 1.3)
-                Double avgPrepTime = orderRepository.getAveragePreparationTime();
+                // 3. Average Prep Time (within dates and branch)
+                Double avgPrepTime = orderRepository.getAveragePreparationTimeByBranchAndDates(branchId, start, end);
 
                 // 4. Revenue Trends (Step 1.3)
                 List<Object[]> trendData = orderRepository.findRevenueTrendByBranchAndDates(branchId, start, end);
