@@ -112,9 +112,10 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                 .collect(Collectors.toList());
 
         // 8. Staff Availability (Chefs and Delivery Drivers)
-        int kitchenTotal = (int) staffRepository.countByBranchIdAndUserRoleName(finalBranchId, "CHEF");
-        int kitchenActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
-                "CHEF", EmploymentStatus.ACTIVE);
+        List<String> kitchenRoles = Arrays.asList("CHEF", "LINE_CHEF");
+        int kitchenTotal = (int) staffRepository.countByBranchIdAndUserRoleNameIn(finalBranchId, kitchenRoles);
+        int kitchenActive = (int) staffRepository.countByBranchIdAndUserRoleNameInAndEmploymentStatus(finalBranchId,
+                kitchenRoles, EmploymentStatus.ACTIVE);
 
         int fleetTotal = (int) staffRepository.countByBranchIdAndUserRoleName(finalBranchId, "DELIVERY");
         int fleetActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
