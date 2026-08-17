@@ -54,14 +54,14 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         int activeOrders = (int) orderRepository.countByBranchIdAndStatusIn(finalBranchId, activeStatuses);
 
         // 3. Pending Deliveries
-        // Counts today's ONLINE_DELIVERY orders that are READY and waiting for driver assignment.
+        // Counts today's ONLINE_DELIVERY orders that are COMPLETED and waiting for driver assignment.
         // Previously: fetched ALL orders across ALL branches into Java memory, then filtered
         // by branchId and orderType in a for-loop. Now done entirely in SQL.
         int pendingDeliveries = (int) orderRepository
                 .countByBranchIdAndOrderTypeAndStatusInAndStatusUpdatedAtAfter(
                         finalBranchId,
                         OrderType.ONLINE_DELIVERY,
-                        Arrays.asList(OrderStatus.READY),
+                        Arrays.asList(OrderStatus.COMPLETED),
                         startOfDay);
 
         // Counts today's ONLINE_DELIVERY orders actively out with a driver.
