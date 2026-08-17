@@ -47,7 +47,7 @@ public class QrCodeController {
      */
 
     @PostMapping("/tables/{tableId}/qr-codes")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('CREATE_QR_CODE')")
     public ResponseEntity<ApiResponse<QrCodeResponse>> createQrCode(
             @PathVariable Long tableId,
             Authentication authentication
@@ -65,7 +65,7 @@ public class QrCodeController {
     }
 
     @GetMapping("/tables/{tableId}/qr-codes/active")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('VIEW_ACTIVE_QR_CODE')")
     public ResponseEntity<ApiResponse<QrCodeResponse>> getActiveQrCodeForTable(@PathVariable Long tableId) {
 
         // Return details for the currently active QR for a table. Useful for
@@ -77,7 +77,7 @@ public class QrCodeController {
     }
 
     @PostMapping("/qr-codes/{qrCodeId}/revoke")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('REVOKE_QR_CODE')")
     public ResponseEntity<ApiResponse<QrCodeResponse>> revokeQrCode(
             @PathVariable Long qrCodeId,
             @Valid @RequestBody(required = false) RevokeQrCodeRequest request
@@ -93,7 +93,7 @@ public class QrCodeController {
     }
 
     @PostMapping("/qr-codes/{qrCodeId}/regenerate")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('REGENERATE_QR_CODE')")
     public ResponseEntity<ApiResponse<QrCodeResponse>> regenerateQrCode(
             @PathVariable Long qrCodeId,
             @Valid @RequestBody(required = false) RegenerateQrCodeRequest request,
@@ -111,7 +111,7 @@ public class QrCodeController {
     }
 
     @GetMapping("/qr-codes/{qrCodeId}/download")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('DOWNLOAD_QR_CODE')")
     public ResponseEntity<byte[]> downloadQrCode(@PathVariable Long qrCodeId) {
 
         // Returns the PNG bytes for the active QR. Download will fail if

@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 
 import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateDailyRequiredStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
@@ -22,6 +23,7 @@ import com.ByteKnights.com.resturarent_system.repository.UserRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.KitchenInventoryService;
 import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService;
+import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
     private final StaffRepository staffRepository;
     private final AuditLogService auditLogService;
     private final ManagerNotificationService managerNotificationService;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     @Override
     public List<InventoryDetailsDTO> getInventoryAlerts(String userEmail) {
@@ -61,17 +64,17 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
         for (InventoryItem item : items) {
             double current = item.getQuantity().doubleValue();
             double reorder = item.getReorderLevel().doubleValue();
-            double max = item.getMaxStock().doubleValue();
+            double dailyRequired = item.getDailyRequiredStock().doubleValue();
 
             if (current <= reorder) {
                 String level = (current <= reorder / 2) ? "CRITICAL" : "LOW";
-                double percentage = (max > 0) ? (current / max) * 100 : 0;
+                double percentage = (dailyRequired > 0) ? (current / dailyRequired) * 100 : 0;
 
                 alerts.add(new InventoryDetailsDTO(
                         item.getId(),
                         item.getName(),
                         Math.round(percentage * 100.0) / 100.0,
-                        max,
+                        dailyRequired,
                         current,
                         item.getUnit(),
                         level
@@ -98,7 +101,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
 
         for (InventoryItem item : items) {
             double current = item.getQuantity().doubleValue();
-            double max = item.getMaxStock().doubleValue();
+            double dailyRequired = item.getDailyRequiredStock().doubleValue();
             double reorder = item.getReorderLevel().doubleValue();
 
             if (current <= reorder) {
@@ -107,13 +110,13 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 warningLevel = "OK";
             }
 
-            double percentage = (max > 0) ? (current / max) * 100 : 0;
+            double percentage = (dailyRequired > 0) ? (current / dailyRequired) * 100 : 0;
 
             dtoList.add(new InventoryDetailsDTO(
                     item.getId(),
                     item.getName(),
                     Math.round(percentage * 100.0) / 100.0,
-                    max,
+                    dailyRequired,
                     current,
                     item.getUnit(),
                     warningLevel
@@ -187,6 +190,8 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
 
         InventoryItem savedItem = inventoryItemRepository.save(item);
 
+        checkAndNotifyStockLevel(savedItem);
+
         auditLogService.logCurrentUserAction(
                 AuditModule.INVENTORY,
                 AuditEventType.INVENTORY_ITEM_CORRECTED,
@@ -199,6 +204,68 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
                 oldValues,
                 buildInventoryItemAuditSnapshot(savedItem)
         );
+    }
+
+    @Override
+    @Transactional
+    public void updateDailyRequiredStock(UpdateDailyRequiredStockDTO updateDTO, String userEmail) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        InventoryItem item = inventoryItemRepository.findByNameAndBranchId(updateDTO.getItemName(), branchId)
+                .orElseThrow(() -> new RuntimeException(
+                        "Inventory item not found in your branch: " + updateDTO.getItemName()
+                ));
+
+        Map<String, Object> oldValues = buildInventoryItemAuditSnapshot(item);
+
+        item.setDailyRequiredStock(updateDTO.getNewDailyRequiredStock());
+
+        InventoryItem savedItem = inventoryItemRepository.save(item);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.INVENTORY,
+                AuditEventType.INVENTORY_ITEM_CORRECTED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.INVENTORY_ITEM,
+                savedItem.getId(),
+                branchId,
+                "Daily required stock updated from kitchen successfully",
+                oldValues,
+                buildInventoryItemAuditSnapshot(savedItem)
+        );
+    }
+
+    @Override
+    @Transactional
+    public void checkAndNotifyStockLevel(InventoryItem item) {
+        String level = item.computeStockLevel();
+
+        if (!"OK".equals(level)) {
+            if (!item.isLowStockAlerted()) {
+                item.setLowStockAlerted(true);
+                inventoryItemRepository.save(item);
+
+                webSocketNotificationService.broadcastLowStockAlert(
+                        item.getBranch().getId(),
+                        item.getId(),
+                        item.getName(),
+                        level,
+                        item.getQuantity().doubleValue(),
+                        item.getUnit()
+                );
+            }
+        } else if (item.isLowStockAlerted()) {
+            // Restocked back above reorder level — clear the flag so the next dip alerts again.
+            item.setLowStockAlerted(false);
+            inventoryItemRepository.save(item);
+        }
     }
 
     @Override
@@ -262,7 +329,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
         snapshot.put("quantity", item.getQuantity());
         snapshot.put("unit", item.getUnit());
         snapshot.put("reorderLevel", item.getReorderLevel());
-        snapshot.put("maxStock", item.getMaxStock());
+        snapshot.put("dailyRequiredStock", item.getDailyRequiredStock());
         snapshot.put("branchId", item.getBranch() != null ? item.getBranch().getId() : null);
         snapshot.put("branchName", item.getBranch() != null ? item.getBranch().getName() : null);
 

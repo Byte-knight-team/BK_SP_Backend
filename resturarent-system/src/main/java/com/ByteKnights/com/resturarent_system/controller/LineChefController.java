@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefCookingStatsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefItemDTO;
 import com.ByteKnights.com.resturarent_system.service.LineChefService;
 import lombok.RequiredArgsConstructor;
@@ -43,5 +44,24 @@ public class LineChefController {
             Principal principal) {
         lineChefService.completeItem(itemId, principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Item completed", null), HttpStatus.OK);
+    }
+
+    @GetMapping("/history")
+    @PreAuthorize("hasAuthority('LINE_CHEF_ORDER_VIEW')")
+    public ResponseEntity<StandardResponse> getCookingHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) String status,
+            Principal principal) {
+        var history = lineChefService.getCookingHistory(principal.getName(), page, size, date, status);
+        return new ResponseEntity<>(new StandardResponse(200, "Success", history), HttpStatus.OK);
+    }
+
+    @GetMapping("/history/stats")
+    @PreAuthorize("hasAuthority('LINE_CHEF_ORDER_VIEW')")
+    public ResponseEntity<StandardResponse> getCookingStats(Principal principal) {
+        LineChefCookingStatsDTO stats = lineChefService.getCookingStats(principal.getName());
+        return new ResponseEntity<>(new StandardResponse(200, "Success", stats), HttpStatus.OK);
     }
 }

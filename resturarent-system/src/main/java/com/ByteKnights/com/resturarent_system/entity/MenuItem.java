@@ -41,8 +41,10 @@ public class MenuItem {
     @Column(name = "image_url", length = 255)
     private String imageUrl;
 
+    // Nullable: PENDING items created by a chef start with this unset (null) until
+    // the chef explicitly confirms it can be cooked — admin approval alone no
+    // longer grants availability. Admin-created items still always set true/false.
     @Builder.Default
-    @Column(nullable = false)
     private Boolean isAvailable = true;
 
     @Enumerated(EnumType.STRING)

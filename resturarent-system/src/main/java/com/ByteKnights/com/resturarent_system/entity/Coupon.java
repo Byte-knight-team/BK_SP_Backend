@@ -52,7 +52,7 @@ public class Coupon {
     private Integer usedCount = 0;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 50)
     @Builder.Default
     private CouponStatus status = CouponStatus.ACTIVE;
 

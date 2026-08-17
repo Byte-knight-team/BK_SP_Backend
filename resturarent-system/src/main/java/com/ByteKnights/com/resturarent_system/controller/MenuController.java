@@ -132,7 +132,7 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('APPROVE_ITEM')")
     public ResponseEntity<MenuItemActionResponse> approveMenuItem(
             @PathVariable Long id,
             @Valid @RequestBody ApproveMenuItemRequest request) {
@@ -141,7 +141,7 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/reject")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('REJECT_ITEM')")
     public ResponseEntity<MenuItemActionResponse> rejectMenuItem(
             @PathVariable Long id,
             @Valid @RequestBody RejectMenuItemRequest request) {
@@ -150,6 +150,7 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/availability")
+    @PreAuthorize("hasAnyRole('ADMIN','CHEF') or hasAuthority('TOGGLE_ITEM_AVAILABILITY')")
     public ResponseEntity<MenuItemActionResponse> toggleMenuItemAvailability(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> payload) {
@@ -199,7 +200,7 @@ public class MenuController {
 
     // Get the ingredient list (recipe) for a menu item — CHEF and ADMIN
     @GetMapping("/{id:\\d+}/ingredients")
-    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN') or hasAuthority('VIEW_INGREDIENTS')")
     public ResponseEntity<List<MenuItemIngredientResponseDTO>> getIngredients(@PathVariable Long id) {
         List<MenuItemIngredientResponseDTO> ingredients = menuItemIngredientService.getIngredients(id);
         return ResponseEntity.ok(ingredients);
@@ -207,7 +208,7 @@ public class MenuController {
 
     // Save (replace) the full ingredient list for a menu item — CHEF and ADMIN
     @PostMapping("/{id:\\d+}/ingredients")
-    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN') or hasAuthority('SAVE_INGREDIENTS')")
     public ResponseEntity<List<MenuItemIngredientResponseDTO>> saveIngredients(
             @PathVariable Long id,
             @Valid @RequestBody MenuItemIngredientRequestDTO request) {

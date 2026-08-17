@@ -25,26 +25,26 @@ public class AdminDashboardController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('VIEW_SUMMARY')")
     public ResponseEntity<AdminDashboardSummaryResponse> getSummary() {
         return ResponseEntity.ok(adminDashboardService.getSummary());
     }
 
     @GetMapping("/order-flow")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('VIEW_ORDER_FLOW')")
     public ResponseEntity<AdminDashboardOrderFlowResponse> getOrderFlow() {
         return ResponseEntity.ok(adminDashboardService.getOrderFlowSummary());
     }
 
     @GetMapping("/revenue-trend")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('VIEW_REVENUE_TREND')")
     public ResponseEntity<List<AdminDashboardRevenuePointResponse>> getRevenueTrend(
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(adminDashboardService.getRevenueTrend(days));
     }
 
     @GetMapping("/superadmin/branch-revenue")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN') or hasAuthority('VIEW_BRANCH_REVENUE')")
     public ResponseEntity<List<SuperAdminBranchRevenueResponse>> getSuperAdminBranchRevenue(
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(adminDashboardService.getSuperAdminBranchRevenueSummary(days));

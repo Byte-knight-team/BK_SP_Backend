@@ -16,7 +16,10 @@ public class DatabaseMigrationConfig {
     public CommandLineRunner migratePaymentStatusEnum(JdbcTemplate jdbcTemplate) {
         return args -> {
             try {
-                log.info("Starting schema migration for payment_status columns...");
+                log.info("Starting schema migration for payment_status and coupon columns...");
+                
+                jdbcTemplate.execute("ALTER TABLE coupons MODIFY COLUMN status VARCHAR(50)");
+                log.info("Migrated coupons.status");
                 
                 // Convert ENUM to VARCHAR(50) to allow for new Java enum values
                 jdbcTemplate.execute("ALTER TABLE orders MODIFY COLUMN payment_status VARCHAR(50)");

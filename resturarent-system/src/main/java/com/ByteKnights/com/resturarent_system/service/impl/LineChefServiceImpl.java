@@ -1,6 +1,9 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefCookingStatsDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefHistoryItemDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefItemDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
@@ -8,6 +11,9 @@ import com.ByteKnights.com.resturarent_system.service.LineChefService;
 import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +39,8 @@ public class LineChefServiceImpl implements LineChefService {
     private final AuditLogService auditLogService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a");
 
     private Staff getStaffFromEmail(String email) {
         User user = userRepository.findByEmail(email)
@@ -262,6 +270,7 @@ public class LineChefServiceImpl implements LineChefService {
         }
     }
 
+<<<<<<< HEAD
     private Map<String, Object> buildOrderItemAuditSnapshot(OrderItem item) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
 
@@ -340,3 +349,68 @@ public class LineChefServiceImpl implements LineChefService {
         return fullName.isBlank() ? null : fullName;
     }
 }
+=======
+    @Override
+    public PagedResponse<LineChefHistoryItemDTO> getCookingHistory(String userEmail, int page, int size, String date, String status) {
+        Staff lineChef = getStaffFromEmail(userEmail);
+
+        // Optional single-day filter: 'yyyy-MM-dd' → [startOfDay, startOfNextDay)
+        LocalDateTime dayStart = null;
+        LocalDateTime dayEnd = null;
+        if (date != null && !date.isBlank()) {
+            LocalDate day = LocalDate.parse(date);
+            dayStart = day.atStartOfDay();
+            dayEnd = dayStart.plusDays(1);
+        }
+
+        // Optional status filter (READY or SERVED — the only statuses a finished item can have)
+        OrderItemStatus statusFilter = null;
+        if (status != null && !status.isBlank()) {
+            statusFilter = OrderItemStatus.valueOf(status.toUpperCase());
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<OrderItem> result = orderItemRepository.findHistoryByLineChef(
+                lineChef.getId(), statusFilter, dayStart, dayEnd, pageable);
+
+        List<LineChefHistoryItemDTO> content = result.getContent().stream().map(item -> {
+            Order order = item.getOrder();
+            Integer tableNumber = order.getTable() != null ? order.getTable().getTableNumber() : null;
+
+            return new LineChefHistoryItemDTO(
+                    item.getId(),
+                    item.getItemName(),
+                    item.getQuantity(),
+                    item.getStatus().name(),
+                    order.getOrderNumber(),
+                    tableNumber,
+                    item.getCookingCompletedAt().format(DATE_FORMATTER),
+                    item.getCookingStartedAt() != null ? item.getCookingStartedAt().format(TIME_FORMATTER) : "-",
+                    item.getCookingCompletedAt().format(TIME_FORMATTER)
+            );
+        }).toList();
+
+        return PagedResponse.<LineChefHistoryItemDTO>builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
+    }
+
+    @Override
+    public LineChefCookingStatsDTO getCookingStats(String userEmail) {
+        Staff lineChef = getStaffFromEmail(userEmail);
+
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfToday = startOfToday.plusDays(1);
+
+        long cookedToday = orderItemRepository.countByAssignedLineChefIdAndCookingCompletedAtBetween(
+                lineChef.getId(), startOfToday, endOfToday);
+        long cookedTotal = orderItemRepository.countByAssignedLineChefIdAndCookingCompletedAtIsNotNull(lineChef.getId());
+
+        return new LineChefCookingStatsDTO(cookedToday, cookedTotal);
+    }
+}
+>>>>>>> dev_3
