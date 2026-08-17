@@ -209,9 +209,4 @@ public class CouponServiceImpl implements CouponService {
                 .createdAt(coupon.getCreatedAt())
                 .build();
     }
-<<<<<<< HEAD
 }
-=======
-}
-
->>>>>>> dev_3
