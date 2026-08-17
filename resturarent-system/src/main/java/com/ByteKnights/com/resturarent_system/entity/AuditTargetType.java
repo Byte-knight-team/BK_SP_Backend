@@ -3,23 +3,40 @@ package com.ByteKnights.com.resturarent_system.entity;
 public enum AuditTargetType {
     AUTH,
     USER,
+    CUSTOMER,
     ROLE,
     BRANCH,
     SYSTEM_CONFIG,
     BRANCH_CONFIG,
     OPERATING_HOURS,
+
     MENU_CATEGORY,
     MENU_ITEM,
+
     TABLE,
     QR_CODE,
     QR_SESSION,
+
     ORDER,
     ORDER_ITEM,
     PAYMENT,
+    COUPON,
+
     INVENTORY_ITEM,
     CHEF_REQUEST,
-    DELIVERY,
     KITCHEN_ALERT,
-    CUSTOMER,
-    REPORT
+
+    DELIVERY,
+    REPORT,
+
+    MENU_ITEM_UPDATE_REQUEST,
+
+    RESERVATION,
+
+    VENDOR,
+    PURCHASE_ORDER,
+    PURCHASE_ORDER_ITEM,
+    GOODS_RECEIPT_NOTE,
+    GRN_LINE_ITEM,
+    INVENTORY_TRANSACTION
 }

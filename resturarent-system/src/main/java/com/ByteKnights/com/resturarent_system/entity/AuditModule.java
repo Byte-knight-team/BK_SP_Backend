@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.entity;
 public enum AuditModule {
     AUTH,
     STAFF,
+    CUSTOMER,
     RBAC,
     BRANCH,
     CONFIG,
@@ -12,9 +13,11 @@ public enum AuditModule {
     QR_SESSION,
     ORDER,
     PAYMENT,
+    PROMOTION,
+    PROCUREMENT,
     KITCHEN,
     INVENTORY,
     DELIVERY,
-    CUSTOMER,
+    RESERVATION,
     REPORT
 }

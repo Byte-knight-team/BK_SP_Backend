@@ -3,6 +3,7 @@ package com.ByteKnights.com.resturarent_system.service.impl;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.LineChefItemDTO;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.LineChefService;
 import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
@@ -14,7 +15,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -27,12 +30,14 @@ public class LineChefServiceImpl implements LineChefService {
     private final ChefAttendanceRepository chefAttendanceRepository;
     private final WebSocketNotificationService webSocketNotificationService;
     private final ManagerNotificationService managerNotificationService;
+    private final AuditLogService auditLogService;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
 
     private Staff getStaffFromEmail(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
         return staffRepository.findByUser(user)
                 .orElseThrow(() -> new RuntimeException("Staff profile not found"));
     }
@@ -46,14 +51,13 @@ public class LineChefServiceImpl implements LineChefService {
                 List.of(OrderItemStatus.PENDING, OrderItemStatus.PREPARING)
         );
 
-        // Include today's READY and SERVED items (SERVED = already handed to customer)
-        // Both are filtered by cookingCompletedAt to avoid historical data
         List<OrderItem> todayDoneItems = orderItemRepository.findByAssignedLineChefIdAndStatusIn(
-                lineChef.getId(),
-                List.of(OrderItemStatus.READY, OrderItemStatus.SERVED)
-        ).stream()
-                .filter(item -> item.getCookingCompletedAt() != null &&
-                        item.getCookingCompletedAt().toLocalDate().equals(LocalDate.now()))
+                        lineChef.getId(),
+                        List.of(OrderItemStatus.READY, OrderItemStatus.SERVED)
+                )
+                .stream()
+                .filter(item -> item.getCookingCompletedAt() != null
+                        && item.getCookingCompletedAt().toLocalDate().equals(LocalDate.now()))
                 .toList();
 
         List<OrderItem> items = new ArrayList<>();
@@ -89,8 +93,8 @@ public class LineChefServiceImpl implements LineChefService {
 
         Staff lineChef = getStaffFromEmail(userEmail);
 
-        if (item.getAssignedLineChef() == null ||
-                !item.getAssignedLineChef().getId().equals(lineChef.getId())) {
+        if (item.getAssignedLineChef() == null
+                || !item.getAssignedLineChef().getId().equals(lineChef.getId())) {
             throw new RuntimeException("This item is not assigned to you");
         }
 
@@ -98,25 +102,59 @@ public class LineChefServiceImpl implements LineChefService {
             throw new RuntimeException("Item is not in PENDING status");
         }
 
-        item.setStatus(OrderItemStatus.PREPARING);
-        item.setCookingStartedAt(LocalDateTime.now());
-        orderItemRepository.save(item);
+        ChefAttendance attendance = chefAttendanceRepository
+                .findByStaffIdAndAttendanceDate(lineChef.getId(), LocalDate.now())
+                .orElseThrow(() -> new RuntimeException("No attendance record for today. Please check in first."));
 
         Order order = item.getOrder();
+
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        oldValues.put("orderItem", buildOrderItemAuditSnapshot(item));
+        oldValues.put("order", buildOrderAuditSnapshot(order));
+        oldValues.put("chefAttendance", buildChefAttendanceAuditSnapshot(attendance));
+
+        item.setStatus(OrderItemStatus.PREPARING);
+        item.setCookingStartedAt(LocalDateTime.now());
+        OrderItem savedItem = orderItemRepository.save(item);
+
         if (order.getStatus() == OrderStatus.PENDING) {
             order.updateStatus(OrderStatus.PREPARING);
             orderRepository.save(order);
         }
 
-        ChefAttendance attendance = chefAttendanceRepository
-                .findByStaffIdAndAttendanceDate(lineChef.getId(), LocalDate.now())
-                .orElseThrow(() -> new RuntimeException("No attendance record for today. Please check in first."));
         attendance.setWorkStatus(ChefWorkStatus.COOKING);
-        chefAttendanceRepository.save(attendance);
+        ChefAttendance savedAttendance = chefAttendanceRepository.save(attendance);
 
-        Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("orderItem", buildOrderItemAuditSnapshot(savedItem));
+        newValues.put("order", buildOrderAuditSnapshot(order));
+        newValues.put("chefAttendance", buildChefAttendanceAuditSnapshot(savedAttendance));
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.KITCHEN,
+                AuditEventType.MEAL_STARTED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.ORDER_ITEM,
+                savedItem.getId(),
+                getOrderBranchId(order),
+                "Line chef started preparing order item",
+                oldValues,
+                newValues
+        );
+
+        Long branchId = getOrderBranchId(order);
+
         if (branchId != null) {
-            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), order.getOrderNumber(), item.getItemName(), "PREPARING", order.getStatus().name(), order.getOrderType().name());
+            webSocketNotificationService.broadcastKitchenItemUpdate(
+                    branchId,
+                    order.getId(),
+                    order.getOrderNumber(),
+                    item.getItemName(),
+                    "PREPARING",
+                    order.getStatus().name(),
+                    order.getOrderType().name()
+            );
         }
     }
 
@@ -128,8 +166,8 @@ public class LineChefServiceImpl implements LineChefService {
 
         Staff lineChef = getStaffFromEmail(userEmail);
 
-        if (item.getAssignedLineChef() == null ||
-                !item.getAssignedLineChef().getId().equals(lineChef.getId())) {
+        if (item.getAssignedLineChef() == null
+                || !item.getAssignedLineChef().getId().equals(lineChef.getId())) {
             throw new RuntimeException("This item is not assigned to you");
         }
 
@@ -137,22 +175,27 @@ public class LineChefServiceImpl implements LineChefService {
             throw new RuntimeException("Item is not being prepared");
         }
 
+        Order order = item.getOrder();
+
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        oldValues.put("orderItem", buildOrderItemAuditSnapshot(item));
+        oldValues.put("order", buildOrderAuditSnapshot(order));
+
         item.setStatus(OrderItemStatus.READY);
         item.setCookingCompletedAt(LocalDateTime.now());
-        orderItemRepository.save(item);
+        OrderItem savedItem = orderItemRepository.save(item);
 
-        // If all items in the order are READY → mark order COMPLETED
-        Order order = item.getOrder();
         boolean allFinished = order.getItems().stream()
                 .allMatch(i -> i.getStatus() == OrderItemStatus.READY
                         || i.getStatus() == OrderItemStatus.SERVED);
+
         if (allFinished) {
             order.updateStatus(OrderStatus.COMPLETED);
             orderRepository.save(order);
-            
-            // Trigger manager notification for completed online delivery
+
             if (order.getOrderType() == OrderType.ONLINE_DELIVERY) {
-                Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
+                Long branchId = getOrderBranchId(order);
+
                 if (branchId != null) {
                     managerNotificationService.createNotification(
                             branchId,
@@ -164,24 +207,136 @@ public class LineChefServiceImpl implements LineChefService {
             }
         }
 
-        Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
-        if (branchId != null) {
-            webSocketNotificationService.broadcastKitchenItemUpdate(branchId, order.getId(), order.getOrderNumber(), item.getItemName(), "READY", order.getStatus().name(), order.getOrderType().name());
-            // QR order: refresh the receptionist table monitor so "Ready to serve" appears live
-            if (order.getOrderType() == OrderType.QR) {
-                webSocketNotificationService.broadcastTableUpdate(branchId);
-            }
-        }
+        ChefAttendance savedAttendance = null;
 
-        // If this line chef has no more PREPARING items → set status back to AVAILABLE
         List<OrderItem> stillPreparing = orderItemRepository.findByAssignedLineChefIdAndStatusIn(
-                lineChef.getId(), List.of(OrderItemStatus.PREPARING));
+                lineChef.getId(),
+                List.of(OrderItemStatus.PREPARING)
+        );
+
         if (stillPreparing.isEmpty()) {
             ChefAttendance attendance = chefAttendanceRepository
                     .findByStaffIdAndAttendanceDate(lineChef.getId(), LocalDate.now())
                     .orElseThrow(() -> new RuntimeException("No attendance record found"));
+
+            oldValues.put("chefAttendance", buildChefAttendanceAuditSnapshot(attendance));
+
             attendance.setWorkStatus(ChefWorkStatus.AVAILABLE);
-            chefAttendanceRepository.save(attendance);
+            savedAttendance = chefAttendanceRepository.save(attendance);
         }
+
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("orderItem", buildOrderItemAuditSnapshot(savedItem));
+        newValues.put("order", buildOrderAuditSnapshot(order));
+        newValues.put("chefAttendance", buildChefAttendanceAuditSnapshot(savedAttendance));
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.KITCHEN,
+                AuditEventType.MEAL_COMPLETED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.ORDER_ITEM,
+                savedItem.getId(),
+                getOrderBranchId(order),
+                "Line chef completed preparing order item",
+                oldValues,
+                newValues
+        );
+
+        Long branchId = getOrderBranchId(order);
+
+        if (branchId != null) {
+            webSocketNotificationService.broadcastKitchenItemUpdate(
+                    branchId,
+                    order.getId(),
+                    order.getOrderNumber(),
+                    item.getItemName(),
+                    "READY",
+                    order.getStatus().name(),
+                    order.getOrderType().name()
+            );
+
+            if (order.getOrderType() == OrderType.QR) {
+                webSocketNotificationService.broadcastTableUpdate(branchId);
+            }
+        }
+    }
+
+    private Map<String, Object> buildOrderItemAuditSnapshot(OrderItem item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (item == null) {
+            return snapshot;
+        }
+
+        snapshot.put("orderItemId", item.getId());
+        snapshot.put("orderId", item.getOrder() != null ? item.getOrder().getId() : null);
+        snapshot.put("itemName", item.getItemName());
+        snapshot.put("quantity", item.getQuantity());
+        snapshot.put("status", item.getStatus() != null ? item.getStatus().name() : null);
+        snapshot.put("assignedLineChefId",
+                item.getAssignedLineChef() != null ? item.getAssignedLineChef().getId() : null);
+        snapshot.put("assignedLineChefName", buildStaffName(item.getAssignedLineChef()));
+        snapshot.put("cookingStartedAt", item.getCookingStartedAt());
+        snapshot.put("cookingCompletedAt", item.getCookingCompletedAt());
+        snapshot.put("kitchenNotes", item.getKitchenNotes());
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildOrderAuditSnapshot(Order order) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (order == null) {
+            return snapshot;
+        }
+
+        snapshot.put("orderId", order.getId());
+        snapshot.put("orderNumber", order.getOrderNumber());
+        snapshot.put("orderStatus", order.getStatus() != null ? order.getStatus().name() : null);
+        snapshot.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : null);
+        snapshot.put("branchId", getOrderBranchId(order));
+        snapshot.put("tableId", order.getTable() != null ? order.getTable().getId() : null);
+        snapshot.put("tableNumber", order.getTable() != null ? order.getTable().getTableNumber() : null);
+        snapshot.put("createdAt", order.getCreatedAt());
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildChefAttendanceAuditSnapshot(ChefAttendance attendance) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (attendance == null) {
+            return snapshot;
+        }
+
+        snapshot.put("attendanceId", attendance.getId());
+        snapshot.put("workStatus", attendance.getWorkStatus() != null ? attendance.getWorkStatus().name() : null);
+
+        return snapshot;
+    }
+
+    private Long getOrderBranchId(Order order) {
+        if (order == null || order.getBranch() == null) {
+            return null;
+        }
+
+        return order.getBranch().getId();
+    }
+
+    private String buildStaffName(Staff staff) {
+        if (staff == null) {
+            return null;
+        }
+
+        if (staff.getUser() != null && staff.getUser().getFullName() != null) {
+            return staff.getUser().getFullName();
+        }
+
+        String firstName = staff.getFirstName() != null ? staff.getFirstName() : "";
+        String lastName = staff.getLastName() != null ? staff.getLastName() : "";
+        String fullName = (firstName + " " + lastName).trim();
+
+        return fullName.isBlank() ? null : fullName;
     }
 }
