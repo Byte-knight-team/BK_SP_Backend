@@ -67,8 +67,17 @@ public class CheckoutServiceImpl implements CheckoutService {
 
         BranchConfigCacheDto branchConfig = systemConfigService.getCachedBranchConfig(request.getBranchId());
 
+        if (branchConfig != null && !branchConfig.isBranchActiveForOrders()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                    "This branch is currently not accepting new orders.");
+        }
+
         double orderDistanceKm = 0.0;
-        if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
+        if ("ONLINE_DELIVERY".equalsIgnoreCase(request.getOrderType())) {
+            if (branchConfig != null && !branchConfig.isDeliveryEnabled()) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                        "Delivery service is currently disabled for this branch.");
+            }
             if (request.getLatitude() == null || request.getLongitude() == null) {
                 throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
             }
@@ -79,11 +88,21 @@ public class CheckoutServiceImpl implements CheckoutService {
             orderDistanceKm = com.ByteKnights.com.resturarent_system.util.DistanceUtil.calculateDistance(
                     branch.getLatitude(), branch.getLongitude(),
                     request.getLatitude(), request.getLongitude());
-            if (orderDistanceKm > branchConfig.getMaxDeliveryRadiusKm()) {
+            if (branchConfig != null && orderDistanceKm > branchConfig.getMaxDeliveryRadiusKm()) {
                 throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
                         String.format(
                                 "Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.",
                                 branchConfig.getMaxDeliveryRadiusKm(), orderDistanceKm));
+            }
+        } else if ("ONLINE_PICKUP".equalsIgnoreCase(request.getOrderType()) || "PICKUP".equalsIgnoreCase(request.getOrderType())) {
+            if (branchConfig != null && !branchConfig.isPickupEnabled()) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                        "Pickup service is currently disabled for this branch.");
+            }
+        } else if (OrderType.QR.name().equalsIgnoreCase(request.getOrderType()) || "DINE_IN".equalsIgnoreCase(request.getOrderType())) {
+            if (branchConfig != null && !branchConfig.isDineInEnabled()) {
+                throw new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                        "Dine-in service is currently disabled for this branch.");
             }
         }
 

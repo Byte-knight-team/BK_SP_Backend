@@ -13,6 +13,7 @@ import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.BranchStatus;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -139,6 +140,7 @@ public class BranchService {
          * This preserves compatibility with older requests that update only the
          * original branch fields.
          */
+        @CacheEvict(value = "crave:branch_config", key = "#id")
         @Transactional
         public BranchResponse updateBranch(
                         Long id,
@@ -252,6 +254,7 @@ public class BranchService {
         /*
          * Activates a branch.
          */
+        @CacheEvict(value = "crave:branch_config", key = "#id")
         @Auditable(module = AuditModule.BRANCH, eventType = AuditEventType.BRANCH_ACTIVATED, targetType = AuditTargetType.BRANCH, description = "Branch activated successfully", captureResultAsNewValue = false)
         @Transactional
         public BranchResponse activateBranch(Long id) {
@@ -273,6 +276,7 @@ public class BranchService {
          *
          * Delivery-branch protection will be added with the SystemConfig batch.
          */
+        @CacheEvict(value = "crave:branch_config", key = "#id")
         @Auditable(module = AuditModule.BRANCH, eventType = AuditEventType.BRANCH_DEACTIVATED, targetType = AuditTargetType.BRANCH, description = "Branch deactivated successfully", captureResultAsNewValue = false)
         @Transactional
         public BranchResponse deactivateBranch(Long id) {

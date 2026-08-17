@@ -53,6 +53,10 @@ public class RedisConfig {
                 .withCacheConfiguration("crave:menu:subcategories",
                         cacheConfiguration().entryTtl(Duration.ofMinutes(30)))
                 .withCacheConfiguration("crave:menu:customer",
+                        cacheConfiguration().entryTtl(Duration.ofMinutes(30)))
+                .withCacheConfiguration("crave:branch_config",
+                        cacheConfiguration().entryTtl(Duration.ofMinutes(30)))
+                .withCacheConfiguration("crave:system_config",
                         cacheConfiguration().entryTtl(Duration.ofMinutes(30)));
     }
 }
