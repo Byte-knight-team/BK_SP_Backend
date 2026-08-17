@@ -74,12 +74,12 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
 
                 // 6. Recent Transactions List
                 List<ManagerSalesSummaryDTO.TransactionDTO> transactions = orderRepository
-                                .findTop50ByBranchIdOrderByCreatedAtDesc(finalBranchId)
+                                .findTop50ByBranchIdOrderByStatusUpdatedAtDesc(finalBranchId)
                                 .stream()
                                 .map(order -> ManagerSalesSummaryDTO.TransactionDTO.builder()
                                                 .id(order.getOrderNumber() != null ? order.getOrderNumber()
                                                                 : "ORD-" + order.getId())
-                                                .date(order.getCreatedAt().format(DATE_FORMATTER))
+                                                .date((order.getStatusUpdatedAt() != null ? order.getStatusUpdatedAt() : order.getCreatedAt()).format(DATE_FORMATTER))
                                                 .customer(order.getContactName() != null ? order.getContactName()
                                                                 : "Walk-in")
                                                 .mode(order.getPaymentStatus() != null ? order.getPaymentStatus().name()

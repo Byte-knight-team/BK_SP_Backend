@@ -93,6 +93,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @EntityGraph(attributePaths = "items")
         List<Order> findTop5ByOrderByCreatedAtDesc();
+        
+        List<Order> findTop50ByBranchIdOrderByStatusUpdatedAtDesc(Long branchId);
 
         @EntityGraph(attributePaths = "items")
         List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
