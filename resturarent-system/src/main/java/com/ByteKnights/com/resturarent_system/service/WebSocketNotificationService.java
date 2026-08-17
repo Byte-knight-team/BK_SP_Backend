@@ -71,6 +71,7 @@ public class WebSocketNotificationService {
         );
         log.info("Broadcasting new receptionist order to {}: {}", destination, orderNumber);
         messagingTemplate.convertAndSend(destination, payload);
+        broadcastAdminDashboardUpdate(branchId);
     }
 
     /**
@@ -90,6 +91,7 @@ public class WebSocketNotificationService {
         );
         log.info("Broadcasting new kitchen order to {}: {}", destination, orderNumber);
         messagingTemplate.convertAndSend(destination, payload);
+        broadcastAdminDashboardUpdate(branchId);
     }
 
     /**
@@ -252,19 +254,26 @@ public class WebSocketNotificationService {
         // 2. Global user-level topic (toast notifications across all customer pages)
         try {
             Order order = orderRepository.findById(orderId).orElse(null);
-            if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
-                Long userId = order.getCustomer().getUser().getId();
-                String orderNumber = order.getOrderNumber();
+            if (order != null) {
+                Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
+                if (branchId != null) {
+                    broadcastAdminDashboardUpdate(branchId);
+                }
 
-                String userDestination = "/topic/user/" + userId + "/orders";
-                log.info("Broadcasting global order update to {}: {} -> {}", userDestination, orderNumber, newStatus);
+                if (order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                    Long userId = order.getCustomer().getUser().getId();
+                    String orderNumber = order.getOrderNumber();
 
-                java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
-                globalPayload.put("orderId", String.valueOf(orderId));
-                globalPayload.put("orderNumber", orderNumber != null ? orderNumber : "");
-                globalPayload.put("orderStatus", newStatus);
+                    String userDestination = "/topic/user/" + userId + "/orders";
+                    log.info("Broadcasting global order update to {}: {} -> {}", userDestination, orderNumber, newStatus);
 
-                messagingTemplate.convertAndSend(userDestination, globalPayload);
+                    java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
+                    globalPayload.put("orderId", String.valueOf(orderId));
+                    globalPayload.put("orderNumber", orderNumber != null ? orderNumber : "");
+                    globalPayload.put("orderStatus", newStatus);
+
+                    messagingTemplate.convertAndSend(userDestination, globalPayload);
+                }
             }
         } catch (Exception e) {
             // Don't let global notification failure break the main flow
@@ -287,19 +296,35 @@ public class WebSocketNotificationService {
 
         try {
             Order order = orderRepository.findById(orderId).orElse(null);
-            if (order != null && order.getCustomer() != null && order.getCustomer().getUser() != null) {
-                Long userId = order.getCustomer().getUser().getId();
-                String userDestination = "/topic/user/" + userId + "/orders";
-                java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
-                globalPayload.put("orderId", String.valueOf(orderId));
-                globalPayload.put("orderNumber", order.getOrderNumber() != null ? order.getOrderNumber() : "");
-                globalPayload.put("paymentStatus", newPaymentStatus);
+            if (order != null) {
+                Long branchId = order.getBranch() != null ? order.getBranch().getId() : null;
+                if (branchId != null) {
+                    broadcastAdminDashboardUpdate(branchId);
+                }
 
-                messagingTemplate.convertAndSend(userDestination, globalPayload);
+                if (order.getCustomer() != null && order.getCustomer().getUser() != null) {
+                    Long userId = order.getCustomer().getUser().getId();
+                    String userDestination = "/topic/user/" + userId + "/orders";
+                    java.util.Map<String, String> globalPayload = new java.util.HashMap<>();
+                    globalPayload.put("orderId", String.valueOf(orderId));
+                    globalPayload.put("orderNumber", order.getOrderNumber() != null ? order.getOrderNumber() : "");
+                    globalPayload.put("paymentStatus", newPaymentStatus);
+
+                    messagingTemplate.convertAndSend(userDestination, globalPayload);
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to broadcast global payment update for order {}: {}", orderId, e.getMessage());
         }
+    }
+
+    /**
+     * Trigger refresh of the Admin Dashboard stats and flow.
+     */
+    public void broadcastAdminDashboardUpdate(Long branchId) {
+        String destination = "/topic/branch/" + branchId + "/admin-notifications";
+        messagingTemplate.convertAndSend(destination, java.util.Map.of("branchId", String.valueOf(branchId)));
+        log.info("Broadcasting admin dashboard update to {}", destination);
     }
 
     /**
