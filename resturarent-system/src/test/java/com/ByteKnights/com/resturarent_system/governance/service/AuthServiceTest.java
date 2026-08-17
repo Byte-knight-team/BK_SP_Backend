@@ -287,7 +287,7 @@ class AuthServiceTest {
                                 RuntimeException.class,
                                 () -> authService.loginStaff(request));
 
-                assertEquals("Your branch is inactive. Please contact the system administrator.",
+                assertEquals("Your branch is inactive. Please contact the system administrator Support: cravehouse.system.dev@gmail.com",
                                 exception.getMessage());
 
                 verify(jwtService, never()).generateToken(anyLong(), anyString(), anyString(), any(), any());

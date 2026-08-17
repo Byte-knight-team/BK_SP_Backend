@@ -1,9 +1,13 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateCouponRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateCouponRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateCouponStatusRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.CouponResponse;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Coupon;
 import com.ByteKnights.com.resturarent_system.entity.CouponStatus;
 import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
@@ -28,6 +32,13 @@ public class CouponServiceImpl implements CouponService {
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.PROMOTION,
+            eventType = AuditEventType.COUPON_CREATED,
+            targetType = AuditTargetType.COUPON,
+            description = "Coupon created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public CouponResponse createCoupon(CreateCouponRequest request) {
         LocalDateTime now = LocalDateTime.now();
@@ -63,6 +74,11 @@ public class CouponServiceImpl implements CouponService {
                 .build();
 
         Coupon saved = couponRepository.save(coupon);
+
+        /*
+         * AOP audit is used because coupon creation is a simple admin action.
+         * captureResultAsNewValue = false avoids storing coupon JSON and saves audit storage.
+         */
         return mapToResponse(saved);
     }
 
@@ -194,4 +210,3 @@ public class CouponServiceImpl implements CouponService {
                 .build();
     }
 }
-
