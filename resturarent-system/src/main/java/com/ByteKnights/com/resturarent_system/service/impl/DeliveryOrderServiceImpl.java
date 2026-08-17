@@ -88,7 +88,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 .deliveryAddress(d.getOrder().getDeliveryAddress())
                 .customerName(d.getOrder().getContactName())
                 .customerPhone(d.getOrder().getContactPhone())
-                .paymentType("CASH ON DELIVERY")
+                .paymentType(d.getOrder().getPaymentStatus() == PaymentStatus.PAID ? "PAID" : "CASH ON DELIVERY")
                 .amount(d.getOrder().getFinalAmount())
                 .status(d.getDeliveryStatus().name())
                 .latitude(d.getOrder().getLatitude())
@@ -298,6 +298,12 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
              * because the Delivery -> Order relationship has no cascade.
              */
             orderRepository.save(order);
+            
+            // Mark the manager's NEW_DELIVERY notification as read and trigger a dashboard refresh
+            managerNotificationService.markAsReadByReference(order.getId(), ManagerNotificationType.NEW_DELIVERY);
+            if (order.getBranch() != null) {
+                managerNotificationService.pingNotificationResolved(order.getBranch().getId());
+            }
             
             webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
             sendServedEmailAsync(delivery.getOrder());
