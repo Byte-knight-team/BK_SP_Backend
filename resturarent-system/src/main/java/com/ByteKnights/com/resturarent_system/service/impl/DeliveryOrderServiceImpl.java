@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHist
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
+import com.ByteKnights.com.resturarent_system.repository.PaymentRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
@@ -29,6 +30,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         private final DeliveryRepository deliveryRepository;
         private final OrderRepository orderRepository;
+        private final PaymentRepository paymentRepository;
         private final StaffRepository staffRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
@@ -268,15 +270,36 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         if (status == DeliveryStatus.DELIVERED) {
             delivery.setDeliveredAt(LocalDateTime.now());
 
+            Order order = delivery.getOrder();
+            order.setStatus(OrderStatus.SERVED);
+
             /*
-             * Explicitly save the Order status to SERVED via OrderRepository,
+             * If the order was Cash on Delivery (payment pending), mark it as PAID 
+             * because the driver collected the cash.
+             */
+            if (order.getOrderType() == OrderType.ONLINE_DELIVERY && order.getPaymentStatus() == PaymentStatus.PENDING) {
+                order.setPaymentStatus(PaymentStatus.PAID);
+                
+                // Update or create the Payment record for financial tracking
+                Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order)
+                        .orElseGet(() -> Payment.builder()
+                                .order(order)
+                                .paymentMethod(PaymentMethod.CASH)
+                                .amount(order.getFinalAmount())
+                                .build());
+                
+                payment.setPaymentStatus(PaymentStatus.PAID);
+                payment.setPaidAt(LocalDateTime.now());
+                paymentRepository.save(payment);
+            }
+
+            /*
+             * Explicitly save the Order status via OrderRepository,
              * because the Delivery -> Order relationship has no cascade.
              */
-            delivery.getOrder().setStatus(OrderStatus.SERVED);
-            orderRepository.save(delivery.getOrder());
+            orderRepository.save(order);
             
-            webSocketNotificationService.broadcastOrderStatusUpdate(delivery.getOrder().getId(),
-                    delivery.getOrder().getStatus().name());
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
             sendServedEmailAsync(delivery.getOrder());
         }
 
