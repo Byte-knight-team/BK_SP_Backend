@@ -451,4 +451,28 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 @Param("branchId") Long branchId,
                 @Param("start") LocalDateTime start,
                 @Param("end") LocalDateTime end);
+
+        // Paged + filtered order history for a branch — shared by both the Kitchen and
+        // Receptionist Order History pages (each passes null for whichever filters it
+        // doesn't expose). All filters optional; newest first. Mirrors
+        // ReservationRepository.findFilteredByBranch's null-safe filter pattern.
+        @Query(value = "SELECT o FROM Order o WHERE o.branch.id = :branchId " +
+                "AND (:status IS NULL OR o.status = :status) " +
+                "AND (:orderType IS NULL OR o.orderType = :orderType) " +
+                "AND (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) " +
+                "AND (:dayStart IS NULL OR (o.createdAt >= :dayStart AND o.createdAt < :dayEnd)) " +
+                "ORDER BY o.createdAt DESC",
+                countQuery = "SELECT COUNT(o) FROM Order o WHERE o.branch.id = :branchId " +
+                "AND (:status IS NULL OR o.status = :status) " +
+                "AND (:orderType IS NULL OR o.orderType = :orderType) " +
+                "AND (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) " +
+                "AND (:dayStart IS NULL OR (o.createdAt >= :dayStart AND o.createdAt < :dayEnd))")
+        Page<Order> findHistoryByBranch(
+                @Param("branchId") Long branchId,
+                @Param("status") OrderStatus status,
+                @Param("orderType") OrderType orderType,
+                @Param("paymentStatus") PaymentStatus paymentStatus,
+                @Param("dayStart") LocalDateTime dayStart,
+                @Param("dayEnd") LocalDateTime dayEnd,
+                Pageable pageable);
 }

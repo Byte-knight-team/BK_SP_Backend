@@ -7,6 +7,9 @@ import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistOrderService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -129,6 +132,80 @@ public class ReceptionistOrderServiceImpl implements ReceptionistOrderService {
         }
 
         return result;
+    }
+
+    // ── GET paged + filtered order history ───────────────────────────────
+    @Override
+    public PagedResponse<ReceptionistOrderHistoryDTO> getOrderHistory(
+            String userEmail, int page, int size, String date, String status, String orderType, String paymentStatus) {
+        Long branchId = getBranchId(userEmail);
+
+        LocalDateTime dayStart = null;
+        LocalDateTime dayEnd = null;
+        if (date != null && !date.isBlank()) {
+            LocalDate day = LocalDate.parse(date);
+            dayStart = day.atStartOfDay();
+            dayEnd = dayStart.plusDays(1);
+        }
+
+        OrderStatus statusFilter = (status != null && !status.isBlank())
+                ? OrderStatus.valueOf(status.toUpperCase()) : null;
+        OrderType orderTypeFilter = (orderType != null && !orderType.isBlank())
+                ? OrderType.valueOf(orderType.toUpperCase()) : null;
+        PaymentStatus paymentStatusFilter = (paymentStatus != null && !paymentStatus.isBlank())
+                ? PaymentStatus.valueOf(paymentStatus.toUpperCase()) : null;
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Order> result = orderRepository.findHistoryByBranch(
+                branchId, statusFilter, orderTypeFilter, paymentStatusFilter, dayStart, dayEnd, pageable);
+
+        List<ReceptionistOrderHistoryDTO> content = result.getContent().stream().map(order -> {
+            String customerName = (order.getContactName() != null && !order.getContactName().isBlank())
+                    ? order.getContactName()
+                    : (order.getCustomer().getUser().getFullName() != null
+                    ? order.getCustomer().getUser().getFullName()
+                    : "Guest");
+
+            String customerPhone = (order.getContactPhone() != null && !order.getContactPhone().isBlank())
+                    ? order.getContactPhone()
+                    : order.getCustomer().getUser().getPhone();
+
+            double finalAmount = order.getFinalAmount() != null
+                    ? order.getFinalAmount().doubleValue()
+                    : order.getTotalAmount().doubleValue();
+
+            List<ReceptionistOrderItemDTO> items = order.getItems().stream().map(item ->
+                    new ReceptionistOrderItemDTO(
+                            item.getId(),
+                            item.getItemName(),
+                            item.getQuantity(),
+                            item.getUnitPrice() != null ? item.getUnitPrice().doubleValue() : 0,
+                            item.getSubtotal() != null ? item.getSubtotal().doubleValue() : 0,
+                            item.getStatus().name(),
+                            item.getKitchenNotes()
+                    )).toList();
+
+            return new ReceptionistOrderHistoryDTO(
+                    order.getId(),
+                    order.getOrderNumber(),
+                    customerName,
+                    customerPhone,
+                    order.getOrderType().name(),
+                    order.getCreatedAt() != null ? order.getCreatedAt().format(FORMATTER) : "",
+                    order.getStatus().name(),
+                    order.getPaymentStatus().name(),
+                    finalAmount,
+                    items
+            );
+        }).toList();
+
+        return PagedResponse.<ReceptionistOrderHistoryDTO>builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
     }
 
     // ── GET full order detail ────────────────────────────────────────────

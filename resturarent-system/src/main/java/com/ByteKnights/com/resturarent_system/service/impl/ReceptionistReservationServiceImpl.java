@@ -440,7 +440,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         // itself.
         Pageable pageable = PageRequest.of(page, size);
         Page<Reservation> result = reservationRepository.findFilteredByBranch(
-                branchId, tableNumber, statusFilter, dayStart, dayEnd, pageable);
+                branchId, tableNumber, statusFilter, dayStart, dayEnd, LocalDateTime.now(), pageable);
 
         return PagedResponse.<ReservationResponseDTO>builder()
                 .content(result.getContent().stream().map(this::toDTO).toList())
@@ -629,7 +629,12 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .notes(r.getCustomerNote())
                 .status(r.getStatus().name())
                 .createdAt(r.getCreatedAt())
-                .totalCharge(r.getTotalCharge());
+                .totalCharge(r.getTotalCharge())
+                // CANCELLED stores its reason in cancelReason; REJECTED reuses receptionistNote
+                // (set by rejectReservation() — never conflicts with the confirm-note use of that
+                // same field, since a REQUESTED booking can only ever be confirmed OR rejected).
+                .cancelReason(r.getStatus() == ReservationStatus.CANCELLED ? r.getCancelReason()
+                        : r.getStatus() == ReservationStatus.REJECTED ? r.getReceptionistNote() : null);
 
         // Payment/refund rows only ever exist once money has moved — skip the extra
         // query for
