@@ -317,9 +317,11 @@ public class ReportServiceImpl implements ReportService {
             // Group by Channel
             channelCount.put(o.getOrderType(), channelCount.getOrDefault(o.getOrderType(), 0L) + 1);
 
-            if (o.getStatus() == OrderStatus.REFUNDED) {
+            if (o.getPaymentStatus() == PaymentStatus.REFUNDED) {
                 refunds = refunds.add(o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO);
-            } else if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS) {
+            } 
+            
+            if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS || o.getPaymentStatus() == PaymentStatus.REFUNDED) {
                 BigDecimal amt = o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO;
                 grossSales = grossSales.add(amt);
                 taxCollected = taxCollected.add(o.getTaxAmount() != null ? o.getTaxAmount() : BigDecimal.ZERO);
