@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -21,6 +22,21 @@ import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
+
+        // Atomic "flip to SERVED only if every item is SERVED" check-and-set, done as a single
+        // conditional UPDATE so two near-simultaneous per-item "Serve" clicks (each in their own
+        // transaction, each holding a stale in-memory snapshot of the other's item) can't both
+        // read "not all served yet" and leave the order permanently stuck below SERVED even
+        // though every item individually reached SERVED. MySQL locks/serializes on the order row,
+        // so whichever call runs second sees the first one's already-committed item update here.
+        // clearAutomatically = true evicts the persistence context so a subsequent findById on
+        // this order picks up the fresh row instead of Hibernate's stale first-level cache copy.
+        @Modifying(clearAutomatically = true)
+        @Query(value = "UPDATE orders SET status = 'SERVED', status_updated_at = CURRENT_TIMESTAMP " +
+                "WHERE id = :orderId AND status <> 'SERVED' " +
+                "AND NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = :orderId AND status <> 'SERVED')",
+                nativeQuery = true)
+        int markServedIfAllItemsServed(@Param("orderId") Long orderId);
 
         long countByStatus(OrderStatus status);
 
@@ -451,9 +467,33 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 @Param("start") LocalDateTime start,
                 @Param("end") LocalDateTime end);
 
+        // Paged + filtered order history for a branch — shared by both the Kitchen and
+        // Receptionist Order History pages (each passes null for whichever filters it
+        // doesn't expose). All filters optional; newest first. Mirrors
+        // ReservationRepository.findFilteredByBranch's null-safe filter pattern.
+        @Query(value = "SELECT o FROM Order o WHERE o.branch.id = :branchId " +
+                "AND (:status IS NULL OR o.status = :status) " +
+                "AND (:orderType IS NULL OR o.orderType = :orderType) " +
+                "AND (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) " +
+                "AND (:dayStart IS NULL OR (o.createdAt >= :dayStart AND o.createdAt < :dayEnd)) " +
+                "ORDER BY o.createdAt DESC",
+                countQuery = "SELECT COUNT(o) FROM Order o WHERE o.branch.id = :branchId " +
+                "AND (:status IS NULL OR o.status = :status) " +
+                "AND (:orderType IS NULL OR o.orderType = :orderType) " +
+                "AND (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) " +
+                "AND (:dayStart IS NULL OR (o.createdAt >= :dayStart AND o.createdAt < :dayEnd))")
+        Page<Order> findHistoryByBranch(
+                @Param("branchId") Long branchId,
+                @Param("status") OrderStatus status,
+                @Param("orderType") OrderType orderType,
+                @Param("paymentStatus") PaymentStatus paymentStatus,
+                @Param("dayStart") LocalDateTime dayStart,
+                @Param("dayEnd") LocalDateTime dayEnd,
+                Pageable pageable);
+
         @Query("SELECT o.status, COUNT(o) FROM Order o WHERE o.branch.id = :branchId AND o.status IN :statuses AND o.createdAt >= :startOfToday GROUP BY o.status")
         List<Object[]> countOrdersByBranchAndStatusGrouped(
-                @Param("branchId") Long branchId, 
-                @Param("statuses") Collection<OrderStatus> statuses, 
+                @Param("branchId") Long branchId,
+                @Param("statuses") Collection<OrderStatus> statuses,
                 @Param("startOfToday") LocalDateTime startOfToday);
 }

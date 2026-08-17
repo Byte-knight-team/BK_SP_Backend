@@ -100,4 +100,19 @@ public class ReceptionistOrderController {
         receptionistOrderService.serveOrderItem(itemId, principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Item served", null), HttpStatus.OK);
     }
+
+    @GetMapping("/history")
+    @PreAuthorize("hasAuthority('RECEPTIONIST_ORDER_VIEW')")
+    public ResponseEntity<StandardResponse> getOrderHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String orderType,
+            @RequestParam(required = false) String paymentStatus,
+            Principal principal) {
+        var history = receptionistOrderService.getOrderHistory(
+                principal.getName(), page, size, date, status, orderType, paymentStatus);
+        return new ResponseEntity<>(new StandardResponse(200, "Success", history), HttpStatus.OK);
+    }
 }

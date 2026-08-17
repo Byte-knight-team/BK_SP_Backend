@@ -126,8 +126,13 @@ public class KitchenMenuController {
 
     // The caller's own edit requests, newest first — for the My Requests page.
     @GetMapping("/edit-requests")
-    public ResponseEntity<StandardResponse> getMyEditRequests(Principal principal) {
-        var requests = kitchenMenuService.getMyEditRequests(principal.getName());
+    public ResponseEntity<StandardResponse> getMyEditRequests(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) String status,
+            Principal principal) {
+        var requests = kitchenMenuService.getMyEditRequests(principal.getName(), page, size, date, status);
         return new ResponseEntity<>(new StandardResponse(200, "Success", requests), HttpStatus.OK);
     }
 }

@@ -60,4 +60,16 @@ public class KitchenOrderController {
         kitchenOrderService.holdOrder(orderId, requestDTO.getHoldReason(), principal.getName());
         return new ResponseEntity<>(new StandardResponse(200, "Order put on hold successfully", null), HttpStatus.OK);
     }
+
+    @GetMapping("/order-history")
+    @PreAuthorize("hasAuthority('KITCHEN_ORDER_VIEW')")
+    public ResponseEntity<StandardResponse> getOrderHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) String status,
+            Principal principal) {
+        var history = kitchenOrderService.getOrderHistory(principal.getName(), page, size, date, status);
+        return new ResponseEntity<>(new StandardResponse(200, "Success", history), HttpStatus.OK);
+    }
 }
