@@ -10,6 +10,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.receptionist.Reservat
 import com.ByteKnights.com.resturarent_system.dto.response.receptionist.TableAvailabilityDTO;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ReceptionistReservationService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import com.ByteKnights.com.resturarent_system.service.email.EmailService;
@@ -32,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
 import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
 
@@ -61,6 +63,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
     private final WebSocketNotificationService webSocketNotificationService;
     private final EmailService emailService;
     private final com.ByteKnights.com.resturarent_system.service.StripePaymentService stripePaymentService;
+    private final AuditLogService auditLogService;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -226,6 +229,10 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("This reservation can no longer be cancelled");
         }
 
+        Map<String, Object> oldValues = buildReservationAuditSnapshot(reservation);
+        oldValues.put("payments", buildReservationPaymentAuditSnapshots(reservation.getId()));
+        oldValues.put("customer", buildCustomerAuditSnapshot(reservation.getCustomer()));
+
         // ── Refund decision (receptionist-initiated cancel)
         // ──────────────────────────────
         // Only a PAID booking has money. When the RESTAURANT cancels BEFORE the booking
@@ -329,6 +336,26 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             }
         }
 
+        Map<String, Object> newValues = buildReservationAuditSnapshot(reservation);
+        newValues.put("payments", buildReservationPaymentAuditSnapshots(reservation.getId()));
+        newValues.put("customer", buildCustomerAuditSnapshot(reservation.getCustomer()));
+        newValues.put("refundAmount", refundAmount);
+        newValues.put("refundProcessed", isRefunded);
+        newValues.put("tablesFreed", anyFreed);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.RESERVATION,
+                AuditEventType.RESERVATION_CANCELLED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.RESERVATION,
+                reservation.getId(),
+                branchId,
+                "Reservation cancelled by receptionist",
+                oldValues,
+                newValues
+        );
+
         // Tell the customer (WS + email), and refresh the branch views — deferred until
         // commit so
         // the pushed update is never ahead of what a follow-up read can actually see.
@@ -377,6 +404,10 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("This reservation is not active or paid");
         }
 
+        Map<String, Object> oldValues = buildReservationAuditSnapshot(r);
+        oldValues.put("payments", buildReservationPaymentAuditSnapshots(r.getId()));
+        oldValues.put("customer", buildCustomerAuditSnapshot(r.getCustomer()));
+
         // Seat the whole party: occupy every table of the booking. The guest count is
         // distributed
         // greedily across the tables (each filled up to its seats), and the booking is
@@ -400,6 +431,24 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
 
         r.setStatus(ReservationStatus.COMPLETED);
         reservationRepository.save(r);
+
+        Map<String, Object> newValues = buildReservationAuditSnapshot(r);
+        newValues.put("payments", buildReservationPaymentAuditSnapshots(r.getId()));
+        newValues.put("customer", buildCustomerAuditSnapshot(r.getCustomer()));
+        newValues.put("seatedGuestCount", guestCount);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.RESERVATION,
+                AuditEventType.RESERVATION_SEATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.RESERVATION,
+                r.getId(),
+                branchId,
+                "Reservation seated by receptionist",
+                oldValues,
+                newValues
+        );
 
         runAfterCommit(() -> {
             webSocketNotificationService.broadcastTableUpdate(branchId);
@@ -487,6 +536,10 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             }
         }
 
+        Map<String, Object> oldValues = buildReservationAuditSnapshot(r);
+        oldValues.put("payments", buildReservationPaymentAuditSnapshots(r.getId()));
+        oldValues.put("customer", buildCustomerAuditSnapshot(r.getCustomer()));
+
         // Assign the tables to this booking (writes the reservation_tables rows).
         r.setTables(new HashSet<>(assignedTables));
 
@@ -510,6 +563,26 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         r.setStatus(ReservationStatus.CONFIRMED);
         r.setPaymentDeadline(now.plusMinutes(config.getReservationPaymentWindowMinutes()));
         reservationRepository.save(r);
+
+        Map<String, Object> newValues = buildReservationAuditSnapshot(r);
+        newValues.put("payments", buildReservationPaymentAuditSnapshots(r.getId()));
+        newValues.put("customer", buildCustomerAuditSnapshot(r.getCustomer()));
+        newValues.put("assignedTableNumbers", request.getTableNumbers());
+        newValues.put("paymentWindowMinutes", config.getReservationPaymentWindowMinutes());
+        newValues.put("tablesLockedImmediately", anyLocked);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.RESERVATION,
+                AuditEventType.RESERVATION_CONFIRMED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.RESERVATION,
+                r.getId(),
+                branchId,
+                "Reservation confirmed by receptionist",
+                oldValues,
+                newValues
+        );
 
         // Notify the customer (WS + email with the pay link) and refresh branch views —
         // deferred
@@ -549,9 +622,31 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
             throw new RuntimeException("Only a requested reservation can be rejected");
         }
 
+        Map<String, Object> oldValues = buildReservationAuditSnapshot(r);
+        oldValues.put("payments", buildReservationPaymentAuditSnapshots(r.getId()));
+        oldValues.put("customer", buildCustomerAuditSnapshot(r.getCustomer()));
+
         r.setStatus(ReservationStatus.REJECTED);
         r.setReceptionistNote(request.getReason());
         reservationRepository.save(r);
+
+        Map<String, Object> newValues = buildReservationAuditSnapshot(r);
+        newValues.put("payments", buildReservationPaymentAuditSnapshots(r.getId()));
+        newValues.put("customer", buildCustomerAuditSnapshot(r.getCustomer()));
+        newValues.put("rejectionReason", request.getReason());
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.RESERVATION,
+                AuditEventType.RESERVATION_REJECTED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.RESERVATION,
+                r.getId(),
+                branchId,
+                "Reservation rejected by receptionist",
+                oldValues,
+                newValues
+        );
 
         runAfterCommit(() -> {
             if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
@@ -583,6 +678,115 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .findByBranchIdAndStatusInOrderByReservationTimeAsc(branchId,
                         List.of(ReservationStatus.CONFIRMED, ReservationStatus.PAID))
                 .stream().map(this::toDTO).toList();
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AUDIT HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private Map<String, Object> buildReservationAuditSnapshot(Reservation reservation) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (reservation == null) {
+            return snapshot;
+        }
+
+        snapshot.put("reservationId", reservation.getId());
+        snapshot.put("status", reservation.getStatus() != null ? reservation.getStatus().name() : null);
+        snapshot.put("branchId", reservation.getBranch() != null ? reservation.getBranch().getId() : null);
+        snapshot.put("branchName", reservation.getBranch() != null ? reservation.getBranch().getName() : null);
+
+        snapshot.put("customerName", reservation.getCustomerName());
+        snapshot.put("customerPhone", reservation.getCustomerPhone());
+        snapshot.put("reservationTime", reservation.getReservationTime());
+        snapshot.put("endTime", reservation.getEndTime());
+        snapshot.put("guestCount", reservation.getGuestCount());
+        snapshot.put("customerNote", reservation.getCustomerNote());
+        snapshot.put("receptionistNote", reservation.getReceptionistNote());
+        snapshot.put("cancelReason", reservation.getCancelReason());
+        snapshot.put("paymentDeadline", reservation.getPaymentDeadline());
+        snapshot.put("totalCharge", reservation.getTotalCharge());
+        snapshot.put("refundAmount", reservation.getRefundAmount());
+        snapshot.put("createdAt", reservation.getCreatedAt());
+
+        List<Map<String, Object>> tableSnapshots = reservation.getTables() != null
+                ? reservation.getTables().stream()
+                        .sorted(Comparator.comparingInt(t -> t.getTableNumber() != null ? t.getTableNumber() : 0))
+                        .map(this::buildTableAuditSnapshot)
+                        .toList()
+                : List.of();
+
+        snapshot.put("tables", tableSnapshots);
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildTableAuditSnapshot(RestaurantTable table) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (table == null) {
+            return snapshot;
+        }
+
+        snapshot.put("tableId", table.getId());
+        snapshot.put("tableNumber", table.getTableNumber());
+        snapshot.put("capacity", table.getCapacity());
+        snapshot.put("state", table.getState() != null ? table.getState().name() : null);
+        snapshot.put("currentGuestCount", table.getCurrentGuestCount());
+        snapshot.put("seatedReservationId", table.getSeatedReservationId());
+        snapshot.put("statusUpdatedAt", table.getStatusUpdatedAt());
+
+        return snapshot;
+    }
+
+    private List<Map<String, Object>> buildReservationPaymentAuditSnapshots(Long reservationId) {
+        if (reservationId == null) {
+            return List.of();
+        }
+
+        return reservationPaymentRepository.findByReservationIdOrderByIdAsc(reservationId)
+                .stream()
+                .map(this::buildReservationPaymentAuditSnapshot)
+                .toList();
+    }
+
+    private Map<String, Object> buildReservationPaymentAuditSnapshot(ReservationPayment payment) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (payment == null) {
+            return snapshot;
+        }
+
+        snapshot.put("paymentId", payment.getId());
+        snapshot.put("reservationId", payment.getReservation() != null ? payment.getReservation().getId() : null);
+        snapshot.put("paymentMethod", payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : null);
+        snapshot.put("paymentStatus", payment.getPaymentStatus() != null ? payment.getPaymentStatus().name() : null);
+        snapshot.put("transactionReference", payment.getTransactionReference());
+        snapshot.put("amount", payment.getAmount());
+        snapshot.put("refundAmount", payment.getRefundAmount());
+        snapshot.put("paidAt", payment.getPaidAt());
+        snapshot.put("refundedAt", payment.getRefundedAt());
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildCustomerAuditSnapshot(Customer customer) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (customer == null) {
+            return snapshot;
+        }
+
+        User user = customer.getUser();
+
+        snapshot.put("customerId", customer.getId());
+        snapshot.put("userId", user != null ? user.getId() : null);
+        snapshot.put("email", user != null ? user.getEmail() : null);
+        snapshot.put("fullName", user != null ? user.getFullName() : null);
+        snapshot.put("totalSpent", customer.getTotalSpent());
+
+        return snapshot;
     }
 
     // Defers a WS broadcast / email until the enclosing transaction actually

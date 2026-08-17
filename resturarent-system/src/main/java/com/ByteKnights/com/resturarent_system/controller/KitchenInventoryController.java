@@ -2,6 +2,7 @@ package com.ByteKnights.com.resturarent_system.controller;
 
 import com.ByteKnights.com.resturarent_system.dto.StandardResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.InventoryRequestDTO;
+import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateDailyRequiredStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
@@ -65,6 +66,18 @@ public class KitchenInventoryController {
         kitchenInventoryService.updateInventoryStock(updateDTO, principal.getName());
         return new ResponseEntity<>(
                 new StandardResponse(200, "Stock updated successfully!", null),
+                HttpStatus.OK
+        );
+    }
+
+    @PutMapping("/inventory/daily-required-stock")
+    @PreAuthorize("hasAuthority('KITCHEN_INVENTORY_UPDATE')")
+    public ResponseEntity<StandardResponse> updateDailyRequiredStock(
+            @Valid @RequestBody UpdateDailyRequiredStockDTO updateDTO,
+            Principal principal) {
+        kitchenInventoryService.updateDailyRequiredStock(updateDTO, principal.getName());
+        return new ResponseEntity<>(
+                new StandardResponse(200, "Daily required stock updated successfully!", null),
                 HttpStatus.OK
         );
     }

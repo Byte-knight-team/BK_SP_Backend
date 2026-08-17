@@ -101,11 +101,33 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     @Transactional(readOnly = true)
     public AdminDashboardOrderFlowResponse getOrderFlowSummary() {
         Long adminBranchId = resolveCurrentAdminBranchIdOrNull();
+        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
 
-        long preparingCount = countOrdersForScope(adminBranchId, OrderStatus.PREPARING);
-        long readyCount = countOrdersForScope(adminBranchId, OrderStatus.READY);
-        long inDeliveryCount = countOrdersForScope(adminBranchId, OrderStatus.OUT_FOR_DELIVERY);
-        long completedCount = countOrdersForScope(adminBranchId, OrderStatus.SERVED);
+        long preparingCount = 0;
+        long readyCount = 0;
+        long inDeliveryCount = 0;
+        long completedCount = 0;
+
+        if (adminBranchId != null) {
+            Set<OrderStatus> flowStatuses = EnumSet.of(OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.SERVED);
+            List<Object[]> groupedCounts = orderRepository.countOrdersByBranchAndStatusGrouped(adminBranchId, flowStatuses, startOfToday);
+            
+            for (Object[] row : groupedCounts) {
+                OrderStatus status = (OrderStatus) row[0];
+                long count = toLong(row[1]);
+                switch (status) {
+                    case PREPARING -> preparingCount = count;
+                    case READY -> readyCount = count;
+                    case OUT_FOR_DELIVERY -> inDeliveryCount = count;
+                    case SERVED -> completedCount = count;
+                }
+            }
+        } else {
+            preparingCount = countOrdersForScope(null, OrderStatus.PREPARING);
+            readyCount = countOrdersForScope(null, OrderStatus.READY);
+            inDeliveryCount = countOrdersForScope(null, OrderStatus.OUT_FOR_DELIVERY);
+            completedCount = countOrdersForScope(null, OrderStatus.SERVED);
+        }
 
         return AdminDashboardOrderFlowResponse.builder()
                 .preparingCount(preparingCount)
@@ -134,21 +156,32 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
             cursor = cursor.plusDays(1);
         }
 
-        List<Order> paidOrders = fetchRevenueOrdersForScope(adminBranchId, startDateTime, endDateTime);
-
-        for (Order order : paidOrders) {
-            if (order.getCreatedAt() == null) {
-                continue;
+        if (adminBranchId != null) {
+            List<Object[]> trendData = orderRepository.findRevenueTrendByBranchAndDates(adminBranchId, startDateTime, endDateTime);
+            for (Object[] row : trendData) {
+                if (row[0] != null) {
+                    LocalDate date = ((java.sql.Date) row[0]).toLocalDate();
+                    if (revenueByDate.containsKey(date)) {
+                        revenueByDate.put(date, toBigDecimal(row[1]));
+                    }
+                }
             }
+        } else {
+            List<Order> paidOrders = fetchRevenueOrdersForScope(null, startDateTime, endDateTime);
+            for (Order order : paidOrders) {
+                if (order.getCreatedAt() == null) {
+                    continue;
+                }
 
-            LocalDate orderDate = order.getCreatedAt().toLocalDate();
+                LocalDate orderDate = order.getCreatedAt().toLocalDate();
 
-            if (!revenueByDate.containsKey(orderDate)) {
-                continue;
+                if (!revenueByDate.containsKey(orderDate)) {
+                    continue;
+                }
+
+                BigDecimal amount = order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO;
+                revenueByDate.put(orderDate, revenueByDate.get(orderDate).add(amount));
             }
-
-            BigDecimal amount = order.getFinalAmount() != null ? order.getFinalAmount() : BigDecimal.ZERO;
-            revenueByDate.put(orderDate, revenueByDate.get(orderDate).add(amount));
         }
 
         List<AdminDashboardRevenuePointResponse> points = new ArrayList<>();

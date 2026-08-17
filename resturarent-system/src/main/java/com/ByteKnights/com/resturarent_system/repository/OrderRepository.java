@@ -442,7 +442,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 @Param("start") LocalDateTime start,
                 @Param("end") LocalDateTime end);
 
-        // Completed orders by type in last 7 days (for pie chart)
         @Query(value = "SELECT order_type, COUNT(*) FROM orders " +
                "WHERE branch_id = :branchId AND status = 'SERVED' " +
                "AND created_at BETWEEN :start AND :end " +
@@ -451,4 +450,10 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                 @Param("branchId") Long branchId,
                 @Param("start") LocalDateTime start,
                 @Param("end") LocalDateTime end);
+
+        @Query("SELECT o.status, COUNT(o) FROM Order o WHERE o.branch.id = :branchId AND o.status IN :statuses AND o.createdAt >= :startOfToday GROUP BY o.status")
+        List<Object[]> countOrdersByBranchAndStatusGrouped(
+                @Param("branchId") Long branchId, 
+                @Param("statuses") Collection<OrderStatus> statuses, 
+                @Param("startOfToday") LocalDateTime startOfToday);
 }
