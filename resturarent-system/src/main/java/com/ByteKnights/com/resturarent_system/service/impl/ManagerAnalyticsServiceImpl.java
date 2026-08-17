@@ -70,7 +70,7 @@ public class ManagerAnalyticsServiceImpl implements ManagerAnalyticsService {
                                         .count();
 
                         BigDecimal typeRevenue = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
-                                        branchId, type, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
+                                        branchId, type, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS, PaymentStatus.REFUNDED));
 
                         if (typeCount > 0 || (typeRevenue != null && typeRevenue.compareTo(BigDecimal.ZERO) > 0)) {
                                 channelDistribution.add(ChannelDistributionDTO.builder()

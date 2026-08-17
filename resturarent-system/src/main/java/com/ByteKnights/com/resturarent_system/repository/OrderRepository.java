@@ -346,7 +346,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @Query(value = "SELECT DATE(created_at) as day, SUM(final_amount) as revenue, COUNT(id) as orders " +
                         "FROM orders " +
-                        "WHERE branch_id = :branchId AND payment_status = 'PAID' AND created_at BETWEEN :start AND :end "
+                        "WHERE branch_id = :branchId AND payment_status IN ('PAID', 'SUCCESS', 'REFUNDED') AND created_at BETWEEN :start AND :end "
                         +
                         "GROUP BY day ORDER BY day", nativeQuery = true)
         List<Object[]> findRevenueTrendByBranchAndDates(
