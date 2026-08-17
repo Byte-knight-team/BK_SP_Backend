@@ -40,37 +40,36 @@ public class ManagerSalesServiceImpl implements ManagerSalesService {
         public ManagerSalesSummaryDTO getSalesSummary(Long targetBranchId, Long userId) {
                 Long finalBranchId = resolveBranchId(targetBranchId, userId);
 
-                // 1. Gross Sales (Everything that is PAID)
+                // 1. Gross Sales (Everything that is PAID, SUCCESS, or REFUNDED)
                 BigDecimal grossSales = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(finalBranchId,
-                                List.of(PaymentStatus.PAID));
+                                Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS, PaymentStatus.REFUNDED));
                 grossSales = (grossSales != null) ? grossSales : BigDecimal.ZERO;
 
-                // 2. Total Refunds (Based on Order Status as payments don't have a REFUNDED
-                // status usually)
-                BigDecimal totalRefunds = orderRepository.sumFinalAmountByBranchIdAndStatusIn(finalBranchId,
-                                List.of(OrderStatus.REFUNDED));
+                // 2. Total Refunds (Based on PaymentStatus.REFUNDED)
+                BigDecimal totalRefunds = orderRepository.sumFinalAmountByBranchIdAndPaymentStatusIn(finalBranchId,
+                                List.of(PaymentStatus.REFUNDED));
                 totalRefunds = (totalRefunds != null) ? totalRefunds : BigDecimal.ZERO;
 
                 // 3. Net Sales
                 BigDecimal netSales = grossSales.subtract(totalRefunds);
 
-                // 4. Payment Methods (Card vs Cash breakdowns)
-                BigDecimal cardPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethod(finalBranchId,
-                                PaymentMethod.CARD);
+                // 4. Payment Methods (Card vs Cash breakdowns using PAID, SUCCESS, and REFUNDED)
+                BigDecimal cardPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethodAndPaymentStatusIn(finalBranchId,
+                                PaymentMethod.CARD, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS, PaymentStatus.REFUNDED));
                 cardPayments = (cardPayments != null) ? cardPayments : BigDecimal.ZERO;
 
-                BigDecimal cashPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethod(finalBranchId,
-                                PaymentMethod.CASH);
+                BigDecimal cashPayments = paymentRepository.sumAmountByBranchIdAndPaymentMethodAndPaymentStatusIn(finalBranchId,
+                                PaymentMethod.CASH, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS, PaymentStatus.REFUNDED));
                 cashPayments = (cashPayments != null) ? cashPayments : BigDecimal.ZERO;
 
-                // 5. Source Breakdown (Dine-in vs Delivery revenue using PAID status)
+                // 5. Source Breakdown (Dine-in vs Delivery revenue using PAID, SUCCESS, and REFUNDED)
                 BigDecimal dineIn = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
-                                finalBranchId, OrderType.QR, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
+                                finalBranchId, OrderType.QR, Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS, PaymentStatus.REFUNDED));
                 dineIn = (dineIn != null) ? dineIn : BigDecimal.ZERO;
 
                 BigDecimal delivery = orderRepository.sumFinalAmountByBranchIdAndOrderTypeAndPaymentStatusIn(
                                 finalBranchId, OrderType.ONLINE_DELIVERY,
-                                Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS));
+                                Arrays.asList(PaymentStatus.PAID, PaymentStatus.SUCCESS, PaymentStatus.REFUNDED));
                 delivery = (delivery != null) ? delivery : BigDecimal.ZERO;
 
                 // 6. Recent Transactions List
