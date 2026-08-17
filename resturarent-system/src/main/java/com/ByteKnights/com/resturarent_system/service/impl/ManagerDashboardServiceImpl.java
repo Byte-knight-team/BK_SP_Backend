@@ -121,11 +121,16 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         int fleetActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
                 "DELIVERY", EmploymentStatus.ACTIVE);
 
+        int receptionistTotal = (int) staffRepository.countByBranchIdAndUserRoleName(finalBranchId, "RECEPTIONIST");
+        int receptionistActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
+                "RECEPTIONIST", EmploymentStatus.ACTIVE);
+
         ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO staff = ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO
                 .builder()
                 .kitchen(new ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO.StaffStats(kitchenActive,
                         kitchenTotal))
                 .fleet(new ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO.StaffStats(fleetActive, fleetTotal))
+                .receptionist(new ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO.StaffStats(receptionistActive, receptionistTotal))
                 .build();
 
         return ManagerDashboardSummaryDTO.builder()
