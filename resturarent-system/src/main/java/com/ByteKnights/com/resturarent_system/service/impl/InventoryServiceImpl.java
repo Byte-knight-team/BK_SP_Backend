@@ -568,7 +568,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private ChefRequestDTO toChefRequestDTO(ChefRequest req) {
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
 
         String formattedTime = req.getCreatedAt() != null
                 ? req.getCreatedAt().format(timeFormatter)
