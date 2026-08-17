@@ -233,8 +233,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         }
 
         stringRedisTemplate.opsForValue().set("otp:" + phone.trim(), otpCode, 5, TimeUnit.MINUTES);
-        // smsService.sendOtpSms(phone, otpCode);
-        System.out.println(otpCode);
+        smsService.sendOtpSms(phone, otpCode);
+        // System.out.println(otpCode);
     }
 
     @Override
