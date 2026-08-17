@@ -192,7 +192,7 @@ public class AuthService {
                         null,
                         null);
 
-                throw new RuntimeException("Your branch is inactive. Please contact the system administrator.");
+                throw new RuntimeException("Your branch is inactive. Please contact the system administrator. Support: cravehouse.system.dev@gmail.com");
             }
         }
 
