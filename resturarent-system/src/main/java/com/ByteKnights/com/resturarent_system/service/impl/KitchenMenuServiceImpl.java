@@ -7,6 +7,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenMenuCa
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenMenuEditRequestResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenMenuItemResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.MenuItemIngredientResponseDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 import com.ByteKnights.com.resturarent_system.entity.Branch;
 import com.ByteKnights.com.resturarent_system.entity.MenuCategory;
 import com.ByteKnights.com.resturarent_system.entity.MenuItem;
@@ -27,10 +28,14 @@ import com.ByteKnights.com.resturarent_system.service.MenuItemIngredientService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -223,12 +228,26 @@ public class KitchenMenuServiceImpl implements KitchenMenuService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<KitchenMenuEditRequestResponse> getMyEditRequests(String userEmail) {
+    public PagedResponse<KitchenMenuEditRequestResponse> getMyEditRequests(
+            String userEmail, int page, int size, String date, String status) {
         Staff chef = resolveStaff(userEmail);
 
-        return menuItemUpdateRequestRepository.findByChefId(chef.getId())
-                .stream()
-                .sorted(Comparator.comparing(MenuItemUpdateRequest::getCreatedAt).reversed())
+        LocalDateTime dayStart = null;
+        LocalDateTime dayEnd = null;
+        if (date != null && !date.isBlank()) {
+            LocalDate day = LocalDate.parse(date);
+            dayStart = day.atStartOfDay();
+            dayEnd = dayStart.plusDays(1);
+        }
+
+        MenuItemUpdateRequestStatus statusFilter = (status != null && !status.isBlank())
+                ? MenuItemUpdateRequestStatus.valueOf(status.toUpperCase()) : null;
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<MenuItemUpdateRequest> result = menuItemUpdateRequestRepository.findMyRequestsFiltered(
+                chef.getId(), statusFilter, dayStart, dayEnd, pageable);
+
+        List<KitchenMenuEditRequestResponse> content = result.getContent().stream()
                 .map(r -> KitchenMenuEditRequestResponse.builder()
                         .id(r.getId())
                         .menuItemId(r.getMenuItem().getId())
@@ -238,7 +257,15 @@ public class KitchenMenuServiceImpl implements KitchenMenuService {
                         .status(r.getStatus().name())
                         .createdAt(r.getCreatedAt())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
+
+        return PagedResponse.<KitchenMenuEditRequestResponse>builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
     }
 
     // Loads a menu item and confirms it belongs to the calling chef's branch —

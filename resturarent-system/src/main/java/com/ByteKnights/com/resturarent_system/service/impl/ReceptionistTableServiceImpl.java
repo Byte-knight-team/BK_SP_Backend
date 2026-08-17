@@ -92,7 +92,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                     .filter(r -> r.getTables().stream().anyMatch(t -> t.getId().equals(table.getId())))
                     .map(r -> TableReservationSummary.builder()
                             .reservationId(r.getId())
-                            .customerName(r.getCustomerName())
+                            .customerName(resolveCustomerName(r))
                             .customerPhone(r.getCustomerPhone())
                             .reservationTime(r.getReservationTime())
                             .endTime(r.getEndTime())
@@ -106,7 +106,7 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
                 seatedReservation = reservationRepository.findById(table.getSeatedReservationId())
                         .map(r -> TableReservationSummary.builder()
                                 .reservationId(r.getId())
-                                .customerName(r.getCustomerName())
+                                .customerName(resolveCustomerName(r))
                                 .customerPhone(r.getCustomerPhone())
                                 .reservationTime(r.getReservationTime())
                                 .endTime(r.getEndTime())
@@ -285,5 +285,22 @@ public class ReceptionistTableServiceImpl implements ReceptionistTableService {
         tableRepository.save(table);
 
         webSocketNotificationService.broadcastTableUpdate(branchId);
+    }
+
+    // reservation.customer_name is just a snapshot taken at request time and is blank for
+    // customers whose users.full_name was never set. Always prefer the live customer_id ->
+    // customers -> users join so a later profile update shows up here too; fall back to the
+    // snapshot only for legacy rows with no linked customer.
+    private String resolveCustomerName(Reservation r) {
+        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+            User u = r.getCustomer().getUser();
+            if (u.getFullName() != null && !u.getFullName().isBlank()) {
+                return u.getFullName();
+            }
+            if (u.getUsername() != null && !u.getUsername().isBlank()) {
+                return u.getUsername();
+            }
+        }
+        return r.getCustomerName();
     }
 }

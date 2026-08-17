@@ -6,6 +6,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateDailyReq
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
 import com.ByteKnights.com.resturarent_system.entity.AuditModule;
 import com.ByteKnights.com.resturarent_system.entity.AuditSeverity;
@@ -26,9 +27,14 @@ import com.ByteKnights.com.resturarent_system.service.ManagerNotificationService
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import com.ByteKnights.com.resturarent_system.entity.ManagerNotificationType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -269,7 +275,7 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
     }
 
     @Override
-    public List<ChefRequestDTO> getMyRequests(String userEmail) {
+    public PagedResponse<ChefRequestDTO> getMyRequests(String userEmail, int page, int size, String date, String status) {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -278,15 +284,34 @@ public class KitchenInventoryServiceImpl implements KitchenInventoryService {
 
         Long branchId = staff.getBranch().getId();
 
-        // Requests are stored with the chef's full name — match this chef's own requests
-        List<ChefRequest> requests = chefRequestRepository
-                .findByBranchIdAndChefNameOrderByCreatedAtDesc(branchId, user.getFullName());
-
-        List<ChefRequestDTO> dtoList = new ArrayList<>();
-        for (ChefRequest req : requests) {
-            dtoList.add(toChefRequestDTO(req));
+        LocalDateTime dayStart = null;
+        LocalDateTime dayEnd = null;
+        if (date != null && !date.isBlank()) {
+            LocalDate day = LocalDate.parse(date);
+            dayStart = day.atStartOfDay();
+            dayEnd = dayStart.plusDays(1);
         }
-        return dtoList;
+
+        ChefRequestStatus statusFilter = (status != null && !status.isBlank())
+                ? ChefRequestStatus.valueOf(status.toUpperCase()) : null;
+
+        Pageable pageable = PageRequest.of(page, size);
+
+        // Requests are stored with the chef's full name — match this chef's own requests
+        Page<ChefRequest> result = chefRequestRepository.findMyRequestsFiltered(
+                branchId, user.getFullName(), statusFilter, dayStart, dayEnd, pageable);
+
+        List<ChefRequestDTO> content = result.getContent().stream()
+                .map(this::toChefRequestDTO)
+                .toList();
+
+        return PagedResponse.<ChefRequestDTO>builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
     }
 
     /*

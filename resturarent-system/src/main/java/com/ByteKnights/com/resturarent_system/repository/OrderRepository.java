@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import com.ByteKnights.com.resturarent_system.entity.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -21,6 +22,21 @@ import java.util.Optional;
 
 @Repository
 public interface OrderRepository extends JpaRepository<Order, Long> {
+
+        // Atomic "flip to SERVED only if every item is SERVED" check-and-set, done as a single
+        // conditional UPDATE so two near-simultaneous per-item "Serve" clicks (each in their own
+        // transaction, each holding a stale in-memory snapshot of the other's item) can't both
+        // read "not all served yet" and leave the order permanently stuck below SERVED even
+        // though every item individually reached SERVED. MySQL locks/serializes on the order row,
+        // so whichever call runs second sees the first one's already-committed item update here.
+        // clearAutomatically = true evicts the persistence context so a subsequent findById on
+        // this order picks up the fresh row instead of Hibernate's stale first-level cache copy.
+        @Modifying(clearAutomatically = true)
+        @Query(value = "UPDATE orders SET status = 'SERVED', status_updated_at = CURRENT_TIMESTAMP " +
+                "WHERE id = :orderId AND status <> 'SERVED' " +
+                "AND NOT EXISTS (SELECT 1 FROM order_items WHERE order_id = :orderId AND status <> 'SERVED')",
+                nativeQuery = true)
+        int markServedIfAllItemsServed(@Param("orderId") Long orderId);
 
         long countByStatus(OrderStatus status);
 
