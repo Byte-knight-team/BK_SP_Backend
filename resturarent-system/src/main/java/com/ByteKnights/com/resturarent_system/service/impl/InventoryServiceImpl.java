@@ -462,8 +462,8 @@ public class InventoryServiceImpl implements InventoryService {
         String performedBy = "Unknown";
 
         if (transaction.getStaff() != null) {
-            String first = transaction.getStaff().getFirstName();
-            String last = transaction.getStaff().getLastName();
+            String first = transaction.getStaff().getDisplayName();
+            String last = "";
 
             if (first != null && last != null) {
                 performedBy = first + " " + last;
@@ -568,7 +568,7 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private ChefRequestDTO toChefRequestDTO(ChefRequest req) {
-        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("hh:mm a");
 
         String formattedTime = req.getCreatedAt() != null
                 ? req.getCreatedAt().format(timeFormatter)

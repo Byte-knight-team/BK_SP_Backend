@@ -82,6 +82,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
                         @Param("startOfToday") LocalDateTime startOfToday);
 
+        @Query("SELECT COALESCE(SUM(o.finalAmount), 0) FROM Order o WHERE o.branch.id = :branchId AND o.paymentStatus IN :paymentStatuses AND o.createdAt BETWEEN :start AND :end")
+        BigDecimal sumFinalAmountByBranchIdAndPaymentStatusInAndCreatedAtBetween(
+                        @Param("branchId") Long branchId,
+                        @Param("paymentStatuses") Collection<PaymentStatus> paymentStatuses,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
         List<Order> findByPaymentStatusInAndCreatedAtBetween(
                         Collection<PaymentStatus> paymentStatuses,
                         LocalDateTime start,
@@ -102,6 +109,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @EntityGraph(attributePaths = "items")
         List<Order> findTop5ByOrderByCreatedAtDesc();
+        
+        List<Order> findTop50ByBranchIdOrderByStatusUpdatedAtDesc(Long branchId);
 
         @EntityGraph(attributePaths = "items")
         List<Order> findByStatusOrderByCreatedAtDesc(OrderStatus status);
@@ -252,6 +261,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                         @Param("branchId") Long branchId,
                         @Param("startOfToday") LocalDateTime startOfToday);
 
+        @Query(value = "SELECT AVG(TIMESTAMPDIFF(SECOND, cooking_started_at, cooking_completed_at)) / 60.0 " +
+                        "FROM orders WHERE branch_id = :branchId " +
+                        "AND status = 'COMPLETED' " +
+                        "AND created_at BETWEEN :start AND :end " +
+                        "AND cooking_started_at IS NOT NULL AND cooking_completed_at IS NOT NULL", nativeQuery = true)
+        Double getAveragePreparationTimeByBranchAndDates(
+                        @Param("branchId") Long branchId,
+                        @Param("start") LocalDateTime start,
+                        @Param("end") LocalDateTime end);
+
         // Peak hours graph data based on order approval time
 
         @Query(value = "SELECT HOUR(approved_at) as hr, COUNT(id) as count " +
@@ -345,7 +364,7 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
         @Query(value = "SELECT DATE(created_at) as day, SUM(final_amount) as revenue, COUNT(id) as orders " +
                         "FROM orders " +
-                        "WHERE branch_id = :branchId AND payment_status = 'PAID' AND created_at BETWEEN :start AND :end "
+                        "WHERE branch_id = :branchId AND payment_status IN ('PAID', 'SUCCESS', 'REFUNDED') AND created_at BETWEEN :start AND :end "
                         +
                         "GROUP BY day ORDER BY day", nativeQuery = true)
         List<Object[]> findRevenueTrendByBranchAndDates(
