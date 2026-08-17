@@ -26,7 +26,7 @@ public class RestaurantTableController {
      * Creates a new table in a branch.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('CREATE_TABLE')")
     public ResponseEntity<?> createTable(@Valid @RequestBody CreateTableRequest request) {
         TableResponse response = tableService.createTable(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -36,7 +36,7 @@ public class RestaurantTableController {
      * Returns all configured tables.
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_TABLE')")
     public ResponseEntity<List<TableResponse>> getAllTables() {
         List<TableResponse> tables = tableService.getAllTables();
         return ResponseEntity.ok(tables);
@@ -46,7 +46,7 @@ public class RestaurantTableController {
      * Returns one table by id.
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_TABLE_BY_ID')")
     public ResponseEntity<?> getTableById(@PathVariable Long id) {
         TableResponse response = tableService.getTableById(id);
         return ResponseEntity.ok(response);
@@ -56,7 +56,7 @@ public class RestaurantTableController {
      * Updates editable table fields like number, capacity, and status.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('UPDATE_TABLE')")
     public ResponseEntity<?> updateTable(
             @PathVariable Long id,
             @Valid @RequestBody UpdateTableRequest request) {

@@ -23,4 +23,6 @@ public class UpdateCouponRequest {
 
     @Min(value = 1, message = "Usage limit must be at least 1")
     private Integer usageLimit;
+    
+    private LocalDateTime startDate;
 }

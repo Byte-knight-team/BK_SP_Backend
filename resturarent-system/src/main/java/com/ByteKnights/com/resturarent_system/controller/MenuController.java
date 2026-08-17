@@ -51,7 +51,7 @@ public class MenuController {
     }
 
     @GetMapping("/pending-chef-items")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_PENDING_ITEMS')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_PENDING_ITEMS')")
     public ResponseEntity<List<MenuItemResponse>> getPendingChefMenuItems() {
         // Retrieve items submitted by chefs that are awaiting admin review
         List<MenuItemResponse> menuItems = menuService.getPendingChefMenuItems();
@@ -59,7 +59,7 @@ public class MenuController {
     }
 
     @GetMapping("/categories/count")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN') or hasAuthority('VIEW_CATEGORY_COUNT')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_CATEGORY_COUNT')")
     public ResponseEntity<Long> getCategoriesCount() {
         // Return the total number of menu categories in the system
         long count = menuService.getCategoryCount();
@@ -67,7 +67,7 @@ public class MenuController {
     }
 
     @GetMapping("/subcategories/count")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_SUBCATEGORY_COUNT')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_SUBCATEGORY_COUNT')")
     public ResponseEntity<Long> getSubCategoriesCount() {
         // Return the total number of distinct subcategories
         long count = menuService.getSubCategoryCount();
@@ -75,7 +75,7 @@ public class MenuController {
     }
 
     @GetMapping("/count")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_ITEMS_COUNT')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_ITEMS_COUNT')")
     public ResponseEntity<Long> getMenuItemsCount() {
         // Return the total number of menu items in the system
         long count = menuService.getMenuItemCount();
@@ -83,7 +83,7 @@ public class MenuController {
     }
 
     @GetMapping("/available/count")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_AVAILABLE_ITEMS_COUNT')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_AVAILABLE_ITEMS_COUNT')")
     public ResponseEntity<Long> getAvailableItemsCount() {
         // Return the count of items currently marked as available
         long count = menuService.getAvailableItemCount();
@@ -91,14 +91,14 @@ public class MenuController {
     }
 
     @GetMapping("/categories")
-    @PreAuthorize("hasAnyRole('ADMIN','CHEF','SUPER_ADMIN') or hasAuthority('VIEW_CATEGORIES')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_CATEGORIES')")
     public ResponseEntity<List<MenuCategoryResponse>> getMenuCategories() {
         List<MenuCategoryResponse> categories = menuCategoryService.getAllCategories();
         return ResponseEntity.ok(categories);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','CHEF') or hasAuthority('VIEW_ALL_ITEMS')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_ALL_ITEMS')")
     public ResponseEntity<List<MenuItemResponse>> getAllMenuItems() {
         // Retrieve all menu items (regardless of availability/approval)
         List<MenuItemResponse> menuItems = menuService.getAllMenuItems();
@@ -106,7 +106,7 @@ public class MenuController {
     }
 
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('ADMIN','CHEF') or hasAuthority('VIEW_ITEM_BY_ID')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_ITEM_BY_ID')")
     public ResponseEntity<MenuItemResponse> getMenuItemById(@PathVariable Long id) {
         // Get a single menu item by its numeric ID
         MenuItemResponse menuItem = menuService.getMenuItemById(id);
@@ -114,7 +114,7 @@ public class MenuController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('CHEF','ADMIN') or hasAuthority('CREATE_ITEM')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('CREATE_ITEM')")
     public ResponseEntity<MenuItemResponse> createMenuItem(@Valid @RequestBody CreateMenuItemRequest request) {
         // Create a new menu item (accessible to chefs and admins)
         MenuItemResponse created = menuService.createMenuItem(request);
@@ -122,7 +122,7 @@ public class MenuController {
     }
 
     @PutMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('ADMIN') or hasAuthority('UPDATE_ITEM')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('UPDATE_ITEM')")
     public ResponseEntity<MenuItemResponse> updateMenuItem(
             @PathVariable Long id,
             @Valid @RequestBody UpdateMenuItemRequest request) {
@@ -132,7 +132,7 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('APPROVE_ITEM')")
     public ResponseEntity<MenuItemActionResponse> approveMenuItem(
             @PathVariable Long id,
             @Valid @RequestBody ApproveMenuItemRequest request) {
@@ -141,7 +141,7 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/reject")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('REJECT_ITEM')")
     public ResponseEntity<MenuItemActionResponse> rejectMenuItem(
             @PathVariable Long id,
             @Valid @RequestBody RejectMenuItemRequest request) {
@@ -150,6 +150,7 @@ public class MenuController {
     }
 
     @PatchMapping("/{id:\\d+}/availability")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('TOGGLE_ITEM_AVAILABILITY')")
     public ResponseEntity<MenuItemActionResponse> toggleMenuItemAvailability(
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> payload) {
@@ -189,7 +190,7 @@ public class MenuController {
      * (optional) branch/category combination.
      */
     @GetMapping("/subcategories")
-    @PreAuthorize("hasAnyRole('ADMIN') or hasAuthority('VIEW_ALL_SUBCATEGORIES')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_ALL_SUBCATEGORIES')")
     public ResponseEntity<List<String>> getDistinctSubCategories(
             @RequestParam(required = false) Long branchId,
             @RequestParam(required = false) Long categoryId) {
@@ -199,7 +200,7 @@ public class MenuController {
 
     // Get the ingredient list (recipe) for a menu item — CHEF and ADMIN
     @GetMapping("/{id:\\d+}/ingredients")
-    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_INGREDIENTS')")
     public ResponseEntity<List<MenuItemIngredientResponseDTO>> getIngredients(@PathVariable Long id) {
         List<MenuItemIngredientResponseDTO> ingredients = menuItemIngredientService.getIngredients(id);
         return ResponseEntity.ok(ingredients);
@@ -207,7 +208,7 @@ public class MenuController {
 
     // Save (replace) the full ingredient list for a menu item — CHEF and ADMIN
     @PostMapping("/{id:\\d+}/ingredients")
-    @PreAuthorize("hasAnyRole('CHEF', 'ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('SAVE_INGREDIENTS')")
     public ResponseEntity<List<MenuItemIngredientResponseDTO>> saveIngredients(
             @PathVariable Long id,
             @Valid @RequestBody MenuItemIngredientRequestDTO request) {

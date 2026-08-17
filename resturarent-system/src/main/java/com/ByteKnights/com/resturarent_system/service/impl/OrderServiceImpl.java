@@ -121,7 +121,14 @@ public class OrderServiceImpl implements OrderService {
 
                 BranchConfigCacheDto branchConfig = systemConfigService.getCachedBranchConfig(request.getBranchId());
 
-                if ("ONLINE_DELIVERY".equals(request.getOrderType())) {
+                if (branchConfig != null && !branchConfig.isBranchActiveForOrders()) {
+                        throw new CheckoutException(HttpStatus.BAD_REQUEST, "This branch is currently not accepting new orders.");
+                }
+
+                if ("ONLINE_DELIVERY".equalsIgnoreCase(request.getOrderType())) {
+                        if (branchConfig != null && !branchConfig.isDeliveryEnabled()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Delivery service is currently disabled for this branch.");
+                        }
                         if (request.getLatitude() == null || request.getLongitude() == null) {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
                         }
@@ -132,15 +139,23 @@ public class OrderServiceImpl implements OrderService {
                                 branch.getLatitude(), branch.getLongitude(),
                                 request.getLatitude(), request.getLongitude()
                         );
-                        if (distance > branchConfig.getMaxDeliveryRadiusKm()) {
+                        if (branchConfig != null && distance > branchConfig.getMaxDeliveryRadiusKm()) {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, 
                                         String.format("Delivery location is outside our service area. Max range is %.1f km, but you are %.1f km away.", 
                                                 branchConfig.getMaxDeliveryRadiusKm(), distance));
                         }
+                } else if ("ONLINE_PICKUP".equalsIgnoreCase(request.getOrderType()) || "PICKUP".equalsIgnoreCase(request.getOrderType())) {
+                        if (branchConfig != null && !branchConfig.isPickupEnabled()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Pickup service is currently disabled for this branch.");
+                        }
+                } else if (OrderType.QR.name().equalsIgnoreCase(request.getOrderType()) || "DINE_IN".equalsIgnoreCase(request.getOrderType())) {
+                        if (branchConfig != null && !branchConfig.isDineInEnabled()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Dine-in service is currently disabled for this branch.");
+                        }
                 }
 
                 RestaurantTable table = null;
-                if (OrderType.QR.name().equals(request.getOrderType())) {
+                if (OrderType.QR.name().equalsIgnoreCase(request.getOrderType()) || "DINE_IN".equalsIgnoreCase(request.getOrderType())) {
                         if (request.getTableId() == null)
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, "Table ID required for Dine-In");
                         table = tableRepository.findById(request.getTableId())
@@ -461,6 +476,8 @@ public class OrderServiceImpl implements OrderService {
                                                 .address(order.getBranch().getAddress())
                                                 .contactNumber(order.getBranch().getContactNumber())
                                                 .email(order.getBranch().getEmail())
+                                                .latitude(order.getBranch().getLatitude())
+                                                .longitude(order.getBranch().getLongitude())
                                                 .build() : null)
                                 .items(itemResponses)
                                 .build();

@@ -1,5 +1,6 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.procurement.*;
 import com.ByteKnights.com.resturarent_system.dto.response.manager.procurement.*;
 import com.ByteKnights.com.resturarent_system.entity.*;
@@ -13,6 +14,7 @@ import com.ByteKnights.com.resturarent_system.repository.PurchaseOrderRepository
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.repository.VendorRepository;
 import com.ByteKnights.com.resturarent_system.repository.ChefRequestRepository;
+import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.ProcurementService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,7 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.Year;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +44,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final StaffRepository staffRepository;
     private final ChefRequestRepository chefRequestRepository;
     private final com.ByteKnights.com.resturarent_system.repository.PurchaseOrderLogRepository purchaseOrderLogRepository;
+    private final AuditLogService auditLogService;
 
     @jakarta.annotation.PostConstruct
     public void fixChefRequestStatusEnum() {
@@ -50,27 +56,18 @@ public class ProcurementServiceImpl implements ProcurementService {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // HELPERS
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /** Resolves the manager's branch from their userId */
     private Staff resolveStaff(Long userId) {
         return staffRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Staff profile not found for user: " + userId));
     }
 
-    /**
-     * Auto-generates a unique PO number in the format PO-{YEAR}-{3-digit seq}.
-     * e.g. PO-2026-001, PO-2026-002, ...
-     * Looks at the highest existing PO number for this branch/year and increments by 1.
-     */
     private String generatePoNumber(Long branchId) {
         int year = Year.now().getValue();
         String yearPrefix = "PO-" + year + "-";
         String maxPoNumber = purchaseOrderRepository.findMaxPoNumberByBranchAndYear(branchId, yearPrefix);
 
         int nextSeq = 1;
+
         if (maxPoNumber != null) {
             try {
                 String seqPart = maxPoNumber.substring(yearPrefix.length());
@@ -79,6 +76,7 @@ public class ProcurementServiceImpl implements ProcurementService {
                 nextSeq = 1;
             }
         }
+
         return yearPrefix + String.format("%03d", nextSeq);
     }
 
@@ -87,6 +85,13 @@ public class ProcurementServiceImpl implements ProcurementService {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
+    @Auditable(
+            module = AuditModule.PROCUREMENT,
+            eventType = AuditEventType.VENDOR_CREATED,
+            targetType = AuditTargetType.VENDOR,
+            description = "Vendor created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public VendorDTO createVendor(CreateVendorRequest request, Long userId) {
         Staff staff = resolveStaff(userId);
@@ -102,14 +107,24 @@ public class ProcurementServiceImpl implements ProcurementService {
                 .isActive(true)
                 .build();
 
+        /*
+         * AOP audit is used because vendor creation is a simple action.
+         * It avoids storing full JSON and saves audit storage.
+         */
         return toVendorDTO(vendorRepository.save(vendor));
     }
 
     @Override
     @Transactional
     public VendorDTO updateVendor(Long vendorId, UpdateVendorRequest request, Long userId) {
+        Staff staff = resolveStaff(userId);
+
         Vendor vendor = vendorRepository.findById(vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found with id: " + vendorId));
+
+        ensureSameBranch(vendor.getBranch().getId(), staff.getBranch().getId(), "Vendor does not belong to your branch");
+
+        Map<String, Object> oldValues = buildVendorAuditSnapshot(vendor);
 
         vendor.setName(request.getName());
         vendor.setContactPerson(request.getContactPerson());
@@ -119,16 +134,52 @@ public class ProcurementServiceImpl implements ProcurementService {
         vendor.setCategory(request.getCategory());
         vendor.setActive(request.isActive());
 
-        return toVendorDTO(vendorRepository.save(vendor));
+        Vendor savedVendor = vendorRepository.save(vendor);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.PROCUREMENT,
+                AuditEventType.VENDOR_UPDATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.VENDOR,
+                savedVendor.getId(),
+                getVendorBranchId(savedVendor),
+                "Vendor updated successfully",
+                oldValues,
+                buildVendorAuditSnapshot(savedVendor)
+        );
+
+        return toVendorDTO(savedVendor);
     }
 
     @Override
     @Transactional
     public void deactivateVendor(Long vendorId, Long userId) {
+        Staff staff = resolveStaff(userId);
+
         Vendor vendor = vendorRepository.findById(vendorId)
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found with id: " + vendorId));
+
+        ensureSameBranch(vendor.getBranch().getId(), staff.getBranch().getId(), "Vendor does not belong to your branch");
+
+        Map<String, Object> oldValues = buildVendorAuditSnapshot(vendor);
+
         vendor.setActive(false);
-        vendorRepository.save(vendor);
+
+        Vendor savedVendor = vendorRepository.save(vendor);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.PROCUREMENT,
+                AuditEventType.VENDOR_DEACTIVATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.VENDOR,
+                savedVendor.getId(),
+                getVendorBranchId(savedVendor),
+                "Vendor deactivated successfully",
+                oldValues,
+                buildVendorAuditSnapshot(savedVendor)
+        );
     }
 
     @Override
@@ -159,6 +210,7 @@ public class ProcurementServiceImpl implements ProcurementService {
 
         String[] colors = { "#F97316", "#3B82F6", "#10B981", "#8B5CF6", "#EF4444", "#EC4899" };
         String color = colors[0];
+
         if (req.getChefName() != null && !req.getChefName().isEmpty()) {
             color = colors[Math.abs(req.getChefName().hashCode()) % colors.length];
         }
@@ -189,6 +241,8 @@ public class ProcurementServiceImpl implements ProcurementService {
         Vendor vendor = vendorRepository.findById(request.getVendorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor not found with id: " + request.getVendorId()));
 
+        ensureSameBranch(vendor.getBranch().getId(), staff.getBranch().getId(), "Vendor does not belong to your branch");
+
         String poNumber = generatePoNumber(staff.getBranch().getId());
 
         PurchaseOrder po = PurchaseOrder.builder()
@@ -203,19 +257,25 @@ public class ProcurementServiceImpl implements ProcurementService {
 
         PurchaseOrder savedPo = purchaseOrderRepository.save(po);
 
+        ChefRequest linkedChefRequest = null;
+
         if (request.getChefRequestId() != null) {
-            ChefRequest chefRequest = chefRequestRepository.findById(request.getChefRequestId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Chef request not found with id: " + request.getChefRequestId()));
-            if (!chefRequest.getBranch().getId().equals(staff.getBranch().getId())) {
+            linkedChefRequest = chefRequestRepository.findById(request.getChefRequestId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Chef request not found with id: " + request.getChefRequestId()
+                    ));
+
+            if (!linkedChefRequest.getBranch().getId().equals(staff.getBranch().getId())) {
                 throw new RuntimeException("Chef request does not belong to your branch");
             }
-            chefRequest.setStatus(ChefRequestStatus.ORDERED);
-            chefRequestRepository.save(chefRequest);
+
+            linkedChefRequest.setStatus(ChefRequestStatus.ORDERED);
+            linkedChefRequest = chefRequestRepository.save(linkedChefRequest);
         }
 
-        // Save each line item
         for (POLineItemRequest lineReq : request.getItems()) {
             InventoryItem inventoryItem = null;
+
             if (lineReq.getInventoryItemId() != null) {
                 inventoryItem = inventoryItemRepository.findById(lineReq.getInventoryItemId())
                         .orElse(null);
@@ -233,13 +293,30 @@ public class ProcurementServiceImpl implements ProcurementService {
             purchaseOrderItemRepository.save(poItem);
         }
 
-        // Create initial log entry
         PurchaseOrderLog log = PurchaseOrderLog.builder()
                 .purchaseOrder(savedPo)
                 .status(PurchaseOrderStatus.SUBMITTED)
                 .actionBy(staff)
                 .build();
+
         purchaseOrderLogRepository.save(log);
+
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("purchaseOrder", buildPurchaseOrderAuditSnapshot(savedPo));
+        newValues.put("linkedChefRequest", buildChefRequestAuditSnapshot(linkedChefRequest));
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.PROCUREMENT,
+                AuditEventType.PURCHASE_ORDER_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.PURCHASE_ORDER,
+                savedPo.getId(),
+                getPurchaseOrderBranchId(savedPo),
+                "Purchase order created successfully",
+                null,
+                newValues
+        );
 
         return getPurchaseOrderById(savedPo.getId());
     }
@@ -247,23 +324,42 @@ public class ProcurementServiceImpl implements ProcurementService {
     @Override
     @Transactional
     public void cancelPurchaseOrder(Long poId, Long userId) {
+        Staff staff = resolveStaff(userId);
+
         PurchaseOrder po = purchaseOrderRepository.findById(poId)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + poId));
+
+        ensureSameBranch(po.getBranch().getId(), staff.getBranch().getId(), "Purchase order does not belong to your branch");
 
         if (po.getStatus() != PurchaseOrderStatus.SUBMITTED) {
             throw new IllegalStateException("Only SUBMITTED purchase orders can be cancelled.");
         }
 
-        po.setStatus(PurchaseOrderStatus.CANCELLED);
-        purchaseOrderRepository.save(po);
+        Map<String, Object> oldValues = buildPurchaseOrderAuditSnapshot(po);
 
-        Staff staff = resolveStaff(userId);
+        po.setStatus(PurchaseOrderStatus.CANCELLED);
+        PurchaseOrder savedPo = purchaseOrderRepository.save(po);
+
         PurchaseOrderLog log = PurchaseOrderLog.builder()
-                .purchaseOrder(po)
+                .purchaseOrder(savedPo)
                 .status(PurchaseOrderStatus.CANCELLED)
                 .actionBy(staff)
                 .build();
+
         purchaseOrderLogRepository.save(log);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.PROCUREMENT,
+                AuditEventType.PURCHASE_ORDER_CANCELLED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.WARN,
+                AuditTargetType.PURCHASE_ORDER,
+                savedPo.getId(),
+                getPurchaseOrderBranchId(savedPo),
+                "Purchase order cancelled successfully",
+                oldValues,
+                buildPurchaseOrderAuditSnapshot(savedPo)
+        );
     }
 
     @Override
@@ -290,11 +386,12 @@ public class ProcurementServiceImpl implements ProcurementService {
     public PurchaseOrderDTO getPurchaseOrderById(Long poId) {
         PurchaseOrder po = purchaseOrderRepository.findById(poId)
                 .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + poId));
+
         return toPurchaseOrderDTO(po);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // GOODS RECEIPT NOTE (GRN)
+    // GOODS RECEIPT NOTE
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
@@ -303,7 +400,14 @@ public class ProcurementServiceImpl implements ProcurementService {
         Staff staff = resolveStaff(userId);
 
         PurchaseOrder po = purchaseOrderRepository.findById(request.getPurchaseOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + request.getPurchaseOrderId()));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Purchase order not found with id: " + request.getPurchaseOrderId()
+                ));
+
+        ensureSameBranch(po.getBranch().getId(), staff.getBranch().getId(), "Purchase order does not belong to your branch");
+
+        Map<String, Object> oldValues = new LinkedHashMap<>();
+        oldValues.put("purchaseOrder", buildPurchaseOrderAuditSnapshot(po));
 
         GoodsReceiptNote grn = GoodsReceiptNote.builder()
                 .purchaseOrder(po)
@@ -314,17 +418,20 @@ public class ProcurementServiceImpl implements ProcurementService {
 
         GoodsReceiptNote savedGrn = goodsReceiptNoteRepository.save(grn);
 
-        // Process each line item
+        List<Map<String, Object>> inventoryChanges = new ArrayList<>();
+
         for (GrnLineItemRequest lineReq : request.getItems()) {
             PurchaseOrderItem poItem = purchaseOrderItemRepository.findById(lineReq.getPurchaseOrderItemId())
-                    .orElseThrow(() -> new ResourceNotFoundException("PO line item not found: " + lineReq.getPurchaseOrderItemId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "PO line item not found: " + lineReq.getPurchaseOrderItemId()
+                    ));
 
             GrnItemCondition condition = lineReq.getCondition() != null
                     ? lineReq.getCondition()
                     : GrnItemCondition.GOOD;
 
-            // Auto-generate discrepancy note if quantities differ
             String discrepancyNote = lineReq.getDiscrepancyNote();
+
             boolean hasDiscrepancy = lineReq.getReceivedQuantity().compareTo(poItem.getOrderedQuantity()) != 0
                     || condition != GrnItemCondition.GOOD;
 
@@ -349,21 +456,22 @@ public class ProcurementServiceImpl implements ProcurementService {
 
             grnLineItemRepository.save(lineItem);
 
-            // Only restock inventory for GOOD condition items with quantity > 0
             if (condition == GrnItemCondition.GOOD
                     && lineReq.getReceivedQuantity().compareTo(BigDecimal.ZERO) > 0
                     && poItem.getInventoryItem() != null) {
 
                 InventoryItem invItem = poItem.getInventoryItem();
+
+                Map<String, Object> inventoryOldValues = buildInventoryItemAuditSnapshot(invItem);
+
                 BigDecimal previousQty = invItem.getQuantity() != null ? invItem.getQuantity() : BigDecimal.ZERO;
                 BigDecimal newQty = previousQty.add(lineReq.getReceivedQuantity());
 
                 invItem.setQuantity(newQty);
-                inventoryItemRepository.save(invItem);
+                InventoryItem savedInventoryItem = inventoryItemRepository.save(invItem);
 
-                // Record an InventoryTransaction(RESTOCK) for full audit trail
                 InventoryTransaction transaction = InventoryTransaction.builder()
-                        .inventoryItem(invItem)
+                        .inventoryItem(savedInventoryItem)
                         .staff(staff)
                         .transactionType(InventoryTransactionType.RESTOCK)
                         .quantityChange(lineReq.getReceivedQuantity())
@@ -373,20 +481,43 @@ public class ProcurementServiceImpl implements ProcurementService {
                         .notes("Auto-restocked via GRN for PO: " + po.getPoNumber())
                         .build();
 
-                inventoryTransactionRepository.save(transaction);
+                InventoryTransaction savedTransaction = inventoryTransactionRepository.save(transaction);
+
+                Map<String, Object> inventoryChange = new LinkedHashMap<>();
+                inventoryChange.put("oldInventoryItem", inventoryOldValues);
+                inventoryChange.put("newInventoryItem", buildInventoryItemAuditSnapshot(savedInventoryItem));
+                inventoryChange.put("inventoryTransaction", buildInventoryTransactionAuditSnapshot(savedTransaction));
+
+                inventoryChanges.add(inventoryChange);
             }
         }
 
-        // Update PO status based on total received quantities across ALL GRNs
         updatePoStatusAfterGrn(po, staff);
+
+        PurchaseOrder updatedPo = purchaseOrderRepository.findById(po.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Purchase order not found with id: " + po.getId()));
+
+        Map<String, Object> newValues = new LinkedHashMap<>();
+        newValues.put("goodsReceiptNote", buildGrnAuditSnapshot(savedGrn));
+        newValues.put("purchaseOrder", buildPurchaseOrderAuditSnapshot(updatedPo));
+        newValues.put("inventoryChanges", inventoryChanges);
+
+        auditLogService.logCurrentUserAction(
+                AuditModule.PROCUREMENT,
+                AuditEventType.GOODS_RECEIPT_NOTE_CREATED,
+                AuditStatus.SUCCESS,
+                AuditSeverity.INFO,
+                AuditTargetType.GOODS_RECEIPT_NOTE,
+                savedGrn.getId(),
+                getPurchaseOrderBranchId(updatedPo),
+                "Goods receipt note created successfully",
+                oldValues,
+                newValues
+        );
 
         return getGrnById(savedGrn.getId());
     }
 
-    /**
-     * After saving a GRN, re-evaluates all PO line items to determine if the PO
-     * is fully received, partially received, or still submitted.
-     */
     private void updatePoStatusAfterGrn(PurchaseOrder po, Staff staff) {
         List<PurchaseOrderItem> poItems = purchaseOrderItemRepository.findByPurchaseOrderId(po.getId());
 
@@ -418,6 +549,7 @@ public class ProcurementServiceImpl implements ProcurementService {
                     .status(po.getStatus())
                     .actionBy(staff)
                     .build();
+
             purchaseOrderLogRepository.save(log);
         } else {
             purchaseOrderRepository.save(po);
@@ -452,20 +584,21 @@ public class ProcurementServiceImpl implements ProcurementService {
     public GoodsReceiptNoteDTO getGrnById(Long grnId) {
         GoodsReceiptNote grn = goodsReceiptNoteRepository.findById(grnId)
                 .orElseThrow(() -> new ResourceNotFoundException("GRN not found with id: " + grnId));
+
         return toGrnDTO(grn);
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SUMMARY
-    // ─────────────────────────────────────────────────────────────────────────
 
     @Override
     public ProcurementSummaryDTO getProcurementSummary(Long branchId) {
         long totalActiveVendors = vendorRepository.countByBranchIdAndIsActiveTrue(branchId);
         long activePendingPos = purchaseOrderRepository.countActivePendingByBranchId(branchId);
 
-        // Calculate total spend this month from confirmed GRN line items (GOOD condition)
-        LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime startOfMonth = LocalDateTime.now()
+                .withDayOfMonth(1)
+                .withHour(0)
+                .withMinute(0)
+                .withSecond(0);
+
         List<GoodsReceiptNote> monthGrns = goodsReceiptNoteRepository
                 .findByPurchaseOrderBranchIdOrderByReceivedAtDesc(branchId)
                 .stream()
@@ -473,13 +606,16 @@ public class ProcurementServiceImpl implements ProcurementService {
                 .collect(Collectors.toList());
 
         BigDecimal totalMonthlySpend = BigDecimal.ZERO;
+
         for (GoodsReceiptNote grn : monthGrns) {
             List<GrnLineItem> lineItems = grnLineItemRepository.findByGoodsReceiptNoteId(grn.getId());
+
             for (GrnLineItem li : lineItems) {
                 if (li.getCondition() == GrnItemCondition.GOOD
                         && li.getPurchaseOrderItem().getAgreedUnitPrice() != null) {
                     BigDecimal lineTotal = li.getReceivedQuantity()
                             .multiply(li.getPurchaseOrderItem().getAgreedUnitPrice());
+
                     totalMonthlySpend = totalMonthlySpend.add(lineTotal);
                 }
             }
@@ -494,7 +630,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // MAPPERS (Entity → DTO)
+    // MAPPERS
     // ─────────────────────────────────────────────────────────────────────────
 
     private VendorDTO toVendorDTO(Vendor vendor) {
@@ -534,7 +670,6 @@ public class ProcurementServiceImpl implements ProcurementService {
                     .build();
         }).collect(Collectors.toList());
 
-        // Calculate total value of PO
         BigDecimal totalValue = items.stream()
                 .filter(i -> i.getAgreedUnitPrice() != null)
                 .map(i -> i.getOrderedQuantity().multiply(i.getAgreedUnitPrice()))
@@ -564,6 +699,7 @@ public class ProcurementServiceImpl implements ProcurementService {
 
         List<GrnLineItemDTO> lineDTOs = lineItems.stream().map(li -> {
             PurchaseOrderItem poItem = li.getPurchaseOrderItem();
+
             boolean hasDiscrepancy = li.getReceivedQuantity().compareTo(poItem.getOrderedQuantity()) != 0
                     || li.getCondition() != GrnItemCondition.GOOD;
 
@@ -587,6 +723,7 @@ public class ProcurementServiceImpl implements ProcurementService {
                 : "Unknown";
 
         String poNumber = grn.getPurchaseOrder() != null ? grn.getPurchaseOrder().getPoNumber() : "";
+
         String vendorName = grn.getPurchaseOrder() != null && grn.getPurchaseOrder().getVendor() != null
                 ? grn.getPurchaseOrder().getVendor().getName()
                 : "";
@@ -603,5 +740,221 @@ public class ProcurementServiceImpl implements ProcurementService {
                 .items(lineDTOs)
                 .hasDiscrepancies(hasDiscrepancies)
                 .build();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AUDIT HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private void ensureSameBranch(Long entityBranchId, Long staffBranchId, String message) {
+        if (entityBranchId == null || staffBranchId == null || !entityBranchId.equals(staffBranchId)) {
+            throw new RuntimeException(message);
+        }
+    }
+
+    private Map<String, Object> buildVendorAuditSnapshot(Vendor vendor) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (vendor == null) {
+            return snapshot;
+        }
+
+        snapshot.put("vendorId", vendor.getId());
+        snapshot.put("branchId", vendor.getBranch() != null ? vendor.getBranch().getId() : null);
+        snapshot.put("branchName", vendor.getBranch() != null ? vendor.getBranch().getName() : null);
+        snapshot.put("name", vendor.getName());
+        snapshot.put("contactPerson", vendor.getContactPerson());
+        snapshot.put("phone", vendor.getPhone());
+        snapshot.put("email", vendor.getEmail());
+        snapshot.put("address", vendor.getAddress());
+        snapshot.put("category", vendor.getCategory());
+        snapshot.put("active", vendor.isActive());
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildPurchaseOrderAuditSnapshot(PurchaseOrder po) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (po == null) {
+            return snapshot;
+        }
+
+        snapshot.put("purchaseOrderId", po.getId());
+        snapshot.put("poNumber", po.getPoNumber());
+        snapshot.put("branchId", po.getBranch() != null ? po.getBranch().getId() : null);
+        snapshot.put("branchName", po.getBranch() != null ? po.getBranch().getName() : null);
+
+        snapshot.put("vendorId", po.getVendor() != null ? po.getVendor().getId() : null);
+        snapshot.put("vendorName", po.getVendor() != null ? po.getVendor().getName() : null);
+
+        snapshot.put("status", po.getStatus() != null ? po.getStatus().name() : null);
+        snapshot.put("expectedDeliveryDate", po.getExpectedDeliveryDate());
+        snapshot.put("notes", po.getNotes());
+
+        snapshot.put("createdByStaffId", po.getCreatedBy() != null ? po.getCreatedBy().getId() : null);
+        snapshot.put("createdByName",
+                po.getCreatedBy() != null && po.getCreatedBy().getUser() != null
+                        ? po.getCreatedBy().getUser().getFullName()
+                        : null);
+
+        snapshot.put("createdAt", po.getCreatedAt());
+
+        List<Map<String, Object>> itemSnapshots = purchaseOrderItemRepository.findByPurchaseOrderId(po.getId())
+                .stream()
+                .map(this::buildPurchaseOrderItemAuditSnapshot)
+                .collect(Collectors.toList());
+
+        snapshot.put("items", itemSnapshots);
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildPurchaseOrderItemAuditSnapshot(PurchaseOrderItem item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (item == null) {
+            return snapshot;
+        }
+
+        snapshot.put("purchaseOrderItemId", item.getId());
+        snapshot.put("inventoryItemId",
+                item.getInventoryItem() != null ? item.getInventoryItem().getId() : null);
+        snapshot.put("itemNameSnapshot", item.getItemNameSnapshot());
+        snapshot.put("orderedQuantity", item.getOrderedQuantity());
+        snapshot.put("unit", item.getUnit());
+        snapshot.put("agreedUnitPrice", item.getAgreedUnitPrice());
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildGrnAuditSnapshot(GoodsReceiptNote grn) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (grn == null) {
+            return snapshot;
+        }
+
+        snapshot.put("grnId", grn.getId());
+        snapshot.put("purchaseOrderId", grn.getPurchaseOrder() != null ? grn.getPurchaseOrder().getId() : null);
+        snapshot.put("poNumber", grn.getPurchaseOrder() != null ? grn.getPurchaseOrder().getPoNumber() : null);
+        snapshot.put("branchId",
+                grn.getPurchaseOrder() != null && grn.getPurchaseOrder().getBranch() != null
+                        ? grn.getPurchaseOrder().getBranch().getId()
+                        : null);
+        snapshot.put("invoiceReference", grn.getInvoiceReference());
+        snapshot.put("notes", grn.getNotes());
+        snapshot.put("receivedAt", grn.getReceivedAt());
+
+        snapshot.put("receivedByStaffId", grn.getReceivedBy() != null ? grn.getReceivedBy().getId() : null);
+        snapshot.put("receivedByName",
+                grn.getReceivedBy() != null && grn.getReceivedBy().getUser() != null
+                        ? grn.getReceivedBy().getUser().getFullName()
+                        : null);
+
+        List<Map<String, Object>> lineItems = grnLineItemRepository.findByGoodsReceiptNoteId(grn.getId())
+                .stream()
+                .map(this::buildGrnLineItemAuditSnapshot)
+                .collect(Collectors.toList());
+
+        snapshot.put("lineItems", lineItems);
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildGrnLineItemAuditSnapshot(GrnLineItem lineItem) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (lineItem == null) {
+            return snapshot;
+        }
+
+        PurchaseOrderItem poItem = lineItem.getPurchaseOrderItem();
+
+        snapshot.put("grnLineItemId", lineItem.getId());
+        snapshot.put("purchaseOrderItemId", poItem != null ? poItem.getId() : null);
+        snapshot.put("itemName", poItem != null ? poItem.getItemNameSnapshot() : null);
+        snapshot.put("orderedQuantity", poItem != null ? poItem.getOrderedQuantity() : null);
+        snapshot.put("receivedQuantity", lineItem.getReceivedQuantity());
+        snapshot.put("unit", poItem != null ? poItem.getUnit() : null);
+        snapshot.put("condition", lineItem.getCondition() != null ? lineItem.getCondition().name() : null);
+        snapshot.put("discrepancyNote", lineItem.getDiscrepancyNote());
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildInventoryItemAuditSnapshot(InventoryItem item) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (item == null) {
+            return snapshot;
+        }
+
+        snapshot.put("inventoryItemId", item.getId());
+        snapshot.put("name", item.getName());
+        snapshot.put("category", item.getCategory());
+        snapshot.put("quantity", item.getQuantity());
+        snapshot.put("unit", item.getUnit());
+        snapshot.put("unitPrice", item.getUnitPrice());
+        snapshot.put("branchId", item.getBranch() != null ? item.getBranch().getId() : null);
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildInventoryTransactionAuditSnapshot(InventoryTransaction transaction) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (transaction == null) {
+            return snapshot;
+        }
+
+        snapshot.put("transactionId", transaction.getId());
+        snapshot.put("inventoryItemId",
+                transaction.getInventoryItem() != null ? transaction.getInventoryItem().getId() : null);
+        snapshot.put("transactionType",
+                transaction.getTransactionType() != null ? transaction.getTransactionType().name() : null);
+        snapshot.put("quantityChange", transaction.getQuantityChange());
+        snapshot.put("previousQuantity", transaction.getPreviousQuantity());
+        snapshot.put("newQuantity", transaction.getNewQuantity());
+        snapshot.put("unitPrice", transaction.getUnitPrice());
+        snapshot.put("notes", transaction.getNotes());
+        snapshot.put("createdAt", transaction.getCreatedAt());
+
+        return snapshot;
+    }
+
+    private Map<String, Object> buildChefRequestAuditSnapshot(ChefRequest request) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+
+        if (request == null) {
+            return snapshot;
+        }
+
+        snapshot.put("chefRequestId", request.getId());
+        snapshot.put("branchId", request.getBranch() != null ? request.getBranch().getId() : null);
+        snapshot.put("chefName", request.getChefName());
+        snapshot.put("itemName", request.getItemName());
+        snapshot.put("requestedQuantity", request.getRequestedQuantity());
+        snapshot.put("unit", request.getUnit());
+        snapshot.put("status", request.getStatus() != null ? request.getStatus().name() : null);
+        snapshot.put("requestType", request.getRequestType() != null ? request.getRequestType().name() : null);
+
+        return snapshot;
+    }
+
+    private Long getVendorBranchId(Vendor vendor) {
+        if (vendor == null || vendor.getBranch() == null) {
+            return null;
+        }
+
+        return vendor.getBranch().getId();
+    }
+
+    private Long getPurchaseOrderBranchId(PurchaseOrder po) {
+        if (po == null || po.getBranch() == null) {
+            return null;
+        }
+
+        return po.getBranch().getId();
     }
 }

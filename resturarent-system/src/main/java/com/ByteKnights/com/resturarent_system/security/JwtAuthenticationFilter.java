@@ -91,12 +91,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                         /*
                          * Use findByUserIdWithBranch instead of findByUserId.
-                         *
-                         * Reason:
-                         * Branch is lazy-loaded in Staff entity.
-                         * If we use normal findByUserId, staff.getBranch().getStatus()
-                         * can cause LazyInitializationException inside this filter.
-                         *
                          * findByUserIdWithBranch uses JOIN FETCH and loads Staff + Branch together.
                          */
                         Staff staff = staffRepository
@@ -120,7 +114,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             denyRequest(
                                     response,
                                     "BRANCH_INACTIVE",
-                                    "Your branch is inactive. Please contact the system administrator.");
+                                    "Your branch is inactive. Please contact the system administrator. Support: cravehouse.system.dev@gmail.com");
                             return;
                         }
                     }

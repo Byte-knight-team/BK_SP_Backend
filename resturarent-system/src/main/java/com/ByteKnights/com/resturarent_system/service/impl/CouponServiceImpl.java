@@ -1,9 +1,13 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.audit.Auditable;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.CreateCouponRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateCouponRequest;
 import com.ByteKnights.com.resturarent_system.dto.request.admin.UpdateCouponStatusRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.admin.CouponResponse;
+import com.ByteKnights.com.resturarent_system.entity.AuditEventType;
+import com.ByteKnights.com.resturarent_system.entity.AuditModule;
+import com.ByteKnights.com.resturarent_system.entity.AuditTargetType;
 import com.ByteKnights.com.resturarent_system.entity.Coupon;
 import com.ByteKnights.com.resturarent_system.entity.CouponStatus;
 import com.ByteKnights.com.resturarent_system.exception.DuplicateResourceException;
@@ -28,8 +32,28 @@ public class CouponServiceImpl implements CouponService {
     }
 
     @Override
+    @Auditable(
+            module = AuditModule.PROMOTION,
+            eventType = AuditEventType.COUPON_CREATED,
+            targetType = AuditTargetType.COUPON,
+            description = "Coupon created successfully",
+            captureResultAsNewValue = false
+    )
     @Transactional
     public CouponResponse createCoupon(CreateCouponRequest request) {
+        LocalDateTime now = LocalDateTime.now();
+        
+        // Strict past date validations with a 1-minute buffer for network latency
+        if (request.getStartDate().isBefore(now.minusMinutes(1))) {
+            throw new InvalidOperationException("Please enter a valid date");
+        }
+        if (request.getExpirationDate().isBefore(now.minusMinutes(1))) {
+            throw new InvalidOperationException("Please enter a valid date");
+        }
+        if (request.getExpirationDate().isBefore(request.getStartDate())) {
+            throw new InvalidOperationException("Expiration date must be after start date");
+        }
+
         String newCode;
         do {
             newCode = com.ByteKnights.com.resturarent_system.util.CouponGeneratorUtil.generateSecureCode();
@@ -50,6 +74,11 @@ public class CouponServiceImpl implements CouponService {
                 .build();
 
         Coupon saved = couponRepository.save(coupon);
+
+        /*
+         * AOP audit is used because coupon creation is a simple admin action.
+         * captureResultAsNewValue = false avoids storing coupon JSON and saves audit storage.
+         */
         return mapToResponse(saved);
     }
 
@@ -93,8 +122,8 @@ public class CouponServiceImpl implements CouponService {
                 .orElseThrow(() -> new ResourceNotFoundException("Coupon not found with id: " + id));
 
         coupon = updateCouponStatusDynamically(coupon);
-        if (coupon.getStatus() == CouponStatus.EXPIRED) {
-            throw new InvalidOperationException("Cannot modify an expired coupon");
+        if (coupon.getStatus() == CouponStatus.EXPIRED && !request.getExpirationDate().isAfter(LocalDateTime.now())) {
+            throw new InvalidOperationException("Cannot modify an expired coupon unless extending its expiration date");
         }
 
         if (request.getDescription() != null && !request.getDescription().isBlank()) {
@@ -103,13 +132,21 @@ public class CouponServiceImpl implements CouponService {
         coupon.setDiscountValue(request.getDiscountValue());
         coupon.setEndDate(request.getExpirationDate());
         coupon.setUsageLimit(request.getUsageLimit());
+        LocalDateTime now = LocalDateTime.now();
+        if (request.getStartDate() != null && coupon.getStatus() == CouponStatus.SCHEDULED) {
+            if (request.getStartDate().isBefore(now.minusMinutes(1))) {
+                throw new InvalidOperationException("Start date cannot be in the past");
+            }
+            coupon.setStartDate(request.getStartDate());
+        }
 
         // Re-evaluate status if dates are extended into the future
-        LocalDateTime now = LocalDateTime.now();
         if (coupon.getStatus() == CouponStatus.EXPIRED && coupon.getEndDate().isAfter(now)) {
             coupon.setStatus(coupon.getStartDate().isAfter(now) ? CouponStatus.SCHEDULED : CouponStatus.ACTIVE);
         } else if (coupon.getStatus() == CouponStatus.ACTIVE && coupon.getStartDate().isAfter(now)) {
             coupon.setStatus(CouponStatus.SCHEDULED);
+        } else if (coupon.getStatus() == CouponStatus.SCHEDULED && !coupon.getStartDate().isAfter(now)) {
+            coupon.setStatus(CouponStatus.ACTIVE);
         }
 
         Coupon updated = couponRepository.save(coupon);
@@ -142,7 +179,9 @@ public class CouponServiceImpl implements CouponService {
             changed = true;
         }
 
-        if (coupon.getStatus() == CouponStatus.ACTIVE && coupon.getEndDate() != null && coupon.getEndDate().isBefore(now)) {
+        if ((coupon.getStatus() == CouponStatus.ACTIVE || coupon.getStatus() == CouponStatus.INACTIVE) 
+                && coupon.getEndDate() != null 
+                && coupon.getEndDate().isBefore(now)) {
             coupon.setStatus(CouponStatus.EXPIRED);
             changed = true;
         }
@@ -171,4 +210,3 @@ public class CouponServiceImpl implements CouponService {
                 .build();
     }
 }
-
