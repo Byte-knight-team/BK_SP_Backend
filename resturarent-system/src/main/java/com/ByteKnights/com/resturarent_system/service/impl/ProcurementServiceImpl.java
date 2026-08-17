@@ -436,15 +436,23 @@ public class ProcurementServiceImpl implements ProcurementService {
     public List<com.ByteKnights.com.resturarent_system.dto.response.procurement.PurchaseOrderLogDTO> getPurchaseOrderLogs(Long branchId) {
         return purchaseOrderLogRepository.findByBranchIdOrderByCreatedAtDesc(branchId)
                 .stream()
-                .map(log -> com.ByteKnights.com.resturarent_system.dto.response.procurement.PurchaseOrderLogDTO.builder()
-                        .id(log.getId())
-                        .purchaseOrderId(log.getPurchaseOrder().getId())
-                        .poNumber(log.getPurchaseOrder().getPoNumber())
-                        .vendorName(log.getPurchaseOrder().getVendor().getName())
-                        .status(log.getStatus())
-                        .actionByName(log.getActionBy().getFirstName() + " " + log.getActionBy().getLastName())
-                        .createdAt(log.getCreatedAt())
-                        .build())
+                .map(log -> {
+                    String itemNames = purchaseOrderItemRepository.findByPurchaseOrderId(log.getPurchaseOrder().getId())
+                            .stream()
+                            .map(PurchaseOrderItem::getItemNameSnapshot)
+                            .collect(Collectors.joining(", "));
+                            
+                    return com.ByteKnights.com.resturarent_system.dto.response.procurement.PurchaseOrderLogDTO.builder()
+                            .id(log.getId())
+                            .purchaseOrderId(log.getPurchaseOrder().getId())
+                            .poNumber(log.getPurchaseOrder().getPoNumber())
+                            .vendorName(log.getPurchaseOrder().getVendor().getName())
+                            .status(log.getStatus())
+                            .actionByName(log.getActionBy().getFirstName() + " " + log.getActionBy().getLastName())
+                            .items(itemNames.isEmpty() ? "N/A" : itemNames)
+                            .createdAt(log.getCreatedAt())
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 

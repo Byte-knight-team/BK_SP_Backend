@@ -15,5 +15,6 @@ public class PurchaseOrderLogDTO {
     private String vendorName;
     private PurchaseOrderStatus status;
     private String actionByName;
+    private String items;
     private LocalDateTime createdAt;
 }
