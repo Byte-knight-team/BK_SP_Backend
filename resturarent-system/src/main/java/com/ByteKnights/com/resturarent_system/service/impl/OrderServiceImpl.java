@@ -457,6 +457,8 @@ public class OrderServiceImpl implements OrderService {
                                                 .address(order.getBranch().getAddress())
                                                 .contactNumber(order.getBranch().getContactNumber())
                                                 .email(order.getBranch().getEmail())
+                                                .latitude(order.getBranch().getLatitude())
+                                                .longitude(order.getBranch().getLongitude())
                                                 .build() : null)
                                 .items(itemResponses)
                                 .build();

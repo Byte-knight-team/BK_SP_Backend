@@ -239,6 +239,8 @@ public class CheckoutServiceImpl implements CheckoutService {
                     .address(branch.getAddress())
                     .contactNumber(branch.getContactNumber())
                     .email(branch.getEmail())
+                    .latitude(branch.getLatitude())
+                    .longitude(branch.getLongitude())
                     .build();
         }
 

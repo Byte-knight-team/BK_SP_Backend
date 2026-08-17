@@ -14,4 +14,6 @@ public class BranchDetailResponse {
     private String address;
     private String contactNumber;
     private String email;
+    private Double latitude;
+    private Double longitude;
 }
