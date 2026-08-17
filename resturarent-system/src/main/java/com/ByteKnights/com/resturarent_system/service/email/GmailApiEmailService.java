@@ -33,7 +33,7 @@ import java.util.Properties;
 /**
  * Sends Crave House transactional emails through the Gmail HTTPS API.
  *
- * This implementation does not use SMTP ports 25, 465, or 587.
+ * does not use SMTP ports 25, 465, or 587.
  */
 @Service
 public class GmailApiEmailService implements EmailService {
