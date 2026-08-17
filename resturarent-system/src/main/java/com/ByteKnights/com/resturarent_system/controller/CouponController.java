@@ -23,13 +23,13 @@ public class CouponController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN') or hasAuthority('CREATE_COUPON')")
     public ResponseEntity<CouponResponse> createCoupon(@Valid @RequestBody CreateCouponRequest request) {
         return ResponseEntity.ok(couponService.createCoupon(request));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN') or hasAuthority('VIEW_COUPONS')")
     public ResponseEntity<List<CouponResponse>> getAllCoupons() {
         return ResponseEntity.ok(couponService.getAllCoupons());
     }
@@ -44,13 +44,13 @@ public class CouponController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN') or hasAuthority('VIEW_COUPON')")
     public ResponseEntity<CouponResponse> getCouponById(@PathVariable Long id) {
         return ResponseEntity.ok(couponService.getCouponById(id));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN') or hasAuthority('UPDATE_COUPON')")
     public ResponseEntity<CouponResponse> updateCoupon(
             @PathVariable Long id,
             @Valid @RequestBody UpdateCouponRequest request) {
@@ -58,7 +58,7 @@ public class CouponController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN') or hasAuthority('UPDATE_COUPON_STATUS')")
     public ResponseEntity<CouponResponse> updateCouponStatus(
             @PathVariable Long id,
             @Valid @RequestBody UpdateCouponStatusRequest request) {
