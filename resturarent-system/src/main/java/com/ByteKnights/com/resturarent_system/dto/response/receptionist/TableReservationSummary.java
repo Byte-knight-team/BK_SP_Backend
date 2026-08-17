@@ -22,4 +22,5 @@ public class TableReservationSummary {
     private String customerPhone;
     private LocalDateTime reservationTime;
     private LocalDateTime endTime;
+    private String status;
 }

@@ -173,7 +173,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .name(request.getName())
                 .category(request.getCategory())
                 .quantity(request.getQuantity())
-                .maxStock(request.getQuantity())
+                .dailyRequiredStock(request.getQuantity())
                 .unit(request.getUnit())
                 .reorderLevel(request.getReorderLevel())
                 .unitPrice(request.getUnitPrice())
@@ -612,7 +612,7 @@ public class InventoryServiceImpl implements InventoryService {
         snapshot.put("name", item.getName());
         snapshot.put("category", item.getCategory());
         snapshot.put("quantity", item.getQuantity());
-        snapshot.put("maxStock", item.getMaxStock());
+        snapshot.put("dailyRequiredStock", item.getDailyRequiredStock());
         snapshot.put("unit", item.getUnit());
         snapshot.put("reorderLevel", item.getReorderLevel());
         snapshot.put("unitPrice", item.getUnitPrice());
