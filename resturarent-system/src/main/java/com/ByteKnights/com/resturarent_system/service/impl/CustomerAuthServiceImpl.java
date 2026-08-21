@@ -39,6 +39,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
+    private static final Pattern PHONE_PATTERN = Pattern
+            .compile("^(?:\\+94|94|0)?7[0-9]{8}$");
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -79,13 +81,30 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+    private String normalizeAndValidatePhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone number is required");
+        }
+        String cleaned = phone.replaceAll("[\\s\\-]", "").trim();
+        if (!PHONE_PATTERN.matcher(cleaned).matches()) {
+            throw new CustomerAuthException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Invalid Sri Lankan phone number. Must be 10 digits starting with 07 (e.g., 0712345678 or +94712345678)");
+        }
+        if (cleaned.startsWith("+94")) {
+            cleaned = "0" + cleaned.substring(3);
+        } else if (cleaned.startsWith("94")) {
+            cleaned = "0" + cleaned.substring(2);
+        }
+        return cleaned;
+    }
+
     @Override
     @Transactional
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
         validateRegisterRequest(request);
 
         String normalizedEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
-        String normalizedPhone = request.getPhone().trim();
+        String normalizedPhone = normalizeAndValidatePhone(request.getPhone());
         String normalizedUsername = request.getUsername().trim();
 
         if (userRepository.findByEmail(normalizedEmail).isPresent()) {
@@ -194,14 +213,12 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     @Override
     @Transactional
     public void requestOtp(String phone) {
-        if (phone == null || phone.trim().isEmpty()) {
-            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone number is required");
-        }
+        String normalizedPhone = normalizeAndValidatePhone(phone);
 
         String otpCode = String.format("%04d", new Random().nextInt(10000));
         LocalDateTime expiry = LocalDateTime.now().plusMinutes(5);
 
-        User user = userRepository.findByPhone(phone.trim()).orElse(null);
+        User user = userRepository.findByPhone(normalizedPhone).orElse(null);
         Customer customer;
 
         if (user == null) {
@@ -209,7 +226,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
             user = User.builder()
                     .username("Guest_" + System.currentTimeMillis())
-                    .phone(phone.trim())
+                    .phone(normalizedPhone)
                     .password(passwordEncoder.encode(otpCode))
                     .role(customerRole)
                     .isActive(true)
@@ -232,8 +249,8 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                             "Customer profile missing"));
         }
 
-        stringRedisTemplate.opsForValue().set("otp:" + phone.trim(), otpCode, 5, TimeUnit.MINUTES);
-        smsService.sendOtpSms(phone, otpCode);
+        stringRedisTemplate.opsForValue().set("otp:" + normalizedPhone, otpCode, 5, TimeUnit.MINUTES);
+        smsService.sendOtpSms(normalizedPhone, otpCode);
         // System.out.println(otpCode);
     }
 
@@ -244,7 +261,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone and code are required");
         }
 
-        User user = userRepository.findByPhone(phone.trim())
+        String normalizedPhone = normalizeAndValidatePhone(phone);
+
+        User user = userRepository.findByPhone(normalizedPhone)
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
 
         /*
@@ -256,12 +275,12 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Customer profile missing"));
 
-        String cachedOtp = stringRedisTemplate.opsForValue().get("otp:" + phone.trim());
+        String cachedOtp = stringRedisTemplate.opsForValue().get("otp:" + normalizedPhone);
         if (cachedOtp == null || !cachedOtp.equals(code.trim())) {
             throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "OTP code has expired or is invalid");
         }
 
-        stringRedisTemplate.delete("otp:" + phone.trim());
+        stringRedisTemplate.delete("otp:" + normalizedPhone);
 
         customer.setPhoneVerified(true);
         customerRepository.save(customer);
