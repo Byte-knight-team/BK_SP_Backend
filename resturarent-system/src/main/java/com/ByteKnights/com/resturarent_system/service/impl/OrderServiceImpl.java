@@ -185,6 +185,19 @@ public class OrderServiceImpl implements OrderService {
                         }
                 }
 
+                // 2.3 Validate Cart Items & Quantity Bounds
+                if (request.getItems() == null || request.getItems().isEmpty()) {
+                        throw new CheckoutException(HttpStatus.BAD_REQUEST, "Order must contain at least one item");
+                }
+                for (PlaceOrderRequest.PlaceOrderItemRequest itemReq : request.getItems()) {
+                        if (itemReq.getQuantity() == null || itemReq.getQuantity() < 1) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Quantity must be at least 1 for all items");
+                        }
+                        if (itemReq.getQuantity() > 50) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Quantity cannot exceed 50 per item");
+                        }
+                }
+
                 // Batch-load menu items and ingredients to prevent N+1 queries
                 List<Long> requestedItemIds = request.getItems().stream()
                         .map(PlaceOrderRequest.PlaceOrderItemRequest::getMenuItemId)
