@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.*;
 import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
 import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
@@ -35,6 +36,9 @@ import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
 
 @Service
 public class OrderServiceImpl implements OrderService {
+
+        private static final Pattern PHONE_PATTERN = Pattern.compile("^(?:\\+94|94|0)?7[0-9]{8}$");
+        private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
 
         private final CheckoutService checkoutService;
         private final QrSessionService qrSessionService;
@@ -100,6 +104,23 @@ public class OrderServiceImpl implements OrderService {
                 this.kitchenInventoryService = kitchenInventoryService;
         }
 
+        private String normalizeAndValidateContactPhone(String phone) {
+                if (phone == null || phone.trim().isEmpty()) {
+                        throw new CheckoutException(HttpStatus.BAD_REQUEST, "Contact phone number is required.");
+                }
+                String cleaned = phone.replaceAll("[\\s\\-]", "").trim();
+                if (!PHONE_PATTERN.matcher(cleaned).matches()) {
+                        throw new CheckoutException(HttpStatus.BAD_REQUEST,
+                                "Invalid Sri Lankan contact phone number. Must be 10 digits starting with 07 (e.g., 0712345678 or +94712345678).");
+                }
+                if (cleaned.startsWith("+94")) {
+                        cleaned = "0" + cleaned.substring(3);
+                } else if (cleaned.startsWith("94")) {
+                        cleaned = "0" + cleaned.substring(2);
+                }
+                return cleaned;
+        }
+
         @Override
         @Transactional
         public OrderPlacementResponse placeCustomerOrder(String userIdentifier, PlaceOrderRequest request) {
@@ -110,6 +131,12 @@ public class OrderServiceImpl implements OrderService {
                                                 .orElseThrow(() -> new ResourceNotFoundException("User not found")));
                 Customer customer = customerRepository.findByUser(user)
                                 .orElseThrow(() -> new ResourceNotFoundException("Customer profile not found"));
+
+                // 1.5 Validate & Sanitize Contact Information
+                if (request.getContactName() == null || request.getContactName().trim().isEmpty()) {
+                        throw new CheckoutException(HttpStatus.BAD_REQUEST, "Contact name is required.");
+                }
+                String normalizedContactPhone = normalizeAndValidateContactPhone(request.getContactPhone());
 
                 // 2. Resolve Branch & Table
                 Branch branch = branchRepository.findById(request.getBranchId())
@@ -128,6 +155,15 @@ public class OrderServiceImpl implements OrderService {
                 if ("ONLINE_DELIVERY".equalsIgnoreCase(request.getOrderType())) {
                         if (branchConfig != null && !branchConfig.isDeliveryEnabled()) {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, "Delivery service is currently disabled for this branch.");
+                        }
+                        if (request.getDeliveryAddress() == null || request.getDeliveryAddress().trim().isEmpty()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Delivery address is required for delivery orders.");
+                        }
+                        if (request.getContactEmail() == null || request.getContactEmail().trim().isEmpty()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Contact email is required for delivery orders.");
+                        }
+                        if (!EMAIL_PATTERN.matcher(request.getContactEmail().trim()).matches()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Invalid contact email address format.");
                         }
                         if (request.getLatitude() == null || request.getLongitude() == null) {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, "Delivery location coordinates are required.");
@@ -148,9 +184,22 @@ public class OrderServiceImpl implements OrderService {
                         if (branchConfig != null && !branchConfig.isPickupEnabled()) {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, "Pickup service is currently disabled for this branch.");
                         }
+                        if (request.getContactEmail() == null || request.getContactEmail().trim().isEmpty()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Contact email is required for pickup orders.");
+                        }
+                        if (!EMAIL_PATTERN.matcher(request.getContactEmail().trim()).matches()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Invalid contact email address format.");
+                        }
                 } else if (OrderType.QR.name().equalsIgnoreCase(request.getOrderType()) || "DINE_IN".equalsIgnoreCase(request.getOrderType())) {
                         if (branchConfig != null && !branchConfig.isDineInEnabled()) {
                                 throw new CheckoutException(HttpStatus.BAD_REQUEST, "Dine-in service is currently disabled for this branch.");
+                        }
+                }
+
+                // If email is provided for any other order type, validate format
+                if (request.getContactEmail() != null && !request.getContactEmail().trim().isEmpty()) {
+                        if (!EMAIL_PATTERN.matcher(request.getContactEmail().trim()).matches()) {
+                                throw new CheckoutException(HttpStatus.BAD_REQUEST, "Invalid contact email address format.");
                         }
                 }
 
@@ -281,14 +330,17 @@ public class OrderServiceImpl implements OrderService {
                 order.setOrderType(OrderType.valueOf(request.getOrderType().toUpperCase()));
                 order.setStatus(OrderStatus.PLACED);
 
-                // Contact Details
-                order.setContactName(request.getContactName());
-                order.setContactPhone(request.getContactPhone());
-                order.setContactEmail(request.getContactEmail());
-                order.setDeliveryAddress(request.getDeliveryAddress());
+                // Contact Details (Sanitized & Normalized)
+                order.setContactName(request.getContactName().trim());
+                order.setContactPhone(normalizedContactPhone);
+                order.setContactEmail(request.getContactEmail() != null && !request.getContactEmail().trim().isEmpty()
+                        ? request.getContactEmail().trim() : null);
+                order.setDeliveryAddress(request.getDeliveryAddress() != null && !request.getDeliveryAddress().trim().isEmpty()
+                        ? request.getDeliveryAddress().trim() : null);
                 order.setLatitude(request.getLatitude());
                 order.setLongitude(request.getLongitude());
-                order.setKitchenNotes(request.getKitchenNotes());
+                order.setKitchenNotes(request.getKitchenNotes() != null && !request.getKitchenNotes().trim().isEmpty()
+                        ? request.getKitchenNotes().trim() : null);
 
                 // Apply Math to Order
                 order.setTaxAmount(trustedMath.getTaxAmount());

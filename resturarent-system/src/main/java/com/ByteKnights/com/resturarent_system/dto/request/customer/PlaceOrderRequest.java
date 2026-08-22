@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.entity.PaymentMethod;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -30,10 +31,20 @@ public class PlaceOrderRequest {
     private List<PlaceOrderItemRequest> items;
 
     // Final Checkout Details
+    @NotBlank(message = "Contact name is required")
+    @Size(max = 100, message = "Contact name must not exceed 100 characters")
     private String contactName;
+
+    @NotBlank(message = "Contact phone number is required")
+    @Size(max = 20, message = "Contact phone must not exceed 20 characters")
     private String contactPhone;
+
+    @Size(max = 100, message = "Contact email must not exceed 100 characters")
     private String contactEmail;
+
+    @Size(max = 500, message = "Delivery address must not exceed 500 characters")
     private String deliveryAddress;
+
     private Double latitude;
     private Double longitude;
     
