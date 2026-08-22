@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -95,6 +96,7 @@ public class GmailApiEmailService implements EmailService {
         this.restClient = RestClient.builder().build();
     }
 
+    @Async("emailTaskExecutor")
     @Override
     public void sendStaffInviteEmail(
             String toEmail,
@@ -117,6 +119,7 @@ public class GmailApiEmailService implements EmailService {
                 htmlContent);
     }
 
+    @Async("emailTaskExecutor")
     @Override
     public void sendCustomerPasswordResetEmail(
             String toEmail,
@@ -136,6 +139,7 @@ public class GmailApiEmailService implements EmailService {
                 htmlContent);
     }
 
+    @Async("emailTaskExecutor")
     @Override
     public void sendCustomerEmailVerification(
             String toEmail,
@@ -155,6 +159,7 @@ public class GmailApiEmailService implements EmailService {
                 htmlContent);
     }
 
+    @Async("emailTaskExecutor")
     @Override
     public void sendSimpleEmail(
             String toEmail,
@@ -169,6 +174,7 @@ public class GmailApiEmailService implements EmailService {
                 htmlContent);
     }
 
+    @Async("emailTaskExecutor")
     @Override
     public void sendHtmlEmail(
             String toEmail,

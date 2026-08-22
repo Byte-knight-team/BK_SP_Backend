@@ -1,6 +1,7 @@
 package com.ByteKnights.com.resturarent_system.repository;
 
 import com.ByteKnights.com.resturarent_system.entity.RestaurantTable;
+import com.ByteKnights.com.resturarent_system.entity.TableStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -40,4 +41,10 @@ public interface RestaurantTableRepository extends JpaRepository<RestaurantTable
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from RestaurantTable t where t.id = :id")
     Optional<RestaurantTable> findByIdForUpdate(Long id);
+
+    /**
+     * Finds all tables in a given state that have an active seated reservation.
+     * Used by schedulers to avoid full table scans.
+     */
+    List<RestaurantTable> findByStateAndSeatedReservationIdIsNotNull(TableStatus state);
 }

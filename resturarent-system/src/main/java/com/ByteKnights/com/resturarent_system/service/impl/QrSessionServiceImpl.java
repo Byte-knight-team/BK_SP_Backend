@@ -28,6 +28,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import javax.crypto.SecretKey;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -174,6 +175,23 @@ public class QrSessionServiceImpl implements QrSessionService {
     }
 
     @Override
+    @Transactional
+    public void endActiveSessionsForTable(Long tableId) {
+        if (tableId == null) {
+            return;
+        }
+        List<QrSession> activeSessions = qrSessionRepository.findByTableIdAndStatus(tableId, QrSessionStatus.ACTIVE);
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        for (QrSession session : activeSessions) {
+            session.setStatus(QrSessionStatus.ENDED);
+            session.setEndedAt(now);
+            qrSessionRepository.save(session);
+            stringRedisTemplate.delete("qrsession:" + session.getId());
+        }
+    }
+
+    @Override
+    @Transactional
     public void validateActiveSession(Long sessionId) {
         String cachedStatus = stringRedisTemplate.opsForValue().get("qrsession:" + sessionId);
 
@@ -187,9 +205,26 @@ public class QrSessionServiceImpl implements QrSessionService {
                         "Your table session has ended. Please close this tab and rescan the QR code.");
             }
 
-            // Re-cache active status in Redis
-            stringRedisTemplate.opsForValue().set("qrsession:" + sessionId, QrSessionStatus.ACTIVE.name(),
-                    sessionExpirationMs, TimeUnit.MILLISECONDS);
+            // Check if session has exceeded its maximum lifetime
+            java.time.LocalDateTime startedAt = session.getStartedAt() != null ? session.getStartedAt() : java.time.LocalDateTime.now();
+            java.time.LocalDateTime expiryTime = startedAt.plusSeconds(sessionExpirationMs / 1000);
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+            if (now.isAfter(expiryTime)) {
+                // Session has expired — mark ENDED in MySQL to avoid resurrecting
+                session.setStatus(QrSessionStatus.ENDED);
+                session.setEndedAt(now);
+                qrSessionRepository.save(session);
+                throw new QrSessionException(HttpStatus.GONE,
+                        "Your table session has expired. Please close this tab and rescan the QR code.");
+            }
+
+            // Still within lifetime: re-cache in Redis with ONLY the remaining time
+            long remainingMillis = java.time.Duration.between(now, expiryTime).toMillis();
+            if (remainingMillis > 0) {
+                stringRedisTemplate.opsForValue().set("qrsession:" + sessionId, QrSessionStatus.ACTIVE.name(),
+                        remainingMillis, TimeUnit.MILLISECONDS);
+            }
         } else if (!QrSessionStatus.ACTIVE.name().equals(cachedStatus)) {
             throw new QrSessionException(HttpStatus.GONE,
                     "Your table session has ended. Please close this tab and rescan the QR code.");

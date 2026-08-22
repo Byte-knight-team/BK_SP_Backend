@@ -42,6 +42,9 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     private static final Pattern PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
 
+    private static final Pattern PHONE_PATTERN = Pattern
+            .compile("^(?:\\+94|94|0)?7[0-9]{8}$");
+
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
@@ -73,6 +76,23 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         this.loyaltyTransactionRepository = loyaltyTransactionRepository;
         this.emailVerificationTokenRepository = emailVerificationTokenRepository;
         this.emailService = emailService;
+    }
+
+    private String normalizeAndValidatePhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone number is required");
+        }
+        String cleaned = phone.replaceAll("[\\s\\-]", "").trim();
+        if (!PHONE_PATTERN.matcher(cleaned).matches()) {
+            throw new CustomerAuthException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Invalid Sri Lankan phone number. Must be 10 digits starting with 07 (e.g., 0712345678 or +94712345678)");
+        }
+        if (cleaned.startsWith("+94")) {
+            cleaned = "0" + cleaned.substring(3);
+        } else if (cleaned.startsWith("94")) {
+            cleaned = "0" + cleaned.substring(2);
+        }
+        return cleaned;
     }
 
     @Override
@@ -122,9 +142,9 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
             user.setUsername(newUsername);
         }
 
-        // Check and Update Phone
-        String newPhone = request.getPhone().trim();
-        if (!user.getPhone().equals(newPhone)) {
+        // Check and Update Phone with Sri Lankan validation & normalization
+        String newPhone = normalizeAndValidatePhone(request.getPhone());
+        if (!newPhone.equals(user.getPhone())) {
             if (userRepository.findByPhone(newPhone).isPresent()) {
                 throw new CustomerAuthException(HttpStatus.CONFLICT, "Phone number is already in use");
             }
@@ -218,18 +238,21 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
         BigDecimal totalSpend = BigDecimal.ZERO;
         BigDecimal totalDiscounts = BigDecimal.ZERO;
         long qrCount = 0, deliveryCount = 0, pickupCount = 0;
-        
+
         for (Object[] row : statsList) {
             OrderType type = (OrderType) row[0];
             long count = ((Number) row[1]).longValue();
-            
-            // Add to totals (these are repeated for each row, but we can just take it or sum it? 
-            // Wait, the query groups by orderType, so SUM(finalAmount) is the sum FOR THAT TYPE.
+
+            // Add to totals (these are repeated for each row, but we can just take it or
+            // sum it?
+            // Wait, the query groups by orderType, so SUM(finalAmount) is the sum FOR THAT
+            // TYPE.
             // We need to sum them all up to get the total!
             totalSpend = totalSpend.add(new BigDecimal(row[2].toString()));
             totalDiscounts = totalDiscounts.add(new BigDecimal(row[3].toString()));
-            
-            if (type == null) continue;
+
+            if (type == null)
+                continue;
             switch (type) {
                 case QR -> qrCount = count;
                 case ONLINE_DELIVERY -> deliveryCount = count;
@@ -328,7 +351,8 @@ public class CustomerProfileServiceImpl implements CustomerProfileService {
     @Transactional
     public void verifyEmail(String tokenStr) {
         EmailVerificationToken token = emailVerificationTokenRepository.findByToken(tokenStr)
-                .orElseThrow(() -> new CustomerAuthException(HttpStatus.BAD_REQUEST, "Invalid or expired verification token"));
+                .orElseThrow(() -> new CustomerAuthException(HttpStatus.BAD_REQUEST,
+                        "Invalid or expired verification token"));
 
         if (token.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
             emailVerificationTokenRepository.delete(token);
