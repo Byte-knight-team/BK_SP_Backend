@@ -325,9 +325,11 @@ public class ReportServiceImpl implements ReportService {
             // Group by Channel
             channelCount.put(o.getOrderType(), channelCount.getOrDefault(o.getOrderType(), 0L) + 1);
 
-            if (o.getStatus() == OrderStatus.REFUNDED) {
+            if (o.getPaymentStatus() == PaymentStatus.REFUNDED) {
                 refunds = refunds.add(o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO);
-            } else if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS) {
+            } 
+            
+            if (o.getPaymentStatus() == PaymentStatus.PAID || o.getPaymentStatus() == PaymentStatus.SUCCESS || o.getPaymentStatus() == PaymentStatus.REFUNDED) {
                 BigDecimal amt = o.getFinalAmount() != null ? o.getFinalAmount() : BigDecimal.ZERO;
                 grossSales = grossSales.add(amt);
                 taxCollected = taxCollected.add(o.getTaxAmount() != null ? o.getTaxAmount() : BigDecimal.ZERO);
@@ -762,7 +764,7 @@ public class ReportServiceImpl implements ReportService {
         for (Order o : orders) {
             String driverName = "Unassigned";
             if (o.getAssignedDelivery() != null) {
-                driverName = o.getAssignedDelivery().getFirstName() + " " + o.getAssignedDelivery().getLastName();
+                driverName = o.getAssignedDelivery().getDisplayName();
             }
 
             if (o.getStatus() == OrderStatus.ARRIVED || o.getStatus() == OrderStatus.COMPLETED || o.getStatus() == OrderStatus.SERVED) {
@@ -1142,13 +1144,11 @@ public class ReportServiceImpl implements ReportService {
             pt.setWidthPercentage(100);
             addTableHeader(pt, "Name", "Role", "Email", "Phone", "Hire Date");
             boolean alt = false;
-
             if (staffMembers.isEmpty()) {
                 addEmptyRow(pt, 5);
             } else {
                 for (Staff s : staffMembers) {
-                    String name = (s.getFirstName() != null ? s.getFirstName() : "") + " " + 
-                                  (s.getLastName() != null ? s.getLastName() : "");
+                    String name = s.getDisplayName();
                     String role = s.getUser() != null && s.getUser().getRole() != null ? s.getUser().getRole().getName() : "N/A";
                     String email = s.getUser() != null && s.getUser().getEmail() != null ? s.getUser().getEmail() : "N/A";
                     String phone = s.getUser() != null && s.getUser().getPhone() != null ? s.getUser().getPhone() : "N/A";

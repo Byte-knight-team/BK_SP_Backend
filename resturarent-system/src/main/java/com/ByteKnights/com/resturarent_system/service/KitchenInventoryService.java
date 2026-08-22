@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateDailyReq
 import com.ByteKnights.com.resturarent_system.dto.request.kitchen.UpdateStockDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.inventory.ChefRequestDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.InventoryDetailsDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 import com.ByteKnights.com.resturarent_system.entity.InventoryItem;
 import jakarta.validation.Valid;
 
@@ -16,7 +17,7 @@ public interface KitchenInventoryService {
     void createRequest(@Valid InventoryRequestDTO requestDTO, String userEmail);
     void updateInventoryStock(UpdateStockDTO updateDTO, String userEmail);
     void updateDailyRequiredStock(UpdateDailyRequiredStockDTO updateDTO, String userEmail);
-    List<ChefRequestDTO> getMyRequests(String userEmail);
+    PagedResponse<ChefRequestDTO> getMyRequests(String userEmail, int page, int size, String date, String status);
 
     /**
      * Checks an inventory item's current stock level and broadcasts a global kitchen

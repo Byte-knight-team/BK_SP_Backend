@@ -19,7 +19,7 @@ public class MenuItemUpdateRequestController {
     private final MenuItemUpdateRequestService service;
 
     @PostMapping("/kitchen/menu-item-requests")
-    @PreAuthorize("hasRole('CHEF') or hasAuthority('CREATE_MENU_ITEM_REQUEST')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('CREATE_MENU_ITEM_REQUEST')")
     public ResponseEntity<String> createRequest(
             @RequestParam Long chefId,
             @RequestBody MenuItemUpdateRequestDto requestDto) {
@@ -28,14 +28,14 @@ public class MenuItemUpdateRequestController {
     }
 
     @GetMapping("/admin/menu-item-requests")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('VIEW_MENU_ITEM_REQUESTS')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_MENU_ITEM_REQUESTS')")
     public ResponseEntity<List<MenuItemUpdateRequestResponseDto>> getAllRequests(
             @RequestParam(required = false) MenuItemUpdateRequestStatus status) {
         return ResponseEntity.ok(service.getAllRequests(status));
     }
 
     @PutMapping("/admin/menu-item-requests/{id}/decision")
-    @PreAuthorize("hasRole('ADMIN') or hasAuthority('DECIDE_MENU_ITEM_REQUEST')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('DECIDE_MENU_ITEM_REQUEST')")
     public ResponseEntity<String> updateRequestDecision(
             @PathVariable Long id,
             @RequestBody MenuItemUpdateDecisionDto decisionDto) {

@@ -33,6 +33,9 @@ public class ReservationResponseDTO {
     private String status;
     private LocalDateTime createdAt;
 
+    // Why the booking was cancelled or rejected — null unless status is CANCELLED/REJECTED.
+    private String cancelReason;
+
     // What the customer owes in total for this booking (time charge + handling fee).
     private BigDecimal totalCharge;
 

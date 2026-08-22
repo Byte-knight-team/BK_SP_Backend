@@ -31,14 +31,14 @@ public class MenuCategoryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN','CHEF') or hasAuthority('VIEW_CATEGORIES')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_CATEGORIES')")
     public ResponseEntity<List<MenuCategoryResponse>> getAllCategories() {
         List<MenuCategoryResponse> categories = menuCategoryService.getAllCategories();
         return ResponseEntity.ok(categories);
     }
 
     @GetMapping("/{id:\\d+}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPER_ADMIN') or hasAuthority('VIEW_CATEGORY_BY_ID')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasAuthority('VIEW_CATEGORY_BY_ID')")
     public ResponseEntity<MenuCategoryResponse> getCategoryById(@PathVariable Long id) {
         MenuCategoryResponse category = menuCategoryService.getCategoryById(id);
         return ResponseEntity.ok(category);

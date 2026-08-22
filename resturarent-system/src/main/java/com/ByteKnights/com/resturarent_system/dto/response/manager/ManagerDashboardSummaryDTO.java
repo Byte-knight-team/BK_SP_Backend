@@ -64,6 +64,7 @@ public class ManagerDashboardSummaryDTO {
     public static class ManagerStaffAvailabilityDTO {
         private StaffStats kitchen;
         private StaffStats fleet;
+        private StaffStats receptionist;
 
         @Data
         @Builder

@@ -5,6 +5,7 @@ import com.ByteKnights.com.resturarent_system.dto.response.delivery.DeliveryHist
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.DeliveryRepository;
 import com.ByteKnights.com.resturarent_system.repository.OrderRepository;
+import com.ByteKnights.com.resturarent_system.repository.PaymentRepository;
 import com.ByteKnights.com.resturarent_system.repository.StaffRepository;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.DeliveryOrderService;
@@ -29,6 +30,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
 
         private final DeliveryRepository deliveryRepository;
         private final OrderRepository orderRepository;
+        private final PaymentRepository paymentRepository;
         private final StaffRepository staffRepository;
         private final WebSocketNotificationService webSocketNotificationService;
         private final AuditLogService auditLogService;
@@ -86,7 +88,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
                 .deliveryAddress(d.getOrder().getDeliveryAddress())
                 .customerName(d.getOrder().getContactName())
                 .customerPhone(d.getOrder().getContactPhone())
-                .paymentType("CASH ON DELIVERY")
+                .paymentType(d.getOrder().getPaymentStatus() == PaymentStatus.PAID ? "PAID" : "CASH ON DELIVERY")
                 .amount(d.getOrder().getFinalAmount())
                 .status(d.getDeliveryStatus().name())
                 .latitude(d.getOrder().getLatitude())
@@ -174,8 +176,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         Long branchId = getDeliveryBranchId(savedDelivery);
         if (branchId != null) {
             try {
-                String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
-                        + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                String driverName = staff.getDisplayName();
                 String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
                 String alertMsg = "Driver " + driverName.trim() + " rejected order " + orderNum
                         + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
@@ -246,8 +247,7 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
             Long branchId = getDeliveryBranchId(delivery);
             if (branchId != null) {
                 try {
-                    String driverName = (staff.getFirstName() != null ? staff.getFirstName() : "")
-                            + " " + (staff.getLastName() != null ? staff.getLastName() : "");
+                    String driverName = staff.getDisplayName();
                     String orderNum = order.getOrderNumber() != null ? order.getOrderNumber() : "ORD-" + order.getId();
                     String alertMsg = "Driver " + driverName.trim() + " aborted delivery of order " + orderNum
                             + ". Reason: " + (reason != null && !reason.isBlank() ? reason : "No reason given");
@@ -268,15 +268,42 @@ public class DeliveryOrderServiceImpl implements DeliveryOrderService {
         if (status == DeliveryStatus.DELIVERED) {
             delivery.setDeliveredAt(LocalDateTime.now());
 
+            Order order = delivery.getOrder();
+            order.setStatus(OrderStatus.SERVED);
+
             /*
-             * Explicitly save the Order status to SERVED via OrderRepository,
+             * If the order was Cash on Delivery (payment pending), mark it as PAID 
+             * because the driver collected the cash.
+             */
+            if (order.getOrderType() == OrderType.ONLINE_DELIVERY && order.getPaymentStatus() == PaymentStatus.PENDING) {
+                order.setPaymentStatus(PaymentStatus.PAID);
+                
+                // Update or create the Payment record for financial tracking
+                Payment payment = paymentRepository.findFirstByOrderOrderByIdDesc(order)
+                        .orElseGet(() -> Payment.builder()
+                                .order(order)
+                                .paymentMethod(PaymentMethod.CASH)
+                                .amount(order.getFinalAmount())
+                                .build());
+                
+                payment.setPaymentStatus(PaymentStatus.PAID);
+                payment.setPaidAt(LocalDateTime.now());
+                paymentRepository.save(payment);
+            }
+
+            /*
+             * Explicitly save the Order status via OrderRepository,
              * because the Delivery -> Order relationship has no cascade.
              */
-            delivery.getOrder().setStatus(OrderStatus.SERVED);
-            orderRepository.save(delivery.getOrder());
+            orderRepository.save(order);
             
-            webSocketNotificationService.broadcastOrderStatusUpdate(delivery.getOrder().getId(),
-                    delivery.getOrder().getStatus().name());
+            // Mark the manager's NEW_DELIVERY notification as read and trigger a dashboard refresh
+            managerNotificationService.markAsReadByReference(order.getId(), ManagerNotificationType.NEW_DELIVERY);
+            if (order.getBranch() != null) {
+                managerNotificationService.pingNotificationResolved(order.getBranch().getId());
+            }
+            
+            webSocketNotificationService.broadcastOrderStatusUpdate(order.getId(), order.getStatus().name());
             sendServedEmailAsync(delivery.getOrder());
         }
 
