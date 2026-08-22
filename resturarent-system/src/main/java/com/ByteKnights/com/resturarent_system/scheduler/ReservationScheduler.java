@@ -10,6 +10,7 @@ import com.ByteKnights.com.resturarent_system.service.email.EmailService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,9 +19,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 @Component
 @RequiredArgsConstructor
@@ -31,12 +31,9 @@ public class ReservationScheduler {
     private final RestaurantTableRepository tableRepository;
     private final WebSocketNotificationService webSocketNotificationService;
     private final EmailService emailService;
+    private final StringRedisTemplate stringRedisTemplate;
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("h:mm a");
-
-    // Tracks reservations that have already been notified to prevent duplicate
-    // toasts
-    private final Set<String> sentNotifications = new HashSet<>();
 
     @Scheduled(fixedRate = 60000)
     @Transactional
@@ -52,7 +49,10 @@ public class ReservationScheduler {
         LocalDateTime fifteenMinStart = now.plusMinutes(14);
         LocalDateTime fifteenMinEnd = now.plusMinutes(16);
 
-        List<Reservation> all = reservationRepository.findAll();
+        // Targeted query: only load actionable statuses (REQUESTED, CONFIRMED, PAID) to avoid scanning whole table
+        List<Reservation> all = reservationRepository.findByStatusIn(
+                List.of(ReservationStatus.REQUESTED, ReservationStatus.CONFIRMED, ReservationStatus.PAID)
+        );
 
         for (Reservation r : all) {
             Long branchId = r.getBranch() != null ? r.getBranch().getId() : null;
@@ -173,34 +173,34 @@ public class ReservationScheduler {
 
             // 1-hour reminder — fire only once
             String key1hr = reservationId + "-1HR";
-            if (!sentNotifications.contains(key1hr)
+            if (!isNotificationSent(key1hr)
                     && !reservationTime.isBefore(oneHourStart)
                     && !reservationTime.isAfter(oneHourEnd)) {
                 webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_1HR", tableNumber,
                         timeStr);
-                sentNotifications.add(key1hr);
+                markNotificationSent(key1hr);
                 log.info("1-hour reminder sent for table {} at {}", tableNumber, timeStr);
             }
 
             // 30-minute reminder — fire only once
             String key30min = reservationId + "-30MIN";
-            if (!sentNotifications.contains(key30min)
+            if (!isNotificationSent(key30min)
                     && !reservationTime.isBefore(thirtyMinStart)
                     && !reservationTime.isAfter(thirtyMinEnd)) {
                 webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_30MIN", tableNumber,
                         timeStr);
-                sentNotifications.add(key30min);
+                markNotificationSent(key30min);
                 log.info("30-min reminder sent for table {} at {}", tableNumber, timeStr);
             }
 
             // 15-minute reminder + lock table — fire only once
             String key15min = reservationId + "-15MIN";
-            if (!sentNotifications.contains(key15min)
+            if (!isNotificationSent(key15min)
                     && !reservationTime.isBefore(fifteenMinStart)
                     && !reservationTime.isAfter(fifteenMinEnd)) {
                 webSocketNotificationService.broadcastReservationReminder(branchId, "REMINDER_15MIN", tableNumber,
                         timeStr);
-                sentNotifications.add(key15min);
+                markNotificationSent(key15min);
                 log.info("15-min reminder sent for table {} at {}", tableNumber, timeStr);
 
                 // Lock every AVAILABLE table of this booking.
@@ -219,38 +219,47 @@ public class ReservationScheduler {
                 }
             }
 
-            // #5 GUEST LATE — the slot has started but the guest still isn't seated (still
-            // PAID;
-            // past-end no-shows were auto-cancelled above, so this window is still active).
-            // Fire once.
+            // #5 GUEST LATE — the slot has started but the guest still isn't seated (still PAID). Fire once.
             String keyLate = reservationId + "-LATE";
-            if (!sentNotifications.contains(keyLate) && reservationTime.isBefore(now)) {
+            if (!isNotificationSent(keyLate) && reservationTime.isBefore(now)) {
                 webSocketNotificationService.broadcastReservationReminder(branchId, "GUEST_LATE", tableNumber, timeStr);
-                sentNotifications.add(keyLate);
+                markNotificationSent(keyLate);
                 log.info("Guest-late notice for table {} reservation {}", tableNumber, reservationId);
             }
         }
 
-        // #6 TIME'S UP — a table occupied for a reservation whose reserved window has
-        // ended. Notify once
-        // per booking (the reserved time is over — ask them to leave / clear the
-        // table).
-        for (RestaurantTable table : tableRepository.findAll()) {
-            if (table.getState() != TableStatus.OCCUPIED || table.getSeatedReservationId() == null)
-                continue;
+        // #6 TIME'S UP — only query occupied tables that have an active seated reservation
+        for (RestaurantTable table : tableRepository.findByStateAndSeatedReservationIdIsNotNull(TableStatus.OCCUPIED)) {
             Reservation sr = reservationRepository.findById(table.getSeatedReservationId()).orElse(null);
             if (sr == null || sr.getEndTime() == null || !sr.getEndTime().isBefore(now))
                 continue;
             String keyUp = "TIMEUP-" + sr.getId();
-            if (sentNotifications.contains(keyUp))
+            if (isNotificationSent(keyUp))
                 continue;
             Long upBranchId = table.getBranch() != null ? table.getBranch().getId() : null;
             if (upBranchId == null)
                 continue;
             webSocketNotificationService.broadcastReservationReminder(
                     upBranchId, "TIME_UP", table.getTableNumber(), sr.getEndTime().format(TIME_FORMATTER));
-            sentNotifications.add(keyUp);
+            markNotificationSent(keyUp);
             log.info("Time's-up notice for table {} reservation {}", table.getTableNumber(), sr.getId());
+        }
+    }
+
+    private boolean isNotificationSent(String key) {
+        try {
+            return Boolean.TRUE.equals(stringRedisTemplate.hasKey("res_notif:" + key));
+        } catch (Exception e) {
+            log.warn("Redis unavailable for notification check, fallback to false: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void markNotificationSent(String key) {
+        try {
+            stringRedisTemplate.opsForValue().set("res_notif:" + key, "1", 24, TimeUnit.HOURS);
+        } catch (Exception e) {
+            log.warn("Redis unavailable to record notification flag: {}", e.getMessage());
         }
     }
 }
