@@ -39,6 +39,13 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
     private static final Pattern PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
+    private static final Pattern PHONE_PATTERN = Pattern
+            .compile("^(?:\\+94|94|0)?7[0-9]{8}$");
+
+    private static final long OTP_EXPIRATION_MINUTES = 5;
+    private static final long OTP_COOLDOWN_SECONDS = 60;
+    private static final long OTP_HOURLY_MAX_REQUESTS = 5;
+    private static final long OTP_MAX_FAILED_ATTEMPTS = 5;
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -79,13 +86,30 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+    private String normalizeAndValidatePhone(String phone) {
+        if (phone == null || phone.trim().isEmpty()) {
+            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone number is required");
+        }
+        String cleaned = phone.replaceAll("[\\s\\-]", "").trim();
+        if (!PHONE_PATTERN.matcher(cleaned).matches()) {
+            throw new CustomerAuthException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Invalid Sri Lankan phone number. Must be 10 digits starting with 07 (e.g., 0712345678 or +94712345678)");
+        }
+        if (cleaned.startsWith("+94")) {
+            cleaned = "0" + cleaned.substring(3);
+        } else if (cleaned.startsWith("94")) {
+            cleaned = "0" + cleaned.substring(2);
+        }
+        return cleaned;
+    }
+
     @Override
     @Transactional
     public CustomerRegisterResponseData register(CustomerRegisterRequest request) {
         validateRegisterRequest(request);
 
         String normalizedEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
-        String normalizedPhone = request.getPhone().trim();
+        String normalizedPhone = normalizeAndValidatePhone(request.getPhone());
         String normalizedUsername = request.getUsername().trim();
 
         if (userRepository.findByEmail(normalizedEmail).isPresent()) {
@@ -194,14 +218,33 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
     @Override
     @Transactional
     public void requestOtp(String phone) {
-        if (phone == null || phone.trim().isEmpty()) {
-            throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone number is required");
+        String normalizedPhone = normalizeAndValidatePhone(phone);
+
+        // 1. Check Cooldown (60-second burst protection)
+        String cooldownKey = "otp_cooldown:" + normalizedPhone;
+        Long remainingCooldown = stringRedisTemplate.getExpire(cooldownKey, TimeUnit.SECONDS);
+        if (remainingCooldown != null && remainingCooldown > 0) {
+            throw new CustomerAuthException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Please wait " + remainingCooldown + " second(s) before requesting a new OTP.");
+        }
+
+        // 2. Check Hourly Volume Quota (Max 5 requests per hour)
+        String hourlyKey = "otp_hourly_count:" + normalizedPhone;
+        Long requestCount = stringRedisTemplate.opsForValue().increment(hourlyKey);
+        if (requestCount != null && requestCount == 1) {
+            stringRedisTemplate.expire(hourlyKey, 1, TimeUnit.HOURS);
+        }
+        if (requestCount != null && requestCount > OTP_HOURLY_MAX_REQUESTS) {
+            Long remainingMinutes = stringRedisTemplate.getExpire(hourlyKey, TimeUnit.MINUTES);
+            long waitMinutes = (remainingMinutes != null && remainingMinutes > 0) ? remainingMinutes : 60;
+            throw new CustomerAuthException(HttpStatus.TOO_MANY_REQUESTS,
+                    "You have reached the maximum limit of " + OTP_HOURLY_MAX_REQUESTS
+                            + " OTP requests per hour. Please try again in " + waitMinutes + " minute(s).");
         }
 
         String otpCode = String.format("%04d", new Random().nextInt(10000));
-        LocalDateTime expiry = LocalDateTime.now().plusMinutes(5);
 
-        User user = userRepository.findByPhone(phone.trim()).orElse(null);
+        User user = userRepository.findByPhone(normalizedPhone).orElse(null);
         Customer customer;
 
         if (user == null) {
@@ -209,7 +252,7 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
 
             user = User.builder()
                     .username("Guest_" + System.currentTimeMillis())
-                    .phone(phone.trim())
+                    .phone(normalizedPhone)
                     .password(passwordEncoder.encode(otpCode))
                     .role(customerRole)
                     .isActive(true)
@@ -232,8 +275,18 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                             "Customer profile missing"));
         }
 
-        stringRedisTemplate.opsForValue().set("otp:" + phone.trim(), otpCode, 5, TimeUnit.MINUTES);
-        smsService.sendOtpSms(phone, otpCode);
+        // Store OTP with 5-minute TTL
+        stringRedisTemplate.opsForValue().set("otp:" + normalizedPhone, otpCode, OTP_EXPIRATION_MINUTES,
+                TimeUnit.MINUTES);
+
+        // Set Cooldown key with 60-second TTL
+        stringRedisTemplate.opsForValue().set(cooldownKey, "1", OTP_COOLDOWN_SECONDS, TimeUnit.SECONDS);
+
+        // Reset any previous failed attempts on new OTP dispatch
+        stringRedisTemplate.delete("otp_failed_attempts:" + normalizedPhone);
+
+        // Dispatch SMS
+        smsService.sendOtpSms(normalizedPhone, otpCode);
         // System.out.println(otpCode);
     }
 
@@ -244,7 +297,9 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
             throw new CustomerAuthException(HttpStatus.BAD_REQUEST, "Phone and code are required");
         }
 
-        User user = userRepository.findByPhone(phone.trim())
+        String normalizedPhone = normalizeAndValidatePhone(phone);
+
+        User user = userRepository.findByPhone(normalizedPhone)
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.NOT_FOUND, "User not found"));
 
         /*
@@ -256,12 +311,35 @@ public class CustomerAuthServiceImpl implements CustomerAuthService {
                 .orElseThrow(() -> new CustomerAuthException(HttpStatus.INTERNAL_SERVER_ERROR,
                         "Customer profile missing"));
 
-        String cachedOtp = stringRedisTemplate.opsForValue().get("otp:" + phone.trim());
-        if (cachedOtp == null || !cachedOtp.equals(code.trim())) {
-            throw new CustomerAuthException(HttpStatus.UNAUTHORIZED, "OTP code has expired or is invalid");
+        String cachedOtp = stringRedisTemplate.opsForValue().get("otp:" + normalizedPhone);
+        if (cachedOtp == null) {
+            throw new CustomerAuthException(HttpStatus.UNAUTHORIZED,
+                    "OTP code has expired or is invalid. Please request a new code.");
         }
 
-        stringRedisTemplate.delete("otp:" + phone.trim());
+        String failedKey = "otp_failed_attempts:" + normalizedPhone;
+        if (!cachedOtp.equals(code.trim())) {
+            Long failedAttempts = stringRedisTemplate.opsForValue().increment(failedKey);
+            if (failedAttempts != null && failedAttempts == 1) {
+                stringRedisTemplate.expire(failedKey, OTP_EXPIRATION_MINUTES, TimeUnit.MINUTES);
+            }
+
+            if (failedAttempts != null && failedAttempts >= OTP_MAX_FAILED_ATTEMPTS) {
+                // Invalidate the OTP to prevent further brute-force attacks
+                stringRedisTemplate.delete("otp:" + normalizedPhone);
+                stringRedisTemplate.delete(failedKey);
+                throw new CustomerAuthException(HttpStatus.TOO_MANY_REQUESTS,
+                        "Too many incorrect attempts. For your security, this verification code has been invalidated. Please request a new one.");
+            }
+
+            long remaining = (failedAttempts != null) ? (OTP_MAX_FAILED_ATTEMPTS - failedAttempts) : 0;
+            throw new CustomerAuthException(HttpStatus.UNAUTHORIZED,
+                    "Invalid verification code. " + remaining + " attempt(s) remaining.");
+        }
+
+        // Successful verification — clean up Redis security keys
+        stringRedisTemplate.delete("otp:" + normalizedPhone);
+        stringRedisTemplate.delete(failedKey);
 
         customer.setPhoneVerified(true);
         customerRepository.save(customer);

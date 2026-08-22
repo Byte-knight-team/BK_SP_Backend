@@ -87,4 +87,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     
     Page<Reservation> findByCustomerIdAndStatusInOrderByReservationTimeDesc(Long customerId, java.util.List<ReservationStatus> statuses, Pageable pageable);
     //------------------------customer query END---------------------
+
+    // Scheduler query: fetch only active, pending, or paid reservations to avoid full table scans
+    List<Reservation> findByStatusIn(List<ReservationStatus> statuses);
 }
