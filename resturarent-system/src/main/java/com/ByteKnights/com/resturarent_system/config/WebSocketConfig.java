@@ -1,7 +1,10 @@
 package com.ByteKnights.com.resturarent_system.config;
 
+import com.ByteKnights.com.resturarent_system.security.WebSocketAuthInterceptor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -13,12 +16,16 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
  *
  * How it works:
  * - Frontend connects to /ws endpoint (with SockJS fallback for older browsers)
+ * - Inbound channel validates JWT on CONNECT and checks topic authorization on SUBSCRIBE
  * - Frontend subscribes to topics like /topic/branch/1/alerts
  * - Backend broadcasts to those topics using SimpMessagingTemplate
  */
 @Configuration
 @EnableWebSocketMessageBroker
+@RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+
+    private final WebSocketAuthInterceptor webSocketAuthInterceptor;
 
     /**
      * Register the /ws endpoint that the React frontend will connect to.
@@ -46,6 +53,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .setHeartbeatValue(new long[]{10000, 10000})
                 .setTaskScheduler(webSocketHeartbeatScheduler());
         registry.setApplicationDestinationPrefixes("/app");
+    }
+
+    /**
+     * Register the security interceptor on the inbound channel to authenticate
+     * incoming STOMP CONNECT frames and authorize SUBSCRIBE destinations before
+     * frames reach the message broker.
+     */
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(webSocketAuthInterceptor);
     }
 
     /**

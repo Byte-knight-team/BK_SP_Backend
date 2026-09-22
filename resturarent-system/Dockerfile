@@ -29,5 +29,14 @@ COPY --from=builder /app/target/*.jar app.jar
 # Expose the default Spring Boot port
 EXPOSE 8080
 
-# Run the application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Configure JVM ergonomics for containerized environments (Render 512MB RAM limit)
+# - UseContainerSupport: respects cgroup memory limits
+# - MaxRAMPercentage=65.0: caps heap at ~330MB of 512MB, leaving ~180MB for Metaspace/native memory
+# - UseSerialGC: minimal GC metadata overhead (saves ~100MB vs default G1GC on small containers)
+# - Xss256k: reduces per-thread stack size from 1MB to 256KB
+# - MaxMetaspaceSize=160m: prevents unbounded class metadata growth
+# - ExitOnOutOfMemoryError: guarantees clean container restart on critical OOM
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=65.0 -XX:+UseSerialGC -Xss256k -XX:MaxMetaspaceSize=160m -XX:+ExitOnOutOfMemoryError"
+
+# Run the application with configured JVM options
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

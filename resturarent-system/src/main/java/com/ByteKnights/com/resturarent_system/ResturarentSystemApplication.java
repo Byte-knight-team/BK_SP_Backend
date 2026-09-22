@@ -8,8 +8,9 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import jakarta.annotation.PostConstruct;
 import java.util.TimeZone;
+import org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration;
 
-@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class })
+@SpringBootApplication(exclude = { UserDetailsServiceAutoConfiguration.class, RedisRepositoriesAutoConfiguration.class })
 @ConfigurationPropertiesScan
 @EnableScheduling
 @EnableCaching

@@ -212,7 +212,7 @@ public class EmailTemplateService {
                                 + "<div style=\"margin:20px 0; padding:15px; background:#f4f4f5; border-radius:6px;\">"
                                 + "<h3 style=\"margin-top:0; margin-bottom:10px; font-size:16px;\">Order Details</h3>"
                                 + "<div style=\"font-family:monospace; white-space:pre-wrap; color:#3f3f46;\">" + escapeHtml(itemsSummary) + "</div>"
-                                + "<p style=\"margin-bottom:0; margin-top:15px; font-size:16px;\"><strong>Total: Rs. " + finalAmount + "</strong></p>"
+                                + "<p style=\"margin-bottom:0; margin-top:15px; font-size:16px;\"><strong>Total: Rs. " + finalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() + "</strong></p>"
                                 + "</div>";
                 
                 if ("CARD".equalsIgnoreCase(paymentMethod)) {
@@ -238,7 +238,7 @@ public class EmailTemplateService {
         public String buildOrderServedHtml(String orderNumber, String branchName, java.math.BigDecimal finalAmount) {
                 String content = "<p>Hello,</p>"
                                 + "<p>Your order <strong>" + escapeHtml(orderNumber) + "</strong> at " + escapeHtml(branchName) + " is complete!</p>"
-                                + "<p>The final total was <strong>Rs. " + finalAmount + "</strong>.</p>"
+                                + "<p>The final total was <strong>Rs. " + finalAmount.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() + "</strong>.</p>"
                                 + "<p>We hope you enjoyed your meal. We would love to hear your feedback on the items you ordered. You can leave a review from your past orders page.</p>"
                                 + "<p>Thank you for choosing Crave House!</p>";
 

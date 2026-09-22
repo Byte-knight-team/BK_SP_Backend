@@ -11,6 +11,8 @@ import com.ByteKnights.com.resturarent_system.exception.QrSessionException;
 import com.ByteKnights.com.resturarent_system.repository.BranchRepository;
 import com.ByteKnights.com.resturarent_system.repository.QrSessionRepository;
 import com.ByteKnights.com.resturarent_system.repository.RestaurantTableRepository;
+import com.ByteKnights.com.resturarent_system.service.SystemConfigService;
+import com.ByteKnights.com.resturarent_system.dto.cache.BranchConfigCacheDto;
 import com.ByteKnights.com.resturarent_system.service.impl.QrSessionServiceImpl;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -47,6 +49,9 @@ public class QrSessionServiceTest {
 
     @Mock
     private StringRedisTemplate stringRedisTemplate;
+
+    @Mock
+    private SystemConfigService systemConfigService;
 
     @Mock
     private ValueOperations<String, String> valueOperations;

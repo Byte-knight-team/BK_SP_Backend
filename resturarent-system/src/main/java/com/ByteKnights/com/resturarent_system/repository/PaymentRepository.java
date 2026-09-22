@@ -39,10 +39,11 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     @Query("UPDATE Order o SET o.paymentStatus = :status WHERE o.id IN (SELECT p.order.id FROM Payment p WHERE p.transactionReference = :txnRef)")
     int updateOrderPaymentStatusByTxnRef(@Param("txnRef") String txnRef, @Param("status") PaymentStatus status);
 
-    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.branch.id = :branchId AND p.paymentMethod = :method AND p.paymentStatus = 'PAID'")
-    BigDecimal sumAmountByBranchIdAndPaymentMethod(
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.order.branch.id = :branchId AND p.paymentMethod = :method AND p.paymentStatus IN :statuses")
+    BigDecimal sumAmountByBranchIdAndPaymentMethodAndPaymentStatusIn(
             @Param("branchId") Long branchId,
-            @Param("method") com.ByteKnights.com.resturarent_system.entity.PaymentMethod method);
+            @Param("method") com.ByteKnights.com.resturarent_system.entity.PaymentMethod method,
+            @Param("statuses") java.util.Collection<com.ByteKnights.com.resturarent_system.entity.PaymentStatus> statuses);
 
     // Total cash collected today for a specific order type (QR or ONLINE_PICKUP)
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +

@@ -154,7 +154,7 @@ public class InventoryController {
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<InventoryItemDTO> restockItem(
             @PathVariable Long id,
-            @RequestBody RestockInventoryItemRequest request,
+            @Valid @RequestBody RestockInventoryItemRequest request,
             @AuthenticationPrincipal JwtUserPrincipal principal) {
 
         Long userId = principal.getUser().getId();
@@ -178,7 +178,7 @@ public class InventoryController {
     @PreAuthorize("hasRole('MANAGER')")
     public ResponseEntity<InventoryItemDTO> removeStock(
             @PathVariable Long id,
-            @RequestBody RemoveInventoryStockRequest request,
+            @Valid @RequestBody RemoveInventoryStockRequest request,
             @AuthenticationPrincipal JwtUserPrincipal principal) {
 
         Long userId = principal.getUser().getId();
@@ -200,9 +200,9 @@ public class InventoryController {
      */
     @PutMapping("/items/{id}/correct")
     @PreAuthorize("hasRole('MANAGER')")
-    public ResponseEntity<InventoryItemDTO> correctItem(
+    public ResponseEntity<InventoryItemDTO> updateInventoryItem(
             @PathVariable Long id,
-            @RequestBody UpdateInventoryItemRequest request,
+            @Valid @RequestBody UpdateInventoryItemRequest request,
             @AuthenticationPrincipal JwtUserPrincipal principal) {
 
         Long userId = principal.getUser().getId();

@@ -6,6 +6,7 @@ import com.ByteKnights.com.resturarent_system.dto.request.customer.PlaceOrderReq
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CustomerOrdersPageResponse;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.OrderResponse;
 import com.ByteKnights.com.resturarent_system.service.OrderService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,7 +29,7 @@ public class OrderController {
     @PostMapping
     public ResponseEntity<ApiResponse<OrderPlacementResponse>> placeOrder(
             Principal principal,
-            @RequestBody PlaceOrderRequest request) {
+            @Valid @RequestBody PlaceOrderRequest request) {
 
         String userIdentifier = principal != null ? principal.getName() : null;
         OrderPlacementResponse response = orderService.placeCustomerOrder(userIdentifier, request);

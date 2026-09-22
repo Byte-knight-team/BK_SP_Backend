@@ -26,6 +26,7 @@ public class CorsConfig {
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("ETag", "Authorization", "Content-Disposition"));
 
         // Enable support for cookies and authentication headers
         config.setAllowCredentials(true);

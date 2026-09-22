@@ -54,14 +54,14 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
         int activeOrders = (int) orderRepository.countByBranchIdAndStatusIn(finalBranchId, activeStatuses);
 
         // 3. Pending Deliveries
-        // Counts today's ONLINE_DELIVERY orders that are READY and waiting for driver assignment.
+        // Counts today's ONLINE_DELIVERY orders that are COMPLETED and waiting for driver assignment.
         // Previously: fetched ALL orders across ALL branches into Java memory, then filtered
         // by branchId and orderType in a for-loop. Now done entirely in SQL.
         int pendingDeliveries = (int) orderRepository
                 .countByBranchIdAndOrderTypeAndStatusInAndStatusUpdatedAtAfter(
                         finalBranchId,
                         OrderType.ONLINE_DELIVERY,
-                        Arrays.asList(OrderStatus.READY),
+                        Arrays.asList(OrderStatus.COMPLETED),
                         startOfDay);
 
         // Counts today's ONLINE_DELIVERY orders actively out with a driver.
@@ -112,19 +112,25 @@ public class ManagerDashboardServiceImpl implements ManagerDashboardService {
                 .collect(Collectors.toList());
 
         // 8. Staff Availability (Chefs and Delivery Drivers)
-        int kitchenTotal = (int) staffRepository.countByBranchIdAndUserRoleName(finalBranchId, "CHEF");
-        int kitchenActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
-                "CHEF", EmploymentStatus.ACTIVE);
+        List<String> kitchenRoles = Arrays.asList("CHEF", "LINE_CHEF");
+        int kitchenTotal = (int) staffRepository.countByBranchIdAndUserRoleNameIn(finalBranchId, kitchenRoles);
+        int kitchenActive = (int) staffRepository.countByBranchIdAndUserRoleNameInAndEmploymentStatus(finalBranchId,
+                kitchenRoles, EmploymentStatus.ACTIVE);
 
         int fleetTotal = (int) staffRepository.countByBranchIdAndUserRoleName(finalBranchId, "DELIVERY");
         int fleetActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
                 "DELIVERY", EmploymentStatus.ACTIVE);
+
+        int receptionistTotal = (int) staffRepository.countByBranchIdAndUserRoleName(finalBranchId, "RECEPTIONIST");
+        int receptionistActive = (int) staffRepository.countByBranchIdAndUserRoleNameAndEmploymentStatus(finalBranchId,
+                "RECEPTIONIST", EmploymentStatus.ACTIVE);
 
         ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO staff = ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO
                 .builder()
                 .kitchen(new ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO.StaffStats(kitchenActive,
                         kitchenTotal))
                 .fleet(new ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO.StaffStats(fleetActive, fleetTotal))
+                .receptionist(new ManagerDashboardSummaryDTO.ManagerStaffAvailabilityDTO.StaffStats(receptionistActive, receptionistTotal))
                 .build();
 
         return ManagerDashboardSummaryDTO.builder()

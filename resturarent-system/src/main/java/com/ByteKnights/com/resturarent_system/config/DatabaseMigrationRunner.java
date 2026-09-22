@@ -22,6 +22,9 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             log.info("Running database schema migrations...");
             jdbcTemplate.execute("ALTER TABLE reservations MODIFY COLUMN status VARCHAR(50) NOT NULL;");
             log.info("Successfully altered 'status' column in 'reservations' table to VARCHAR(50).");
+            
+            jdbcTemplate.execute("ALTER TABLE manager_notifications MODIFY COLUMN type VARCHAR(255) NOT NULL;");
+            log.info("Successfully altered 'type' column in 'manager_notifications' table to VARCHAR(255).");
         } catch (Exception e) {
             log.error("Failed to run database migrations (this is fine if it was already applied): {}", e.getMessage());
         }

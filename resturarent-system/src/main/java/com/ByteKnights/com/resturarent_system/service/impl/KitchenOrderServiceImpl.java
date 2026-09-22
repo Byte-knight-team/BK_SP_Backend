@@ -1,18 +1,25 @@
 package com.ByteKnights.com.resturarent_system.service.impl;
 
+import com.ByteKnights.com.resturarent_system.dto.response.kitchen.KitchenOrderHistoryDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderCardDetailsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderDetailsDTO;
 import com.ByteKnights.com.resturarent_system.dto.response.kitchen.OrderItemDetailsDTO;
+import com.ByteKnights.com.resturarent_system.dto.response.receptionist.PagedResponse;
 import com.ByteKnights.com.resturarent_system.entity.*;
 import com.ByteKnights.com.resturarent_system.repository.*;
 import com.ByteKnights.com.resturarent_system.service.AuditLogService;
 import com.ByteKnights.com.resturarent_system.service.KitchenOrderService;
 import com.ByteKnights.com.resturarent_system.service.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -205,6 +212,73 @@ public class KitchenOrderServiceImpl implements KitchenOrderService {
                 "Order placed on hold by kitchen staff",
                 oldValues,
                 buildKitchenOrderAuditSnapshot(savedOrder));
+    }
+
+    @Override
+    public PagedResponse<KitchenOrderHistoryDTO> getOrderHistory(String userEmail, int page, int size, String date, String status) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Staff staff = staffRepository.findByUser(user)
+                .orElseThrow(() -> new RuntimeException("Staff profile not found"));
+
+        Long branchId = staff.getBranch().getId();
+
+        LocalDateTime dayStart = null;
+        LocalDateTime dayEnd = null;
+        if (date != null && !date.isBlank()) {
+            LocalDate day = LocalDate.parse(date);
+            dayStart = day.atStartOfDay();
+            dayEnd = dayStart.plusDays(1);
+        }
+
+        OrderStatus statusFilter = null;
+        if (status != null && !status.isBlank()) {
+            statusFilter = OrderStatus.valueOf(status.toUpperCase());
+        }
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Order> result = orderRepository.findHistoryByBranch(
+                branchId, statusFilter, null, null, dayStart, dayEnd, pageable);
+
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a");
+
+        List<KitchenOrderHistoryDTO> content = result.getContent().stream().map(order -> {
+            List<OrderItemDetailsDTO> items = order.getItems().stream().map(item ->
+                    new OrderItemDetailsDTO(
+                            item.getId(),
+                            item.getItemName(),
+                            item.getQuantity(),
+                            item.getStatus().name(),
+                            item.getAssignedLineChef() != null
+                                    ? item.getAssignedLineChef().getUser().getFullName()
+                                    : "Not Assigned",
+                            item.getKitchenNotes()
+                    )).toList();
+
+            String prepTime = "-";
+            if (order.getCookingStartedAt() != null && order.getCookingCompletedAt() != null) {
+                long minutes = Duration.between(order.getCookingStartedAt(), order.getCookingCompletedAt()).toMinutes();
+                prepTime = minutes + " min";
+            }
+
+            return new KitchenOrderHistoryDTO(
+                    order.getId(),
+                    order.getOrderNumber(),
+                    order.getCreatedAt() != null ? order.getCreatedAt().format(dateFmt) : "",
+                    order.getStatus().name(),
+                    prepTime,
+                    items
+            );
+        }).toList();
+
+        return PagedResponse.<KitchenOrderHistoryDTO>builder()
+                .content(content)
+                .page(result.getNumber())
+                .size(result.getSize())
+                .totalElements(result.getTotalElements())
+                .totalPages(result.getTotalPages())
+                .build();
     }
 
     private Map<String, Object> buildKitchenOrderItemAuditSnapshot(OrderItem item) {

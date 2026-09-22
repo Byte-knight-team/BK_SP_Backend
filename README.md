@@ -70,6 +70,9 @@ The BK Software Project is an enterprise-grade restaurant management platform de
 - **AWS S3 Integration**: Securely upload, store, and retrieve dynamic media such as customer profile pictures and menu item reviews via presigned URLs.
 - **Payment Integration**: Secure, automated Stripe Checkout integration with fully automated webhook listeners (`payment_intent.succeeded`) to safely verify signatures and update database payment statuses (`PAID`) asynchronously.
 - **Delivery Management**: Route optimization and real-time tracking for online delivery orders.
+- **Asynchronous Processing (`@EnableAsync`)**: Dedicated thread pools (`AsyncConfig`) to process emails (Gmail API), SMS messages (TextLK), and audit logging in the background without blocking HTTP request threads.
+- **HTTP Web Caching (ETag)**: Conditional GET validation (`ShallowEtagHeaderFilter`) returning `304 Not Modified` to reduce bandwidth and network payload latency for menu and static metadata endpoints.
+- **Automated Schedulers**: Automated background jobs for periodic cleanup of expired QR sessions (`QrSessionScheduler`) and automatic cancellation/expiration of unpaid table bookings (`ReservationScheduler`).
 - **Exception Handling**: Robust error handling with detailed audit trails for order cancellations, modifications, and disputes.
 - **Branch-Specific Reports**: Sales analytics, inventory insights, and operational reports per branch, segmented by order channel (QR vs. online).
 - **Customer Feedback & Ratings**: Collect customer reviews and ratings for orders placed through any channel.
@@ -217,10 +220,10 @@ cd resturarent-system
 
 #### Using Docker
 
-If you prefer to run the application in a container:
+If you prefer to run the application in a container (multi-stage build with optimized G1GC JVM flags):
 ```bash
 docker build -t restaurant-backend .
-docker run -p 8080:8080 --env-file ./resturarent-system/.env restaurant-backend
+docker run -p 8080:8080 -m 512m --env-file ./resturarent-system/.env restaurant-backend
 ```
 
 #### Development (Quick Start)
@@ -294,16 +297,18 @@ resturarent-system/
 │   ├── main/
 │   │   ├── java/com/ByteKnights/com/resturarent_system/
 │   │   │   ├── controller/        # REST API endpoints
-│   │   │   ├── service/           # Business logic
-│   │   │   ├── repository/        # Data access layer
-│   │   │   ├── entity/            # JPA entities
-│   │   │   ├── dto/               # Data transfer objects
-│   │   │   ├── config/            # Spring configuration
-│   │   │   ├── security/          # RBAC & authentication
-│   │   │   └── util/              # Utility classes
+│   │   │   ├── service/           # Business logic & domain services
+│   │   │   ├── repository/        # Data access layer (Spring Data JPA)
+│   │   │   ├── entity/            # JPA entities & relational mappings
+│   │   │   ├── dto/               # Request/Response Data Transfer Objects
+│   │   │   ├── config/            # Security, CORS, Async, WebCache, Redis configs
+│   │   │   ├── scheduler/         # Automated background cron tasks (QR, Reservations)
+│   │   │   ├── exception/         # Centralized Global Exception Handler
+│   │   │   ├── security/          # RBAC, JWT filters, authentication providers
+│   │   │   └── util/              # Utility classes (QR Code generation, etc.)
 │   │   └── resources/
 │   │       ├── application.properties
-│   │       └── data.sql           # Initial data
+│   │       └── data.sql           # Initial seed data
 │   └── test/
 │       └── java/com/ByteKnights/com/resturarent_system/
 ├── pom.xml                         # Maven dependencies
@@ -384,5 +389,5 @@ For questions or issues, contact the backend team.
 This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
 ---
 
-**Last Updated**: July 2026
+**Last Updated**: August 2026
 

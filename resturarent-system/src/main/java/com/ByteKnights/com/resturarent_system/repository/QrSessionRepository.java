@@ -6,9 +6,15 @@ import com.ByteKnights.com.resturarent_system.entity.QrSessionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface QrSessionRepository extends JpaRepository<QrSession, Long> {
     Optional<QrSession> findByCustomerAndStatus(Customer customer, QrSessionStatus status);
+
+    List<QrSession> findByTableIdAndStatus(Long tableId, QrSessionStatus status);
+
+    List<QrSession> findByStatusAndStartedAtBefore(QrSessionStatus status, LocalDateTime cutoff);
 }

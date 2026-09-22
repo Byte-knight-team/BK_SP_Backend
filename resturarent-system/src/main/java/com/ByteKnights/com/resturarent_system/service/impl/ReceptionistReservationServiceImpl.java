@@ -489,7 +489,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         // itself.
         Pageable pageable = PageRequest.of(page, size);
         Page<Reservation> result = reservationRepository.findFilteredByBranch(
-                branchId, tableNumber, statusFilter, dayStart, dayEnd, pageable);
+                branchId, tableNumber, statusFilter, dayStart, dayEnd, LocalDateTime.now(), pageable);
 
         return PagedResponse.<ReservationResponseDTO>builder()
                 .content(result.getContent().stream().map(this::toDTO).toList())
@@ -816,6 +816,23 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
         return staff.getBranch().getId();
     }
 
+    // reservation.customer_name is just a snapshot taken at request time and is blank for
+    // customers whose users.full_name was never set. Always prefer the live customer_id ->
+    // customers -> users join so a later profile update shows up here too; fall back to the
+    // snapshot only for legacy rows with no linked customer.
+    private String resolveCustomerName(Reservation r) {
+        if (r.getCustomer() != null && r.getCustomer().getUser() != null) {
+            User u = r.getCustomer().getUser();
+            if (u.getFullName() != null && !u.getFullName().isBlank()) {
+                return u.getFullName();
+            }
+            if (u.getUsername() != null && !u.getUsername().isBlank()) {
+                return u.getUsername();
+            }
+        }
+        return r.getCustomerName();
+    }
+
     private ReservationResponseDTO toDTO(Reservation r) {
         List<RestaurantTable> ts = r.getTables().stream()
                 .sorted(Comparator.comparingInt(t -> t.getTableNumber() != null ? t.getTableNumber() : 0))
@@ -825,7 +842,7 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .id(r.getId())
                 .tableIds(ts.stream().map(RestaurantTable::getId).toList())
                 .tableNumbers(ts.stream().map(RestaurantTable::getTableNumber).toList())
-                .customerName(r.getCustomerName())
+                .customerName(resolveCustomerName(r))
                 .customerPhone(r.getCustomerPhone())
                 .reservationTime(r.getReservationTime())
                 .endTime(r.getEndTime())
@@ -833,7 +850,12 @@ public class ReceptionistReservationServiceImpl implements ReceptionistReservati
                 .notes(r.getCustomerNote())
                 .status(r.getStatus().name())
                 .createdAt(r.getCreatedAt())
-                .totalCharge(r.getTotalCharge());
+                .totalCharge(r.getTotalCharge())
+                // CANCELLED stores its reason in cancelReason; REJECTED reuses receptionistNote
+                // (set by rejectReservation() — never conflicts with the confirm-note use of that
+                // same field, since a REQUESTED booking can only ever be confirmed OR rejected).
+                .cancelReason(r.getStatus() == ReservationStatus.CANCELLED ? r.getCancelReason()
+                        : r.getStatus() == ReservationStatus.REJECTED ? r.getReceptionistNote() : null);
 
         // Payment/refund rows only ever exist once money has moved — skip the extra
         // query for

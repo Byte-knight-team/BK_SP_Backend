@@ -4,6 +4,7 @@ import com.ByteKnights.com.resturarent_system.dto.ApiResponse;
 import com.ByteKnights.com.resturarent_system.dto.request.customer.CheckoutCalculateRequest;
 import com.ByteKnights.com.resturarent_system.dto.response.customer.CheckoutCalculateResponse;
 import com.ByteKnights.com.resturarent_system.service.CheckoutService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,7 +24,7 @@ public class CheckoutController {
     @PostMapping("/calculate")
     public ResponseEntity<ApiResponse<CheckoutCalculateResponse>> calculateTotals(
             Principal principal,
-            @RequestBody CheckoutCalculateRequest request) {
+            @Valid @RequestBody CheckoutCalculateRequest request) {
         
         // QR customers or Online customers will have their identifier here
         String userIdentifier = principal != null ? principal.getName() : null;

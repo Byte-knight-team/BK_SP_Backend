@@ -122,7 +122,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
 
                                         return ManagerDriverSummaryDTO.DriverStatusDTO.builder()
                                                         .id(rider.getId())
-                                                        .name(rider.getFirstName() + " " + rider.getLastName())
+                                                        .name(rider.getDisplayName())
                                                         .avatar(null)
                                                         .rating(4.5)
                                                         .status(status)
@@ -180,8 +180,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                                                 ? d.getOrder().getOrderNumber()
                                                                 : "ORD-" + d.getOrder().getId())
                                                 .deliveryStatus(d.getDeliveryStatus().name())
-                                                .driverName(d.getDeliveryStaff().getFirstName() + " "
-                                                                + d.getDeliveryStaff().getLastName())
+                                                .driverName(d.getDeliveryStaff().getDisplayName())
                                                 .resolvedAt(d.getDeliveredAt() != null
                                                                 ? d.getDeliveredAt().format(historyFormatter)
                                                                 : d.getCancelledAt() != null
@@ -215,7 +214,7 @@ public class ManagerDriverServiceImpl implements ManagerDriverService {
                                                         .branchLatitude(alertBranch != null ? alertBranch.getLatitude() : null)
                                                         .branchLongitude(alertBranch != null ? alertBranch.getLongitude() : null)
                                                         .branchName(alertBranch != null ? alertBranch.getName() : null)
-                                                        .cancelledDriverName(alertDriver.getFirstName() + " " + alertDriver.getLastName())
+                                                        .cancelledDriverName(alertDriver.getDisplayName())
                                                         .cancelledReason(d.getCancelledReason())
                                                         .cancelledAt(d.getCancelledAt() != null
                                                                         ? d.getCancelledAt().format(historyFormatter)
